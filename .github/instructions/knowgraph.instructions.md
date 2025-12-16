@@ -1,3 +1,6 @@
+---
+applyTo: '**'
+---
 # KnowGraph Autonomous Agent Rules (Master Rules)
 This document contains strict rules and best practice guidelines for AI agents to utilize the KnowGraph MCP Server to its fullest, most complete, and efficient extent.
 

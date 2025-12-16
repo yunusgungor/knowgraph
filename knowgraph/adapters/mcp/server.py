@@ -127,7 +127,21 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
         # Determine provider
         provider = get_llm_provider(app)
 
-        return await index_graph(input_path, graph_path, provider, resume_mode, gc)
+        # Extract additional parameters for repository/code directory indexing
+        include_patterns = arguments.get("include_patterns")
+        exclude_patterns = arguments.get("exclude_patterns")
+        access_token = arguments.get("access_token")
+
+        return await index_graph(
+            input_path,
+            graph_path,
+            provider,
+            resume_mode,
+            gc,
+            include_patterns=include_patterns,
+            exclude_patterns=exclude_patterns,
+            access_token=access_token,
+        )
 
     elif name == "knowgraph_analyze_impact":
         element = arguments.get("element")
@@ -411,22 +425,39 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="knowgraph_index",
-            description="Trigger indexing of a documentation directory.",
+            description="Trigger indexing of markdown files, Git repositories, or code directories.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "input_path": {"type": "string", "description": "Path to markdown files."},
+                    "input_path": {
+                        "type": "string",
+                        "description": "Path to markdown files, local directory, or Git repository URL (GitHub, GitLab, Bitbucket).",
+                    },
                     "output_path": {
                         "type": "string",
                         "description": "Path to graph storage (optional).",
                     },
                     "resume": {
                         "type": "boolean",
-                        "description": "Resume indexing from checkpoint if interrupted (default: false).",
+                        "description": "Resume indexing from checkpoint if interrupted (default: false). Only works for local files.",
                     },
                     "gc": {
                         "type": "boolean",
                         "description": "Garbage collect deleted nodes during update (default: false).",
+                    },
+                    "include_patterns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "File patterns to include (e.g., ['*.py', '*.md']). Only for repositories and code directories.",
+                    },
+                    "exclude_patterns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "File patterns to exclude (e.g., ['node_modules/*', '*.lock']). Only for repositories and code directories.",
+                    },
+                    "access_token": {
+                        "type": "string",
+                        "description": "GitHub Personal Access Token for private repositories.",
                     },
                 },
                 "required": ["input_path"],

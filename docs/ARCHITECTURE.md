@@ -125,7 +125,9 @@ knowgraph/
 │   └── export/         # Data export utilities
 ├── infrastructure/      # External dependencies
 │   ├── storage/        # Filesystem operations
-│   ├── parsing/        # Markdown parsing
+│   ├── parsing/        # Markdown parsing and repository ingestion
+│   │   ├── markdown_parser.py    # Markdown document parsing
+│   │   └── repo_ingestor.py      # Git repository ingestion (NEW in v0.3.0)
 │   ├── embedding/      # Sparse embeddings (TF-IDF)
 │   ├── intelligence/   # LLM providers (OpenAI, etc.)
 │   └── search/         # Vector search
@@ -133,6 +135,58 @@ knowgraph/
     ├── cli/            # Command-line interface
     ├── mcp/            # MCP server implementation
     └── api/            # REST API (future)
+```
+
+### Repository Ingestion (v0.3.0)
+
+KnowGraph now supports direct indexing of Git repositories and code directories through the **gitingest** integration:
+
+**Key Features:**
+- **Multi-Source Support**: GitHub, GitLab, Bitbucket repositories
+- **Local Directories**: Automatic conversion of code directories to markdown
+- **Smart Detection**: Automatic source type detection (repository/directory/markdown)
+- **Pattern Filtering**: Include/exclude file patterns for precise control
+- **Private Repositories**: GitHub Personal Access Token (PAT) support
+
+**Core Functions:**
+```python
+# Auto-detect source type
+source_type = detect_source_type(input_path)
+
+# Ingest repository to markdown
+content, path = await ingest_repository(
+    repo_url_or_path="https://github.com/user/repo",
+    include_patterns=["*.py", "*.md"],
+    exclude_patterns=["node_modules/*"],
+    access_token="github_pat_xxx"
+)
+
+# Smart source ingestion (handles all types)
+content, path, type = await ingest_source(input_path)
+```
+
+**Processing Flow:**
+```
+Input (URL/Path)
+    ↓
+Source Detection (repository/directory/markdown)
+    ↓
+┌─────────────┬──────────────┬──────────────┐
+│ Repository  │  Directory   │   Markdown   │
+│    (URL)    │   (Code)     │   (Existing) │
+└──────┬──────┴──────┬───────┴──────┬───────┘
+       │             │              │
+   Gitingest    Gitingest      Read File
+       │             │              │
+       └──────┬──────┴──────────────┘
+              │
+       Markdown Digest
+              │
+         Parse & Chunk
+              │
+        AI Enrichment
+              │
+       Graph Building
 ```
 
 ## 🤖 MCP Server Architecture
@@ -151,7 +205,7 @@ The MCP server exposes the following tools to the outside world:
 | Tool Name | Description | Critical Parameters |
 | :--- | :--- | :--- |
 | **`knowgraph_query`** | Performs semantic search on the knowledge graph. | `query`, `top_k`, `max_hops`, `with_explanation`, `expand_query` |
-| **`knowgraph_index`** | Indexes Markdown files. | `input_path`, `resume` (continue from checkpoint), `gc` (garbage collection) |
+| **`knowgraph_index`** | Indexes markdown files, Git repositories, or code directories. | `input_path` (URL or path), `include_patterns`, `exclude_patterns`, `access_token`, `resume`, `gc` |
 | **`knowgraph_analyze_impact`** | Performs change impact analysis. | `element` (file/concept), `mode` ("path"/"semantic"), `max_hops` |
 | **`knowgraph_validate`** | Validates database consistency. | `graph_path` |
 | **`knowgraph_get_stats`** | Provides statistical summary. | `graph_path` |

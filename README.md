@@ -46,6 +46,41 @@ KnowGraph is built for scale. The new **Smart Indexing Engine** processes large 
 
 ---
 
+## 🎯 Key Features
+
+### Multi-Source Indexing (v0.3.0)
+
+KnowGraph now supports **three input formats** for maximum flexibility:
+
+| Source Type | Description | Example |
+|------------|-------------|---------|
+| 📝 **Markdown Files** | Original functionality, optimized for documentation | `knowgraph index ./docs` |
+| 🔗 **Git Repositories** | Direct indexing from GitHub, GitLab, Bitbucket | `knowgraph index https://github.com/user/repo` |
+| 📁 **Code Directories** | Automatic conversion to markdown via gitingest | `knowgraph index ./my-project` |
+
+**Advanced Filtering:**
+```bash
+# Include only Python and Markdown files
+knowgraph index https://github.com/user/repo --include "*.py" --include "*.md"
+
+# Exclude dependencies and build artifacts
+knowgraph index ./project --exclude "node_modules/*" --exclude "*.lock"
+
+# Index private repositories
+export GITHUB_TOKEN="github_pat_xxx"
+knowgraph index https://github.com/company/private-repo
+```
+
+### Core Capabilities
+
+*   **🔍 Semantic Search:** Natural language queries with context-aware retrieval
+*   **📊 Impact Analysis:** Predict the ripple effects of code changes
+*   **🔄 Batch Processing:** Process multiple queries efficiently
+*   **✅ Graph Validation:** Ensure knowledge graph consistency
+*   **📈 Statistics & Metrics:** Monitor graph health and coverage
+
+---
+
 ## ⚡ Cognitive Upgrade in 30 Seconds (Quick Start)
 
 Connect KnowGraph as an MCP server to boost your AI editor's IQ.
@@ -74,9 +109,31 @@ Add the following to your **Claude Desktop** (`claude_desktop_config.json`) or *
 }
 ```
 
-> ⚠️ **Note:** KnowGraph thrives on structured information in Markdown (`.md`) format. We strongly recommend using [Gittodoc](https://gittodoc.com/) to convert your source code into an optimized graph-ready format.
+> 📝 **New in v0.3.0:** KnowGraph now supports multiple input formats:
+> - **Markdown files** (`.md`) - Original functionality
+> - **Git repositories** (GitHub, GitLab, Bitbucket) - NEW! 🎉
+> - **Code directories** (automatically converted to markdown) - NEW! 🎉
+> 
+> While we still recommend [Gittodoc](https://gittodoc.com/) for pre-processing, you can now index repositories directly!
 
-### 3. Usage
+### 3. Index Your Knowledge Base
+
+```bash
+# Index local markdown files
+knowgraph index /path/to/markdown/files
+
+# NEW: Index a GitHub repository directly
+knowgraph index https://github.com/user/repo
+
+# NEW: Index with filtering
+knowgraph index https://github.com/user/repo \
+  --include "*.py" --include "*.md" \
+  --exclude "node_modules/*"
+```
+
+For more details, see [Repository Indexing Guide](docs/REPOSITORY_INDEXING.md).
+
+### 4. Usage
 
 Set your environment variables and start chatting with your AI assistant.
 
@@ -197,8 +254,10 @@ Run these **scientific experiments** (prompts) to witness the KnowGraph differen
 
 For those who want to dive into the deep tech:
 
-*   **[MCP Rules & Detailed Prompts](docs/KNOWGRAPH_MCP_RULES.md)**
-*   **[Architecture & Algorithms](docs/ARCHITECTURE.md)**: Graph theory, node weighting algorithms, and system architecture.
+*   **[📖 User Guide](docs/USER_GUIDE.md)**: Comprehensive guide covering installation, configuration, indexing, querying, and troubleshooting.
+*   **[🔧 MCP Rules & Detailed Prompts](docs/KNOWGRAPH_MCP_RULES.md)**: Best practices for using KnowGraph with AI assistants.
+*   **[🏗️ Architecture & Algorithms](docs/ARCHITECTURE.md)**: Graph theory, node weighting algorithms, and system architecture.
+*   **[📦 Repository Indexing](docs/REPOSITORY_INDEXING.md)**: Guide for indexing Git repositories and code directories.
 
 ## 🤝 Contribute to Science
 

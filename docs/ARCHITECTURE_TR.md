@@ -125,7 +125,9 @@ knowgraph/
 │   └── export/         # Data export utilities
 ├── infrastructure/      # External dependencies
 │   ├── storage/        # Filesystem operations
-│   ├── parsing/        # Markdown parsing
+│   ├── parsing/        # Markdown parsing ve repository ingestion
+│   │   ├── markdown_parser.py    # Markdown doküman ayrıştırma
+│   │   └── repo_ingestor.py      # Git repository ingestion (v0.3.0'da YENİ)
 │   ├── embedding/      # Sparse embeddings (TF-IDF)
 │   ├── intelligence/   # LLM providers (OpenAI, etc.)
 │   └── search/         # Vector search
@@ -133,6 +135,58 @@ knowgraph/
     ├── cli/            # Command-line interface
     ├── mcp/            # MCP server implementation
     └── api/            # REST API (future)
+```
+
+### Repository Ingestion (v0.3.0)
+
+KnowGraph artık **gitingest** entegrasyonu sayesinde Git repository'lerini ve kod dizinlerini doğrudan indeksleyebiliyor:
+
+**Temel Özellikler:**
+- **Çoklu Kaynak Desteği**: GitHub, GitLab, Bitbucket repository'leri
+- **Yerel Dizinler**: Kod dizinlerinin otomatik markdown'a çevrilmesi
+- **Akıllı Algılama**: Otomatik kaynak tipi algılama (repository/directory/markdown)
+- **Desen Filtreleme**: Dahil etme/hariç tutma desenleri ile hassas kontrol
+- **Özel Repository'ler**: GitHub Personal Access Token (PAT) desteği
+
+**Ana Fonksiyonlar:**
+```python
+# Kaynak tipini otomatik algıla
+source_type = detect_source_type(input_path)
+
+# Repository'yi markdown'a çevir
+content, path = await ingest_repository(
+    repo_url_or_path="https://github.com/user/repo",
+    include_patterns=["*.py", "*.md"],
+    exclude_patterns=["node_modules/*"],
+    access_token="github_pat_xxx"
+)
+
+# Akıllı kaynak işleme (tüm tipleri destekler)
+content, path, type = await ingest_source(input_path)
+```
+
+**İşleme Akışı:**
+```
+Girdi (URL/Path)
+    ↓
+Kaynak Algılama (repository/directory/markdown)
+    ↓
+┌─────────────┬──────────────┬──────────────┐
+│ Repository  │  Directory   │   Markdown   │
+│    (URL)    │   (Kod)      │   (Mevcut)   │
+└──────┬──────┴──────┬───────┴──────┬───────┘
+       │             │              │
+   Gitingest    Gitingest      Dosya Oku
+       │             │              │
+       └──────┬──────┴──────────────┘
+              │
+       Markdown Digest
+              │
+         Ayrıştır & Parçala
+              │
+        AI Zenginleştirme
+              │
+       Graf Oluşturma
 ```
 
 ## 🤖 MCP Server Mimarisi
@@ -151,7 +205,7 @@ MCP sunucusu, dış dünyaya şu araçları sunar:
 | Araç Adı | Açıklama | Kritik Parametreler |
 | :--- | :--- | :--- |
 | **`knowgraph_query`** | Bilgi grafiğinde anlamsal arama yapar. | `query`, `top_k`, `max_hops`, `with_explanation`, `expand_query` |
-| **`knowgraph_index`** | Markdown dosyalarını indeksler. | `input_path`, `resume` (kaldığı yerden devam), `gc` (garbage collection) |
+| **`knowgraph_index`** | Markdown dosyalarını, Git repository'lerini veya kod dizinlerini indeksler. | `input_path` (URL veya yol), `include_patterns`, `exclude_patterns`, `access_token`, `resume`, `gc` |
 | **`knowgraph_analyze_impact`** | Değişiklik etki analizi yapar. | `element` (dosya/kavram), `mode` ("path"/"semantic"), `max_hops` |
 | **`knowgraph_validate`** | Veritabanı tutarlılığını kontrol eder. | `graph_path` |
 | **`knowgraph_get_stats`** | İstatistiksel özet sunar. | `graph_path` |

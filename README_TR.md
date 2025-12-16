@@ -43,7 +43,42 @@ KnowGraph, ölçeklenebilirlik için yeniden tasarlandı. Yeni **Akıllı İndek
 *   **🛡️ Akıllı Hız Limitleyici (Smart Rate Limiter):** API limitlerine (Free/Pro tier) otomatik uyum sağlar, header takibiyle 429 hatalarını önler.
 *   **🏎️ Eşzamanlı Paketleme (Concurrent Batching):** 20 paralel çalışan ile her çağrıda 10 parçayı işleyerek maksimum verim sağlar.
 
-## ⚡ 30 Saniyede Bilişsel Yükseltme (Quick Start)
+---
+
+## 🎯 Temel Özellikler
+
+### Çoklu Kaynak İndeksleme (v0.3.0)
+
+KnowGraph artık maksimum esneklik için **üç girdi formatını** destekliyor:
+
+| Kaynak Tipi | Açıklama | Örnek |
+|------------|----------|-------|
+| 📝 **Markdown Dosyaları** | Orijinal özellik, dokümantasyon için optimize | `knowgraph index ./docs` |
+| 🔗 **Git Repository'leri** | GitHub, GitLab, Bitbucket'tan doğrudan indeksleme | `knowgraph index https://github.com/user/repo` |
+| 📁 **Kod Dizinleri** | Gitingest ile otomatik markdown'a çevirme | `knowgraph index ./my-project` |
+
+**Gelişmiş Filtreleme:**
+```bash
+# Sadece Python ve Markdown dosyalarını dahil et
+knowgraph index https://github.com/user/repo --include "*.py" --include "*.md"
+
+# Bağımlılıkları ve build artifact'lerini hariç tut
+knowgraph index ./project --exclude "node_modules/*" --exclude "*.lock"
+
+# Özel repository'leri indeksle
+export GITHUB_TOKEN="github_pat_xxx"
+knowgraph index https://github.com/company/private-repo
+```
+
+### Ana Yetenekler
+
+*   **🔍 Semantik Arama:** Bağlam duyarlı doğal dil sorguları
+*   **📊 Etki Analizi:** Kod değişikliklerinin dalga etkilerini öngörme
+*   **🔄 Toplu İşleme:** Çoklu sorguları verimli şekilde işleme
+*   **✅ Graf Doğrulama:** Bilgi grafiği tutarlılığını sağlama
+*   **📈 İstatistik & Metrikler:** Graf sağlığını ve kapsamını izleme
+
+---
 
 AI editörünüzün IQ'sunu artırmak için KnowGraph'ı bir MCP sunucusu olarak bağlayın.
 
@@ -73,7 +108,31 @@ pip install knowgraph
 
 > ⚠️ **Not:** KnowGraph, Markdown (`.md`) formatındaki yapılandırılmış bilgiyi sever. Kaynak kodunuzu optimize edilmiş bir grafa çevirmek için [Gittodoc](https://gittodoc.com/) kullanmanızı şiddetle öneririz.
 
-### 3. Kullanım
+> 📝 **v0.3.0'daki Yenilikler:** KnowGraph artık birden fazla girdi formatını destekliyor:
+> - **Markdown dosyaları** (`.md`) - Orijinal özellik
+> - **Git repository'leri** (GitHub, GitLab, Bitbucket) - YENİ! 🎉
+> - **Kod dizinleri** (otomatik markdown'a çevriliyor) - YENİ! 🎉
+> 
+> [Gittodoc](https://gittodoc.com/) kullanımını hala öneriyoruz, ancak artık repository'leri doğrudan indeksleyebilirsiniz!
+
+### 3. Bilgi Tabanınızı İndeksleyin
+
+```bash
+# Yerel markdown dosyalarını indeksle
+knowgraph index /path/to/markdown/files
+
+# YENİ: GitHub repository'sini doğrudan indeksle
+knowgraph index https://github.com/user/repo
+
+# YENİ: Filtreleme ile indeksle
+knowgraph index https://github.com/user/repo \
+  --include "*.py" --include "*.md" \
+  --exclude "node_modules/*"
+```
+
+Detaylı bilgi için [Repository İndeksleme Rehberi](docs/REPOSITORY_INDEXING.md)'ne bakın.
+
+### 4. Kullanım
 
 Environment değişkenlerini ayarladıktan sonra AI asistanınızla konuşmaya başlayın.
 
@@ -194,8 +253,10 @@ KnowGraph'ın farkını görmek için aşağıdaki **bilimsel deneyleri** (promp
 
 Teknolojinin derinliklerine inmek isteyenler için:
 
-*   **[MCP Kuralları & Detaylı Promptlar](docs/KNOWGRAPH_MCP_RULES_TR.md)**
-*   **[Mimari & Algoritmalar](docs/ARCHITECTURE_TR.md)**: Graf teorisi, düğüm ağırlıklandırma algoritmaları ve sistem mimarisi.
+*   **[📖 Kullanıcı Kılavuzu](docs/USER_GUIDE.md)**: Kurulum, yapılandırma, indeksleme, sorgulama ve sorun gidermeyi kapsayan kapsamlı kılavuz (İngilizce).
+*   **[🔧 MCP Kuralları & Detaylı Promptlar](docs/KNOWGRAPH_MCP_RULES_TR.md)**: KnowGraph'ı AI asistanlarıyla kullanmak için en iyi pratikler.
+*   **[🏗️ Mimari & Algoritmalar](docs/ARCHITECTURE_TR.md)**: Graf teorisi, düğüm ağırlıklandırma algoritmaları ve sistem mimarisi.
+*   **[📦 Repository İndeksleme](docs/REPOSITORY_INDEXING.md)**: Git repository'lerini ve kod dizinlerini indeksleme kılavuzu (İngilizce).
 
 ## 🤝 Bilime Katkı
 

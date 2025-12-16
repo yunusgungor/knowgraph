@@ -26,25 +26,47 @@ from knowgraph.shared.security import validate_path
 
 
 async def index_graph(
-    input_path: str, graph_path: Path, provider: IntelligenceProvider, resume_mode: bool, gc: bool
+    input_path: str,
+    graph_path: Path,
+    provider: IntelligenceProvider,
+    resume_mode: bool,
+    gc: bool,
+    include_patterns: list[str] | None = None,
+    exclude_patterns: list[str] | None = None,
+    access_token: str | None = None,
 ) -> list[types.TextContent]:
-    """Handles the indexing process, including resume logic and incremental updates.
+    """Handles the indexing process for markdown files, repositories, and code directories.
+
+    Supports:
+    - Local markdown files and directories
+    - Git repository URLs (GitHub, GitLab, Bitbucket)
+    - Code directories (with automatic conversion to markdown)
+    - Resume mode and incremental updates
     """
-    # Resolve input path to absolute path
-    # This prevents errors with relative paths (e.g. 'input' vs './input')
-    try:
-        input_path_obj = validate_path(input_path, must_exist=True, must_be_file=False)
-        input_path = str(input_path_obj)
-    except Exception as e:
-        return [types.TextContent(type="text", text=f"Error: Invalid input path: {e}")]
+    from knowgraph.infrastructure.parsing.repo_ingestor import detect_source_type
+
+    # Detect source type first
+    source_type = detect_source_type(input_path)
+
+    # For repositories and remote code directories, skip path validation
+    if source_type == "repository":
+        # No path validation needed for URLs
+        pass
+    else:
+        # Validate local paths
+        try:
+            input_path_obj = validate_path(input_path, must_exist=True, must_be_file=False)
+            input_path = str(input_path_obj)
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error: Invalid input path: {e}")]
 
     # Redirect stdout to stderr to prevent polluting the MCP JSON-RPC stream
-    # Internal components like SmartGraphBuilder use print() which would break the protocol
     with contextlib.redirect_stdout(sys.stderr):
         try:
             manifest_path = graph_path / "metadata" / "manifest.json"
 
-            if resume_mode:
+            if resume_mode and source_type != "repository":
+                # Resume mode only works for local files/directories
                 manifest = read_manifest(graph_path)
                 if not manifest:
                     return [
@@ -75,8 +97,6 @@ async def index_graph(
                             enriched_nodes.append(new_node)
 
                         delta.added_nodes = enriched_nodes
-                        # Assuming modified nodes are treated same as added in this simple logic
-                        # Real implementation might need more nuance, but keeping parity with original code
                         delta.modified_nodes = enriched_nodes
 
                     normalized_content = normalize_markdown_content(new_content)
@@ -92,9 +112,9 @@ async def index_graph(
                             text=f"Successfully resumed/updated indexing for {input_path}.",
                         )
                     ]
-                # For directories, fall through to standard run_update below
 
-            if manifest_path.exists():
+            # Standard indexing or update
+            if manifest_path.exists() and source_type != "repository":
                 await run_update(
                     input_path=input_path,
                     graph_store=str(graph_path),
@@ -108,20 +128,36 @@ async def index_graph(
                     )
                 ]
             else:
+                # Full indexing (supports repositories, code directories, and markdown)
                 await run_index(
                     input_path=input_path,
                     output_path=str(graph_path),
                     provider=provider,
+                    include_patterns=include_patterns,
+                    exclude_patterns=exclude_patterns,
+                    access_token=access_token,
                 )
+
+                source_desc = (
+                    "repository"
+                    if source_type == "repository"
+                    else "code directory" if source_type == "directory" else "markdown files"
+                )
+
                 return [
                     types.TextContent(
                         type="text",
-                        text=f"Successfully initialized knowledge graph from {input_path}.",
+                        text=f"Successfully initialized knowledge graph from {source_desc}: {input_path}.",
                     )
                 ]
 
         except Exception as e:
-            return [types.TextContent(type="text", text=f"Error indexing: {e!s}")]
+            import traceback
+
+            error_details = traceback.format_exc()
+            return [
+                types.TextContent(type="text", text=f"Error indexing: {e!s}\n\n{error_details}")
+            ]
 
 
 def analyze_path_impact_report(

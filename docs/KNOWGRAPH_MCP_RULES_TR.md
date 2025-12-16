@@ -5,7 +5,11 @@ Bu dosya, KnowGraph MCP Sunucusunu en üst düzeyde, eksiksiz ve en verimli şek
 
 ## 🚀 1. Temel Prensipler
 1.  **Önce Kontrol Et (Pre-flight Check)**: Karmaşık bir işlemden önce (örneğin büyük bir etki analizi veya sorgu), veritabanının sağlığını `knowgraph_validate` ile kontrol etmeyi alışkanlık haline getir.
-2.  **Varsayılan Yol (Default Path)**: MCP sunucusu ile sorgu yaparken, varsayılan `graph_path` parametresi her zaman **kod tabanındaki `graphstore` dizinidir** (`./graphstore`). Tüm analizler ve sorgular bu dizin üzerinden gerçekleştirilir.
+2.  **Varsayılan Yol (Default Path)**: 
+    - MCP sunucusu ile sorgu yaparken, `graph_path` parametresi **belirtilmezse**, sistem otomatik olarak **kod tabanının kök dizinindeki `graphstore` klasörünü** kullanır.
+    - **Önemli**: Eğer `graph_path` parametresi boş bırakılırsa veya belirtilmezse, KnowGraph araçları varsayılan olarak `./graphstore` yolunu kullanır. Bu yol, **projenin bulunduğu dizindeki `graphstore` klasörüne** işaret eder.
+    - **Örnek**: Eğer proje `/Users/kullanici/projeler/myapp` dizinindeyse, varsayılan graph path `/Users/kullanici/projeler/myapp/graphstore` olacaktır.
+    - Tüm analizler ve sorgular bu dizin üzerinden gerçekleştirilir. Farklı bir konum kullanmak istiyorsanız, `graph_path` parametresini açıkça belirtmelisiniz.
 3.  **Bağlam Kraldır (Context is King)**: Basit sorgular yerine, `enable_hierarchical_lifting=True` kullanarak dosyanın bulunduğu klasör ve proje yapısından gelen zekayı her zaman kullan.
 4.  **Kesinlik vs. Genişlik**:
     *   Nokta atışı teknik bilgi için: `expand_query=False` (Varsayılan).

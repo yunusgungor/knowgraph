@@ -104,12 +104,13 @@ async def test_index_graph_standard_init():
 
 @pytest.mark.asyncio
 async def test_index_graph_error():
-    # Simulate exception
+    # Simulate exception during indexing
     with (
-        patch("pathlib.Path.exists", side_effect=Exception("Boom")),
-        patch("knowgraph.adapters.mcp.methods.validate_path", side_effect=lambda p, **k: Path(p)),
+        patch("knowgraph.infrastructure.parsing.repo_ingestor.detect_source_type", return_value="markdown"),
+        patch("knowgraph.adapters.mcp.methods.validate_path", return_value=Path("input.md")),
+        patch("knowgraph.adapters.mcp.methods.run_index", side_effect=Exception("Boom")),
     ):
-        result = await index_graph("input", Path("p"), MagicMock(), resume_mode=False, gc=False)
+        result = await index_graph("input.md", Path("p"), MagicMock(), resume_mode=False, gc=False)
         assert "Error indexing: Boom" in result[0].text
 
 
