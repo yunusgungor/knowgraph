@@ -1,0 +1,273 @@
+"""Manifest management for graph metadata and versioning."""
+
+import json
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+
+from knowgraph.shared.exceptions import StorageError
+
+
+@dataclass
+class Manifest:
+    """Graph snapshot metadata.
+
+    Tracks version information, statistics, and configuration for incremental
+    updates and consistency validation.
+
+    Attributes
+    ----------
+        version: Schema version (e.g., "1.0.0")
+        created_at: Unix timestamp of initial creation
+        updated_at: Unix timestamp of last update
+        node_count: Total number of nodes
+        edge_count: Total number of edges
+        file_hashes: Mapping of source file paths to SHA-1 hashes
+        edges_filename: Filename for the edges data
+        sparse_index_filename: Filename for the sparse index data
+        semantic_edge_count: Number of semantic edges
+        finalized: Whether indexing completed successfully (for checkpoint/resume)
+
+    """
+
+    version: str
+    node_count: int
+    edge_count: int
+    file_hashes: dict[str, str]
+    edges_filename: str
+    sparse_index_filename: str
+    created_at: int | None = None
+    updated_at: int | None = None
+    semantic_edge_count: int = 0
+    finalized: bool = False
+
+    def __post_init__(self) -> None:
+        """Set default timestamps if not provided."""
+        if self.created_at is None:
+            self.created_at = int(time.time())
+        if self.updated_at is None:
+            self.updated_at = int(time.time())
+
+    def to_dict(self: "Manifest") -> dict[str, object]:
+        """Serialize manifest to dictionary."""
+        return {
+            "version": self.version,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "node_count": self.node_count,
+            "edge_count": self.edge_count,
+            "file_hashes": self.file_hashes,
+            "files": {
+                "edges": self.edges_filename,
+                "sparse_index": self.sparse_index_filename,
+            },
+            "semantic_edge_count": self.semantic_edge_count,
+            "finalized": self.finalized,
+        }
+
+    @classmethod
+    def from_dict(cls: type["Manifest"], data: dict[str, object]) -> "Manifest":
+        """Deserialize manifest from dictionary."""
+        from typing import cast
+
+        return cls(
+            version=cast(str, data["version"]),
+            created_at=cast(int, data["created_at"]),
+            updated_at=cast(int, data["updated_at"]),
+            node_count=cast(int, data["node_count"]),
+            edge_count=cast(int, data["edge_count"]),
+            file_hashes=cast(dict[str, str], data["file_hashes"]),
+            edges_filename=cast(str, data["files"]["edges"]),
+            sparse_index_filename=cast(
+                str, data["files"].get("sparse_index", data["files"].get("vectors"))
+            ),  # Fallback for migration
+            semantic_edge_count=cast(
+                int, data.get("semantic_edge_count", data.get("lexical_edge_count", 0))
+            ),  # Fallback
+            finalized=cast(bool, data.get("finalized", False)),
+        )
+
+    @classmethod
+    def create_new(
+        cls: type["Manifest"],
+        edges_filename: str,
+        sparse_index_filename: str,
+        version: str = "1.0.0",
+        created_at: int | None = None,
+    ) -> "Manifest":
+        """Create a new manifest with default values.
+
+        Args:
+        ----
+            edges_filename: Filename for the edges data
+            sparse_index_filename: Filename for the sparse index data
+            version: Schema version (default: "1.0.0")
+            created_at: Unix timestamp of initial creation (default: current time)
+
+        Returns:
+        -------
+            New manifest instance
+
+        """
+        now = int(time.time())
+        return cls(
+            version=version,
+            created_at=created_at or now,
+            updated_at=now,
+            node_count=0,
+            edge_count=0,
+            file_hashes={},
+            edges_filename=edges_filename,
+            sparse_index_filename=sparse_index_filename,
+        )
+
+
+@contextmanager
+def acquire_manifest_lock(graph_store_path: Path, timeout: float = 30.0) -> Iterator[None]:
+    """Acquire exclusive lock on manifest file for concurrent update safety.
+
+    Uses a lock file to prevent concurrent modifications. Implements timeout
+    with exponential backoff for lock acquisition.
+
+    Args:
+    ----
+        graph_store_path: Root graph storage directory
+        timeout: Maximum seconds to wait for lock (default: 30.0)
+
+    Yields:
+    ------
+        None when lock is acquired
+
+    Raises:
+    ------
+        StorageError: If lock cannot be acquired within timeout
+
+    """
+    metadata_dir = graph_store_path / "metadata"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+
+    lock_file = metadata_dir / "manifest.lock"
+    start_time = time.time()
+    backoff = 0.1  # Start with 100ms backoff
+
+    # Try to acquire lock
+    while True:
+        try:
+            # Create lock file with exclusive access (fails if exists)
+            lock_file.touch(exist_ok=False)
+            break
+        except FileExistsError:
+            elapsed = time.time() - start_time
+            if elapsed >= timeout:
+                raise StorageError(
+                    f"Failed to acquire manifest lock within {timeout}s timeout",
+                    {"lock_file": str(lock_file)},
+                )
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 1.0)  # Exponential backoff, max 1s
+
+    try:
+        yield
+    finally:
+        # Always release lock
+        if lock_file.exists():
+            lock_file.unlink()
+
+
+def write_manifest(manifest: Manifest, graph_store_path: Path) -> None:
+    """Write manifest to JSON file with exclusive locking.
+
+    Uses file locking to ensure thread-safe concurrent updates.
+
+
+    File location: {graph_store_path}/metadata/manifest.json
+
+    Args:
+    ----
+        manifest: Manifest to write
+        graph_store_path: Root graph storage directory
+
+    Raises:
+    ------
+        StorageError: If write operation fails
+
+    """
+    with acquire_manifest_lock(graph_store_path):
+        metadata_dir = graph_store_path / "metadata"
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+
+        manifest_file = metadata_dir / "manifest.json"
+        temp_file = manifest_file.with_suffix(".tmp")
+
+        try:
+            with open(temp_file, "w", encoding="utf-8") as file:
+                json.dump(manifest.to_dict(), file, indent=2, ensure_ascii=False)
+            temp_file.rename(manifest_file)
+        except Exception as error:
+            if temp_file.exists():
+                temp_file.unlink()
+            raise StorageError(
+                "Failed to write manifest",
+                {"error": str(error), "path": str(manifest_file)},
+            ) from error
+
+
+def read_manifest(graph_store_path: Path) -> Manifest | None:
+    """Read manifest from JSON file.
+
+    Args:
+    ----
+        graph_store_path: Root graph storage directory
+
+    Returns:
+    -------
+        Manifest object or None if not found
+
+    Raises:
+    ------
+        StorageError: If read operation fails (excluding not found)
+
+    """
+    manifest_file = graph_store_path / "metadata" / "manifest.json"
+
+    if not manifest_file.exists():
+        return None
+
+    try:
+        with open(manifest_file, encoding="utf-8") as file:
+            data = json.load(file)
+        return Manifest.from_dict(data)
+    except Exception as error:
+        raise StorageError(
+            "Failed to read manifest",
+            {"error": str(error), "path": str(manifest_file)},
+        ) from error
+
+
+def update_manifest_stats(manifest: Manifest, node_count: int, edge_count: int) -> Manifest:
+    """Update manifest with new node and edge counts.
+
+    Args:
+    ----
+        manifest: Existing manifest
+        node_count: New node count
+        edge_count: New edge count
+
+    Returns:
+    -------
+        Updated manifest (new instance, original unchanged)
+
+    """
+    return Manifest(
+        version=manifest.version,
+        created_at=manifest.created_at,
+        updated_at=int(time.time()),
+        node_count=node_count,
+        edge_count=edge_count,
+        file_hashes=manifest.file_hashes,
+        edges_filename=manifest.edges_filename,
+        sparse_index_filename=manifest.sparse_index_filename,
+        semantic_edge_count=manifest.semantic_edge_count,
+    )

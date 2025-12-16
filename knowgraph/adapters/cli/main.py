@@ -1,0 +1,41 @@
+"""Main CLI entry point for KnowGraph commands."""
+
+import click
+from dotenv import load_dotenv
+
+from knowgraph.adapters.cli.index_command import index_command
+from knowgraph.adapters.cli.query_command import query_command
+from knowgraph.adapters.cli.update_command import update_command
+
+# Load environment variables
+load_dotenv()
+
+
+@click.group()
+@click.version_option(version="0.1.0")
+def cli() -> None:
+    """KnowGraph - Knowledge Graph-Powered RAG System.
+
+    A production-grade library for converting Git repositories into queryable
+    knowledge graphs with explainable reasoning paths.
+    """
+
+
+# Register commands
+cli.add_command(index_command, name="index")
+cli.add_command(query_command, name="query")
+cli.add_command(update_command, name="update")
+
+
+@cli.command(name="serve")
+def serve_command() -> None:
+    """Start the KnowGraph MCP server."""
+    import asyncio
+
+    from knowgraph.adapters.mcp.server import main
+
+    asyncio.run(main())
+
+
+if __name__ == "__main__":
+    cli()

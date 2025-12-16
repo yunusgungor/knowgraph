@@ -1,0 +1,246 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "knowgraph"
+version = "0.1.0"
+description = "Knowledge Graph-Powered RAG system for code understanding"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Yunus Güngör", email = "mail@yunusgungor.com" }]
+keywords = ["graph", "rag", "code-analysis", "knowledge-graph", "ml"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "numpy>=1.26.0",
+    "scipy>=1.11.0",
+    "networkx>=3.2.0",
+    "click>=8.1.0",
+    "rich>=13.7.0",
+    "tqdm>=4.66.0",
+    "mcp>=1.0.0",
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "tiktoken>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-xdist>=3.5.0",
+    "black>=24.1.0",
+    "isort>=5.13.0",
+    "flake8>=7.0.0",
+    "pylint>=3.0.0",
+    "mypy>=1.8.0",
+    "ruff>=0.1.0",
+    "pre-commit>=3.6.0",
+    "ipdb>=0.13.0",
+    "jupyterlab>=4.0.0",
+    "sphinx>=7.2.0",
+    "sphinx-rtd-theme>=2.0.0",
+]
+
+[project.scripts]
+knowgraph = "knowgraph.adapters.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/yunusgungor/knowgraph"
+Documentation = "https://github.com/yunusgungor/knowgraph/docs"
+Repository = "https://github.com/yunusgungor/knowgraph"
+Issues = "https://github.com/yunusgungor/knowgraph/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["knowgraph*"]
+exclude = ["tests*", "docs*", "graph_store*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.pytest_cache
+  | \.ruff_cache
+  | \.venv
+  | venv
+  | build
+  | dist
+  | graph_store
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+skip_glob = ["**/graph_store/**", "**/.venv/**"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+warn_no_return = true
+warn_unreachable = false
+strict_equality = true
+exclude = ["graph_store", ".venv", "venv", "build", "dist", "tests"]
+disable_error_code = [
+    "assignment",
+    "attr-defined",
+    "unreachable",
+    "truthy-function",
+    "index",
+    "arg-type",
+    "dict-item",
+    "misc",
+    "var-annotated",
+]
+
+[[tool.mypy.overrides]]
+module = ["networkx.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests", "tests.*"]
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+check_untyped_defs = false
+warn_return_any = false
+no_implicit_optional = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=knowgraph",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+    "--cov-fail-under=70",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["knowgraph"]
+omit = ["*/tests/*", "*/__pycache__/*", "*/site-packages/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C90", # mccabe complexity
+    "N",   # pep8-naming
+    "D",   # pydocstyle
+    "UP",  # pyupgrade
+    "ANN", # flake8-annotations
+    "S",   # flake8-bandit
+    "B",   # flake8-bugbear
+    "A",   # flake8-builtins
+    "C4",  # flake8-comprehensions
+    "T10", # flake8-debugger
+    "ISC", # flake8-implicit-str-concat
+    "PIE", # flake8-pie
+    "PT",  # flake8-pytest-style
+    "Q",   # flake8-quotes
+    "SIM", # flake8-simplify
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+    "RUF", # Ruff-specific rules
+]
+ignore = [
+    "C901",   # Function complexity - some functions are intentionally complex
+    "PTH123", # open() vs Path.open() - both are acceptable
+    "A003",   # Shadowing builtins - 'type' is a common field name
+    "A002",   # Argument shadowing builtins
+    "ARG002", # Unused method argument
+    "ARG005", # Unused lambda argument
+    "F841",   # Local variable is assigned to but never used (common in tests)
+    "S108",   # Probable insecure usage of temporary file or directory
+    "S101",   # Use of assert detected (common in tests)
+    "PT011",  # pytest.raises() is too broad
+    "N806",   # Variable in function should be lowercase
+    "E501",   # Line too long
+    "RUF059", # Unused unpacked variable
+    "ARG001", # Unused function argument
+    "SIM117", # Use a single `with` statement
+    "ANN",    # Typings
+    "SIM108", # Use ternary operator
+    "RUF100", # Unused noqa detected
+    "B007",   # Loop control variable not used
+    "B904",   # Raise ... from ...
+    "PTH",    # Use pathlib
+    "D",      # Pydocstyle (docstrings)
+    "S110",   # Try-except-pass
+    "B905",   # Zip without strict
+    "SIM105", # Contextlib.suppress
+]
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "graph_store",
+]
+
+[tool.ruff.mccabe]
+max-complexity = 5
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401", "D104"]
+"tests/**/*.py" = ["S101", "D", "ANN"]
