@@ -8,8 +8,13 @@ from typing import Any
 class RateLimiter:
     """Dynamic rate limiter based on response headers."""
 
-    def __init__(self):
-        """Initialize rate limiter."""
+    def __init__(self, requests_per_minute: int = 50, tokens_per_minute: int = 100000) -> None:
+        """Initialize rate limiter.
+
+        Args:
+            requests_per_minute: The maximum number of requests allowed per minute.
+            tokens_per_minute: The maximum number of tokens allowed per minute.
+        """
         self._lock = asyncio.Lock()
         self._remaining_requests = 1000  # Default safe high value
         self._remaining_tokens = 1000000  # Default safe high value

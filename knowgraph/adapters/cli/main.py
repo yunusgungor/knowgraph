@@ -1,11 +1,16 @@
 """Main CLI entry point for KnowGraph commands."""
 
+import warnings
+
 import click
 from dotenv import load_dotenv
 
-from knowgraph.adapters.cli.index_command import index_command
-from knowgraph.adapters.cli.query_command import query_command
-from knowgraph.adapters.cli.update_command import update_command
+# Suppress invalid escape sequence warnings from dependencies
+warnings.filterwarnings("ignore", category=SyntaxWarning, message="invalid escape sequence")
+
+from knowgraph.adapters.cli.index_command import index_command  # noqa: E402
+from knowgraph.adapters.cli.query_command import query_command  # noqa: E402
+from knowgraph.adapters.cli.update_command import update_command  # noqa: E402
 
 # Load environment variables
 load_dotenv()

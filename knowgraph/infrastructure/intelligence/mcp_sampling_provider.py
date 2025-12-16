@@ -65,6 +65,15 @@ class MCPSamplingProvider(IntelligenceProvider):
         """Generate text from a prompt."""
         return await self._sample(prompt)
 
+    async def extract_entities_batch(self, texts: list[str]) -> list[list[Entity]]:
+        """Extract entities from multiple texts in a batch (serialized for MCP)."""
+        # For MCP sampling, we currently process sequentially or would need parallel requests.
+        # Simple sequential implementation for now to satisfy interface.
+        results = []
+        for text in texts:
+            results.append(await self.extract_entities(text))
+        return results
+
     async def extract_entities(self, text: str) -> list[Entity]:
         """Extract entities from text."""
         prompt = ENTITY_EXTRACTION_PROMPT.format(text=text)
