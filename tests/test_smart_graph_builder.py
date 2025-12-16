@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -11,11 +12,12 @@ from knowgraph.infrastructure.parsing.chunker import Chunk
 
 @pytest.mark.asyncio
 async def test_smart_graph_builder_workflow():
-    provider = MagicMock(spec=IntelligenceProvider)
+    provider = AsyncMock(spec=IntelligenceProvider)
     # Return entities for node 1, empty for node 2
-    provider.extract_entities.side_effect = [
-        [Entity(name="Apple", type="Fruit", description="A fruit")],
-        [],
+    # Return entities for node 1, empty for node 2
+    # Batch processing expects a list of lists
+    provider.extract_entities_batch.side_effect = [
+        [[Entity(name="Apple", type="Fruit", description="A fruit")], []],
     ]
 
     chunks = [
@@ -84,25 +86,35 @@ async def test_smart_graph_builder_workflow():
             "knowgraph.application.indexing.smart_graph_builder.create_semantic_edges",
             return_value=[],
         ) as mock_edges,
+        patch(
+            "knowgraph.application.indexing.smart_graph_builder.CacheManager"
+        ) as MockCacheManager,
     ):
+        # Configure mock cache
+        mock_cache = MockCacheManager.return_value
+        mock_cache.get_entities.return_value = None  # Force cache miss
+        mock_cache.get_cache_for_chunk = MagicMock(return_value=None)
 
-        nodes, edges = await builder.build(chunks, "file.md", "hash")
+        nodes, edges = await builder.build(chunks, "file.md", "hash", graph_path=Path("."))
 
         assert len(nodes) == 2
         # Check metadata update
         assert nodes[0].metadata["entities"][0]["name"] == "Apple"
-        assert provider.extract_entities.call_count == 2
+        assert nodes[0].metadata["entities"][0]["name"] == "Apple"
+        # Only called once because of batching
+        assert provider.extract_entities_batch.call_count == 1
         mock_edges.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_retry_logic():
-    provider = MagicMock(spec=IntelligenceProvider)
+    provider = AsyncMock(spec=IntelligenceProvider)
     # Fail 2 times then succeed
-    provider.extract_entities.side_effect = [
+    # Fail 2 times then succeed
+    provider.extract_entities_batch.side_effect = [
         Exception("Rate Limit"),
         Exception("Rate Limit"),
-        [Entity(name="Apple", type="Fruit", description="desc")],
+        [[Entity(name="Apple", type="Fruit", description="desc")]],
     ]
 
     builder = SmartGraphBuilder(provider)
@@ -138,10 +150,17 @@ async def test_retry_logic():
             return_value=[],
         ),
         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch(
+            "knowgraph.application.indexing.smart_graph_builder.CacheManager"
+        ) as MockCacheManager,
     ):
+        mock_cache = MockCacheManager.return_value
+        mock_cache.get_entities.return_value = None
 
-        nodes, _ = await builder.build([chunk], "f", "h")
+        nodes, _ = await builder.build([chunk], "f", "h", graph_path=Path("."))
 
+        # Should have slept twice
+        assert provider.extract_entities_batch.call_count == 3
         # Should have slept twice
         assert mock_sleep.call_count == 2
         assert nodes[0].metadata["entities"][0]["name"] == "Apple"
@@ -149,9 +168,10 @@ async def test_retry_logic():
 
 @pytest.mark.asyncio
 async def test_retry_failure():
-    provider = MagicMock(spec=IntelligenceProvider)
+    provider = AsyncMock(spec=IntelligenceProvider)
     # Fail 5 times (all attempts)
-    provider.extract_entities.side_effect = Exception("Fail")
+    # Fail 5 times (all attempts)
+    provider.extract_entities_batch.side_effect = Exception("Fail")
 
     builder = SmartGraphBuilder(provider)
     chunk = Chunk(
@@ -185,9 +205,14 @@ async def test_retry_failure():
             return_value=[],
         ),
         patch("asyncio.sleep", new_callable=AsyncMock),
+        patch(
+            "knowgraph.application.indexing.smart_graph_builder.CacheManager"
+        ) as MockCacheManager,
     ):
+        mock_cache = MockCacheManager.return_value
+        mock_cache.get_entities.return_value = None
 
-        nodes, _ = await builder.build([chunk], "f", "h")
+        nodes, _ = await builder.build([chunk], "f", "h", graph_path=Path("."))
 
         # Should return empty entities
         assert nodes[0].metadata["entities"] == []

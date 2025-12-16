@@ -7,7 +7,7 @@ Clean Code principles.
 import os
 
 # Chunking Configuration
-DEFAULT_CHUNK_SIZE = 4096  # Maximum characters per chunk
+DEFAULT_CHUNK_SIZE = 24000  # Maximum characters per chunk (Optimization for large files)
 DEFAULT_CHUNK_OVERLAP = 50  # Token overlap between chunks
 MIN_CHUNK_SIZE = 100  # Minimum chunk size to avoid noise
 
@@ -15,10 +15,12 @@ MIN_CHUNK_SIZE = 100  # Minimum chunk size to avoid noise
 TOP_K = 20  # Number of seed nodes from vector search
 MAX_NODES = 200  # Maximum nodes in active subgraph
 ENABLE_QUERY_EXPANSION = True  # Enable LLM-based query expansion
+MAX_CONCURRENT_REQUESTS = 20  # Maximum concurrent API requests
+BATCH_SIZE = 10  # Number of chunks to process in a single LLM call
 
 # LLM Configuration
 DEFAULT_LLM_PROVIDER = "openai"
-DEFAULT_OPENAI_MODEL = os.getenv("KNOWGRAPH_LLM_MODEL", "gpt-4.1-nano")
+DEFAULT_OPENAI_MODEL = os.getenv("KNOWGRAPH_LLM_MODEL", "gpt-4o-mini")
 KNOWGRAPH_LLM_MODEL = DEFAULT_OPENAI_MODEL
 LLM_TEMPERATURE = 0.0
 MAX_EXPANSION_TERMS = 5  # Number of expansion terms
@@ -29,7 +31,7 @@ MIN_HOPS = 1  # Minimum traversal depth
 MAX_HOPS_LIMIT = 6  # Hard limit for traversal
 
 # Context Assembly Configuration
-MAX_TOKENS = 3000  # Maximum tokens for LLM context (90% of 4K)
+MAX_TOKENS = 50000  # Maximum tokens for LLM context (increased for large files)
 TOKEN_BUDGET_UTILIZATION = 0.90  # Target 90% token budget usage
 
 # Node Activation Scoring Weights (sum = 1.0)
@@ -75,7 +77,7 @@ TOKEN_PENALTY_FACTOR = 0.1  # Penalty factor for large chunks
 FILE_READ_CHUNK_SIZE = 8192  # Bytes to read at a time for hashing
 
 # Validation Limits
-MAX_NODE_TOKEN_COUNT = 10000  # Maximum tokens per node
+MAX_NODE_TOKEN_COUNT = 50000  # Maximum tokens per node
 MAX_QUERY_PREVIEW_LENGTH = 100  # Characters to show in error messages
 
 # Sampling Configuration

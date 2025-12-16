@@ -28,3 +28,31 @@ Code:
 
 Output JSON:
 """
+
+ENTITY_EXTRACTION_BATCH_PROMPT = """
+You are an expert code analysis AI. Your task is to extract key entities from MULTIPLE code segments provided below.
+
+Processing Rules:
+1. Each segment starts with "--- SEGMENT <ID> ---".
+2. Extract entities for EACH segment independently.
+3. Return a JSON object with a "results" list, where each item corresponds to a segment in the same order.
+
+Output Format:
+{{
+  "results": [
+    {{
+      "segment_id": "<ID>",
+      "entities": [
+          {{
+            "name": "EntityName",
+            "type": "Class/Function/Variable",
+            "description": "Brief description"
+          }}
+      ]
+    }}
+  ]
+}}
+
+Segments to Analyze:
+{text}
+"""

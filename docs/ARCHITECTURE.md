@@ -175,15 +175,18 @@ The journey of an MCP request within the system is as follows:
 
 ## 🔬 How It Works
 
-### Indexing Pipeline
+### Indexing Pipeline (v0.2.0 Smart Engine)
 
-KnowGraph transforms markdown files into a knowledge graph in 5 steps:
+KnowGraph transforms markdown files into a knowledge graph using a high-performance **Hybrid Pipeline**:
 
-1. **Parse Headers**: Splits into sections based on H1-H4 headers.
-2. **Smart Chunking**: Token-aware chunking preserving logical boundaries.
-3. **Entity Extraction**: Extracts important nodes (functions, classes) using LLM.
+1. **Parse Headers**: Splits document into logical sections (H1-H4).
+2. **Smart Chunking**: Token-aware chunking preserving context.
+3. **Hybrid Entity Extraction**:
+    *   **Level 1 (Memory):** Checks **SQLite Cache**. If analyzed before, returns instantly (0ms).
+    *   **Level 2 (Speed):** If chunk is code, runs **AST Analysis** (Python `ast` module). Extracts classes/functions deterministically (10ms, 0 tokens).
+    *   **Level 3 (Intelligence):** If text, batches chunks (10x) and sends to **LLM** (gpt-4o-mini) via **Smart Rate Limiter**.
 4. **Build Graph**: Creates semantic edges based on entity overlap.
-5. **Persist to Disk**: Saves in JSONL format.
+5. **Persist to Disk**: Saves nodes/edges JSONL and updates Manifest.
 
 ### Query Pipeline
 

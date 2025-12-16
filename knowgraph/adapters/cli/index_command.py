@@ -90,10 +90,12 @@ async def run_index(
 
     builder = SmartGraphBuilder(provider)
     # We pass a dummy "file_hash" or the first one, but the builder mostly uses this for ID generation if needed (not really used in build signature for nodes)
-    # The build method signature is (chunks, file_path, file_hash). Use the input root as "file_path".
+    # The build method signature is (chunks, file_path, file_hash, graph_path). Use the input root as "file_path".
     # For multiple files, we might need to adjust how we pass this if it affects node ID stability across re-runs.
     # However, node IDs usually depend on chunk content.
-    nodes, all_edges = await builder.build(all_chunks, str(input_path_obj), "")
+    nodes, all_edges = await builder.build(
+        all_chunks, str(input_path_obj), "", str(graph_store_path)
+    )
 
     # We still need sparse embeddings for retrieval index
     sparse_embedder = SparseEmbedder()

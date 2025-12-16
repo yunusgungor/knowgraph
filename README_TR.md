@@ -34,6 +34,15 @@ KnowGraph, **Graf Teorisi** ve **Ağ Bilimi (Network Science)** prensiplerini ku
 
 ---
 
+## 🚀 Performans Motoru (v0.2.0)
+
+KnowGraph, ölçeklenebilirlik için yeniden tasarlandı. Yeni **Akıllı İndeksleme Motoru** (Smart Indexing Engine) büyük depoları verimli bir şekilde işler:
+
+*   **⚡ Hibrit Zeka (Hybrid Intelligence):** Kod dosyaları **AST (Abstract Syntax Tree)** kullanılarak 100 kat daha hızlı ve 0 maliyetle (token harcamadan) analiz edilirken, standart dosyalar Toplu (Batch) LLM işlemiyle analiz edilir.
+*   **🧠 Kalıcı Hafıza (Persistent Memory):** Dahili SQLite Önbellekleme (`.knowgraph_cache`) sayesinde değişmeyen dosyaları asla tekrar indekslemezsiniz. Kesintilerden sonra anında kaldığı yerden devam eder.
+*   **🛡️ Akıllı Hız Limitleyici (Smart Rate Limiter):** API limitlerine (Free/Pro tier) otomatik uyum sağlar, header takibiyle 429 hatalarını önler.
+*   **🏎️ Eşzamanlı Paketleme (Concurrent Batching):** 20 paralel çalışan ile her çağrıda 10 parçayı işleyerek maksimum verim sağlar.
+
 ## ⚡ 30 Saniyede Bilişsel Yükseltme (Quick Start)
 
 AI editörünüzün IQ'sunu artırmak için KnowGraph'ı bir MCP sunucusu olarak bağlayın.

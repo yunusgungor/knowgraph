@@ -12,9 +12,11 @@ from knowgraph.domain.intelligence.provider import (
     Relationship,
 )
 from knowgraph.infrastructure.intelligence.prompts import (
+    ENTITY_EXTRACTION_BATCH_PROMPT,
     ENTITY_EXTRACTION_PROMPT,
     RELATIONSHIP_EXTRACTION_PROMPT,
 )
+from knowgraph.infrastructure.intelligence.rate_limiter import RateLimiter
 
 
 class OpenAIProvider(IntelligenceProvider):
@@ -32,6 +34,63 @@ class OpenAIProvider(IntelligenceProvider):
             base_url=api_base or os.getenv("KNOWGRAPH_API_BASE_URL"),
         )
         self.model = model
+        self.rate_limiter = RateLimiter()
+
+    async def extract_entities_batch(self, texts: list[str]) -> list[list[Entity]]:
+        """Extract entities from multiple texts in a single batch request."""
+        # Prepare batched prompt
+        segments = []
+        for i, text in enumerate(texts):
+            segments.append(f"--- SEGMENT {i} ---\n{text}\n")
+
+        combined_text = "\n".join(segments)
+        prompt = ENTITY_EXTRACTION_BATCH_PROMPT.format(text=combined_text)
+
+        await self.rate_limiter.acquire()
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0,
+            )
+            # Update limits from headers (if available, client response might hide raw headers depending on lib version,
+            # but usually response object has access if we use with_raw_response or verify lib behavior.
+            # Assuming recent openai lib, response is Pydantic model. Accessing headers is tricky without 'with_raw_response'.
+            # For strict correctness we should use .with_raw_response if available, but let's check basic usage first.
+            # Actually standard openai python lib > 1.0 triggers exceptions on 429.
+            # Reading headers is not directly on the model.
+            # We skip update() for now or need a wrapper.
+            # Let's focus on acquisition logic first as that prevents overload.
+        except Exception:
+            # Trigger backoff on error
+            await self.rate_limiter.trigger_backoff()
+            raise
+
+        content = response.choices[0].message.content
+        content = response.choices[0].message.content
+        if not content:
+            return [[] for _ in texts]
+
+        try:
+            data = json.loads(content)
+            results = data.get("results", [])
+
+            # Map back to original order
+            batch_output = [[] for _ in texts]
+            for item in results:
+                # Parse segment ID safely
+                try:
+                    seg_id = int(item.get("segment_id", -1))
+                    if 0 <= seg_id < len(texts):
+                        entities = [Entity(**e) for e in item.get("entities", [])]
+                        batch_output[seg_id] = entities
+                except (ValueError, TypeError):
+                    continue
+
+            return batch_output
+        except Exception:
+            return [[] for _ in texts]
 
     async def generate_text(self, prompt: str) -> str:
         """Generate text from a prompt."""

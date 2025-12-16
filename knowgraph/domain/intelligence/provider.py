@@ -34,6 +34,11 @@ class IntelligenceProvider(ABC):
         ...
 
     @abstractmethod
+    async def extract_entities_batch(self, texts: list[str]) -> list[list[Entity]]:
+        """Extract entities from multiple texts in a batch."""
+        ...
+
+    @abstractmethod
     async def extract_relationships(self, text: str, entities: list[Entity]) -> list[Relationship]:
         """Extract relationships from text given a list of known entities."""
         ...

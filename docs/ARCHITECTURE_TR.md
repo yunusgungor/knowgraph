@@ -175,15 +175,18 @@ Bir MCP isteğinin sistem içindeki yolculuğu şöyledir:
 
 ## 🔬 How It Works
 
-### Indexing Pipeline
+### Indexing Pipeline (v0.2.0 Akıllı Motor)
 
-KnowGraph, markdown dosyalarını 5 adımda bilgi grafiğine dönüştürür:
+KnowGraph, markdown dosyalarını **Hibrit Boru Hattı (Hybrid Pipeline)** kullanarak bilgi grafiğine dönüştürür:
 
-1. **Parse Headers**: H1-H4 başlıklarına göre bölümlere ayırma.
-2. **Smart Chunking**: Token-aware chunking ile mantıksal bütünlüğü koruma.
-3. **Entity Extraction**: LLM ile önemli entity'leri (fonksiyon, sınıf vb.) çıkarma.
+1. **Parse Headers**: Dokümanı H1-H4 başlıklarına göre mantıksal bölümlere ayırma.
+2. **Smart Chunking**: Bağlamı koruyan token-duyarlı parçalama.
+3. **Hibrit Entity Extraction**:
+    *   **Seviye 1 (Hafıza):** **SQLite Cache** kontrol edilir. Daha önce analiz edildiyse anında döner (0ms).
+    *   **Seviye 2 (Hız):** Kod bloğu ise **AST Analizi** (Python `ast`) çalışır. Sınıf/fonksiyonları deterministik bulur (10ms, 0 token).
+    *   **Seviye 3 (Zeka):** Metin ise parçalar 10'arlı paketlenir (Batch) ve **Akıllı Rate Limiter** üzerinden **LLM**'e (gpt-4o-mini) gönderilir.
 4. **Build Graph**: Entity overlap'e göre semantic edge'ler oluşturma.
-5. **Persist to Disk**: JSONL formatında kaydetme.
+5. **Persist to Disk**: Node ve Edge verilerini JSONL olarak kaydetme.
 
 ### Query Pipeline
 

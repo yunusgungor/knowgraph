@@ -1,16 +1,17 @@
-# 🧠 KnowGraph
+# 🧠 KnowGraph: Graph RAG & MCP Server for Code
 [![CI](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml)
 
 <div align="center">
 
-**The Cognitive Revolution for Your Codebase (MCP Server)**
+**The Cognitive Revolution for Your Codebase (Graph RAG for LLMs)**
 
-> **"Your code is not just text, it's a living system."**  
-> Shift from the probabilistic world of vector similarity to the deterministic clarity of Graph Theory.
+> **"Your code is not just text, it's a living graph."**
+> Shift from the probabilistic world of vector similarity (Standard RAG) to the deterministic clarity of **Graph Theory** and **NetworkX**.
 
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success?style=flat-square&logo=github)](https://github.com/yunusgungor/knowgraph)
 [![Theory](https://img.shields.io/badge/Theory-Graph_Topology-purple?style=flat-square&logo=wikipedia)](https://en.wikipedia.org/wiki/Network_theory)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python)](https://www.python.org/)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-green?style=flat-square&logo=server)](https://modelcontextprotocol.io)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
 [⚡ Quick Start](#-cognitive-upgrade-in-30-seconds-quick-start) • [🔬 The Difference](#-why-knowgraph-the-scientific-edge) • [🧪 The Lab](#-the-lab-cognitive-capability-tests) • [📚 Knowledge Base](#-knowledge-base)
@@ -31,6 +32,17 @@ KnowGraph leverages **Graph Theory** and **Network Science** principles to offer
 | **2. Centrality Analysis** | Focuses on keyword frequency. | Identifies **architecturally critical** components (Hub Nodes) using `PageRank`. |
 | **3. Deterministic Provenance** | High hallucination risk. | Cites the **reasoning path** and source files as irrefutable proof. |
 | **4. Cognitive Hierarchy** | Analyzes files in isolation. | Interprets files in **enriched context** using parent `README`s and project purpose. |
+
+---
+
+## 🚀 Performance Engine (v0.2.0)
+
+KnowGraph is built for scale. The new **Smart Indexing Engine** processes large repositories efficiently:
+
+*   **⚡ Hybrid Intelligence:** Code files are analyzed using **AST (Abstract Syntax Tree)** for 100x speed and 0-token cost, while standard files use Batch LLM processing.
+*   **🧠 Persistent Memory:** Built-in SQLite Caching (`.knowgraph_cache`) ensures you never re-index unchanged files. Resumes instantly after interruptions.
+*   **🛡️ Smart Rate Limiter:** Automatically respects API limits (Free/Pro tiers) by dynamically throttling requests based on headers, preventing 429 errors.
+*   **🏎️ Concurrent Batching:** Processes 10 chunks per call with 20 parallel workers, maximizing throughput.
 
 ---
 
