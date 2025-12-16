@@ -5,11 +5,12 @@ Bu dosya, KnowGraph MCP Sunucusunu en üst düzeyde, eksiksiz ve en verimli şek
 
 ## 🚀 1. Temel Prensipler
 1.  **Önce Kontrol Et (Pre-flight Check)**: Karmaşık bir işlemden önce (örneğin büyük bir etki analizi veya sorgu), veritabanının sağlığını `knowgraph_validate` ile kontrol etmeyi alışkanlık haline getir.
-2.  **Bağlam Kraldır (Context is King)**: Basit sorgular yerine, `enable_hierarchical_lifting=True` kullanarak dosyanın bulunduğu klasör ve proje yapısından gelen zekayı her zaman kullan.
-3.  **Kesinlik vs. Genişlik**:
+2.  **Varsayılan Yol (Default Path)**: MCP sunucusu ile sorgu yaparken, varsayılan `graph_path` parametresi her zaman **kod tabanındaki `graphstore` dizinidir** (`./graphstore`). Tüm analizler ve sorgular bu dizin üzerinden gerçekleştirilir.
+3.  **Bağlam Kraldır (Context is King)**: Basit sorgular yerine, `enable_hierarchical_lifting=True` kullanarak dosyanın bulunduğu klasör ve proje yapısından gelen zekayı her zaman kullan.
+4.  **Kesinlik vs. Genişlik**:
     *   Nokta atışı teknik bilgi için: `expand_query=False` (Varsayılan).
     *   Kavramsal araştırma veya belirsiz sorular için: MUTLAKA `expand_query=True` kullan.
-4.  **Açık İsimlendirme (Explicit Naming)**: KnowGraph "durumsuz" (stateless) bir arama motorudur. "O dosya" veya "Bunu" gibi zamirler yerine, her sorguda dosya adını (`auth.cpp`) veya fonksiyonu (`Guid.NewGuid`) açıkça belirt.
+5.  **Açık İsimlendirme (Explicit Naming)**: KnowGraph "durumsuz" (stateless) bir arama motorudur. "O dosya" veya "Bunu" gibi zamirler yerine, her sorguda dosya adını (`auth.cpp`) veya fonksiyonu (`Guid.NewGuid`) açıkça belirt.
 
 ---
 

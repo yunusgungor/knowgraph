@@ -5,11 +5,12 @@ This document contains strict rules and best practice guidelines for AI agents t
 
 ## 🚀 1. Core Principles
 1.  **Pre-flight Check**: Before performing complex operations (e.g., massive impact analysis or deep queries), always make it a habit to check the database health using `knowgraph_validate`.
-2.  **Context is King**: Instead of simple queries, always utilize the intelligence derived from the file's directory and project structure by using `enable_hierarchical_lifting=True`.
-3.  **Precision vs. Breadth**:
+2.  **Default Path**: When querying with the MCP server, the default `graph_path` parameter is always the **`graphstore` directory in the codebase** (`./graphstore`). All analyses and queries are performed using this path.
+3.  **Context is King**: Instead of simple queries, always utilize the intelligence derived from the file's directory and project structure by using `enable_hierarchical_lifting=True`.
+4.  **Precision vs. Breadth**:
     *   For pinpoint technical information: Use `expand_query=False` (Default).
     *   For conceptual research or vague questions: MUST use `expand_query=True`.
-4.  **Explicit Naming**: KnowGraph is a stateless search engine. Avoid pronouns like "that file" or "it". Always explicitly state the filename (`auth.cpp`) or function (`Guid.NewGuid`) in every query.
+5.  **Explicit Naming**: KnowGraph is a stateless search engine. Avoid pronouns like "that file" or "it". Always explicitly state the filename (`auth.cpp`) or function (`Guid.NewGuid`) in every query.
 
 ---
 
