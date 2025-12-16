@@ -17,8 +17,8 @@ from knowgraph.infrastructure.storage.manifest import Manifest
 
 app = Server("knowgraph-mcp")
 
-# Path to project root for resolving relative paths (assumed to be 3 levels up from this file)
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+# Path to project root for resolving relative paths (defaults to current working directory)
+PROJECT_ROOT = Path.cwd()
 
 
 @app.call_tool()  # type: ignore
