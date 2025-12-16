@@ -129,7 +129,7 @@ class QueryRetriever:
             raise
         except Exception as error:
             raise QueryError(
-                "Failed to retrieve nodes",
+                f"Failed to retrieve nodes: {error!s}",
                 {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
             ) from error
 
