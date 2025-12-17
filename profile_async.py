@@ -4,15 +4,14 @@ import asyncio
 import cProfile
 import pstats
 import time
-from pathlib import Path
 from io import StringIO
+from pathlib import Path
 
 from knowgraph.application.querying.query_engine import QueryEngine
 
 
-async def profile_single_query():
+async def profile_query(engine: QueryEngine, query: str) -> None:
     """Profile a single query to find bottlenecks."""
-    engine = QueryEngine(Path("/Users/yunusgungor/knowrag/graphstore"))
 
     print("\n🔍 Profiling Single Query\n")
     print("=" * 60)
@@ -35,14 +34,14 @@ async def profile_single_query():
     print("=" * 60)
 
 
-async def analyze_bottlenecks():
+async def analyze_bottlenecks() -> None:
     """Analyze where time is spent in queries."""
     engine = QueryEngine(Path("/Users/yunusgungor/knowrag/graphstore"))
 
     print("\n⏱️  Detailed Timing Analysis\n")
     print("=" * 60)
 
-    query = "async/await avantajları"
+    query = "async/await avantajları"  # noqa: RUF001
 
     # Time each component
     start = time.time()
@@ -50,7 +49,7 @@ async def analyze_bottlenecks():
     total_time = time.time() - start
 
     print(f"Query: {query}")
-    print(f"\nTiming Breakdown:")
+    print("\nTiming Breakdown:")
     print(
         f"  Sparse Search:    {result.sparse_search_time:.3f}s ({result.sparse_search_time/total_time*100:.1f}%)"
     )
@@ -96,7 +95,7 @@ async def analyze_bottlenecks():
         print("   → Check node loading performance")
 
 
-async def test_concurrent_io():
+async def test_concurrent_io() -> None:
     """Test if concurrent I/O actually works."""
     engine = QueryEngine(Path("/Users/yunusgungor/knowrag/graphstore"))
 
@@ -110,7 +109,7 @@ async def test_concurrent_io():
     for q in queries:
         try:
             await engine.query_async(q, top_k=5, max_hops=2)
-        except:
+        except Exception:
             pass
     seq_time = time.time() - start
 
@@ -147,7 +146,7 @@ async def test_concurrent_io():
     print("=" * 60)
 
 
-async def main():
+async def main() -> None:
     """Run all profiling tests."""
     print("\n" + "=" * 60)
     print("KnowGraph Async Performance Profiling")

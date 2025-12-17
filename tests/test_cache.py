@@ -2,13 +2,13 @@
 
 import pytest
 
-from knowgraph.domain.algorithms.centrality import (
-    _centrality_cache,
-    compute_centrality_metrics,
-)
 from knowgraph.application.querying.cache_warmup import (
     clear_cache,
     get_cache_stats,
+)
+from knowgraph.domain.algorithms.centrality import (
+    _centrality_cache,
+    compute_centrality_metrics,
 )
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
@@ -115,16 +115,17 @@ def test_cache_miss_different_nodes(sample_nodes, sample_edges):
 
 def test_cache_eviction():
     """Test cache eviction when max size reached."""
-    from knowgraph.domain.algorithms.centrality import _cache_max_size
-    from uuid import uuid4
     import hashlib
+    from uuid import uuid4
+
+    from knowgraph.domain.algorithms.centrality import _cache_max_size
 
     clear_cache()
 
     # Fill cache to max
     for i in range(_cache_max_size + 10):
         # Generate valid 40-char hash
-        hash_value = hashlib.sha1(f"node{i}".encode()).hexdigest()
+        hash_value = hashlib.sha1(f"node{i}".encode()).hexdigest()  # noqa: S324
 
         node = Node(
             id=uuid4(),
@@ -157,8 +158,9 @@ def test_clear_cache(sample_nodes, sample_edges):
 
 def test_get_cache_stats(sample_nodes, sample_edges):
     """Test cache statistics."""
-    from knowgraph.application.querying.query_engine import QueryEngine
     from pathlib import Path
+
+    from knowgraph.application.querying.query_engine import QueryEngine
 
     clear_cache()
 

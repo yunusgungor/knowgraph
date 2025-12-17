@@ -1,11 +1,19 @@
-"""Repository ingestor using gitingest for code repository parsing.
+"""Repository ingestor for converting Git repositories to markdown.
 
-Converts Git repositories and code directories into markdown format for indexing.
+Uses gitingest to clone and convert repositories to markdown format.
 """
 
 import tempfile
 from pathlib import Path
 from typing import Literal
+
+try:
+    from gitingest import ingest
+
+    GITINGEST_AVAILABLE = True
+except ImportError:
+    ingest = None  # type: ignore[assignment]
+    GITINGEST_AVAILABLE = False
 
 try:
     from gitingest import ingest_async  # type: ignore[import-untyped]
@@ -42,15 +50,19 @@ def detect_source_type(input_path: str) -> SourceType:
     if any(host in path_lower for host in ["github.com", "gitlab.com", "bitbucket.org"]):
         return "repository"
 
-    # Check if it's a local path
+    # Local path
     path_obj = Path(input_path)
     if path_obj.exists():
-        if path_obj.is_file() and path_obj.suffix == ".md":
-            return "markdown"
+        if path_obj.is_file():
+            return "markdown" if path_obj.suffix == ".md" else "directory"
+        # Directory - check if it contains only markdown files
         if path_obj.is_dir():
-            # Always treat directories as "directory" type
-            # They will be processed by gitingest regardless of content
-            return "directory"
+            md_files = list(path_obj.glob("**/*.md"))
+            other_files = [f for f in path_obj.glob("**/*") if f.is_file() and f.suffix != ".md"]
+            # If directory has markdown files and no other files, it's a markdown directory
+            if md_files and not other_files:
+                return "markdown"
+        return "directory"
 
     # Default to directory for local paths
     if not any(proto in path_lower for proto in ["http://", "https://", "git@"]):
@@ -90,10 +102,7 @@ async def ingest_repository(
 
     """
     if ingest_async is None:
-        msg = (
-            "gitingest is not installed. "
-            "Install it with: pip install gitingest>=0.3.1"
-        )
+        msg = "gitingest is not installed. " "Install it with: pip install gitingest>=0.3.1"
         raise GitingestNotInstalledError(msg)
 
     try:
@@ -108,7 +117,7 @@ async def ingest_repository(
             kwargs["max_file_size"] = max_file_size
         if access_token is not None:
             kwargs["token"] = access_token
-        
+
         summary, tree, content = await ingest_async(repo_url_or_path, **kwargs)
 
         # Build complete markdown document

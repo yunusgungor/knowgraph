@@ -6,15 +6,12 @@ Optimized to minimize serialization overhead.
 
 import asyncio
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 from uuid import UUID
-import pickle
 
 import networkx as nx
 
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
-
 
 # Global process pool (persistent, reused across queries)
 _process_pool: ProcessPoolExecutor | None = None
@@ -78,7 +75,7 @@ def _compute_centrality_worker(
         else:
             betweenness = nx.betweenness_centrality(graph, normalized=True)
     except Exception:
-        betweenness = {node_id: 0.0 for node_id in node_ids}
+        betweenness = dict.fromkeys(node_ids, 0.0)
 
     # Degree centrality
     degree = nx.degree_centrality(graph)
@@ -87,7 +84,7 @@ def _compute_centrality_worker(
     try:
         closeness = nx.closeness_centrality(graph)
     except Exception:
-        closeness = {node_id: 0.0 for node_id in node_ids}
+        closeness = dict.fromkeys(node_ids, 0.0)
 
     # Eigenvector centrality
     try:
@@ -96,7 +93,7 @@ def _compute_centrality_worker(
         else:
             eigenvector = nx.eigenvector_centrality(graph, max_iter=100)
     except Exception:
-        eigenvector = {node_id: 0.0 for node_id in node_ids}
+        eigenvector = dict.fromkeys(node_ids, 0.0)
 
     # Combine metrics
     from knowgraph.config import (
@@ -255,7 +252,7 @@ if __name__ == "__main__":
     import time
     from uuid import uuid4
 
-    async def benchmark():
+    async def benchmark() -> None:
         """Benchmark multiprocessing vs single-process."""
         print("\n🔥 Multiprocessing Benchmark\n")
         print("=" * 60)
@@ -310,9 +307,9 @@ if __name__ == "__main__":
         print(f"\n🚀 Speedup: {speedup:.2f}x")
 
         if speedup > 1.2:
-            print(f"  ✅ Multiprocessing faster!")
+            print("  ✅ Multiprocessing faster!")
         else:
-            print(f"  ⚠️  Multiprocessing overhead (small graph or overhead)")
+            print("  ⚠️  Multiprocessing overhead (small graph or overhead)")
 
         # Cleanup
         shutdown_process_pool()

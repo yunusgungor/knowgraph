@@ -5,6 +5,11 @@ Coordinates retrieval, graph reasoning, and context assembly.
 Supports both sync and async modes for backward compatibility.
 """
 
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
 import asyncio
 import time
 from contextvars import ContextVar
@@ -94,7 +99,7 @@ class QueryEngine:
 
         # Async concurrency control
         self._query_semaphore = asyncio.Semaphore(MAX_CONCURRENT_QUERIES)
-        self._active_tasks: set[asyncio.Task] = set()
+        self._active_tasks: set[asyncio.Task[QueryResult]] = set()
 
     def query(
         self: "QueryEngine",
@@ -626,7 +631,7 @@ class QueryEngine:
         timeout: float | None = None,
         enable_hierarchical_lifting: bool = True,
         lift_levels: int = 2,
-        progress_callback: "Callable[[int, int], Awaitable[None]] | None" = None,
+        progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> list[QueryResult]:
         """Execute multiple queries concurrently with advanced features.
 
@@ -662,7 +667,6 @@ class QueryEngine:
             ... )
 
         """
-        from typing import Awaitable, Callable
 
         results = []
 

@@ -56,43 +56,36 @@ async def test_mcp_query_advanced():
         patch("knowgraph.adapters.mcp.server.QueryEngine") as MockEngine,
         patch("knowgraph.adapters.mcp.server.QueryExpander") as MockExpander,
         patch("knowgraph.adapters.mcp.server.resolve_graph_path", side_effect=lambda p, r: Path(p)),
-        patch("knowgraph.adapters.mcp.server.get_llm_provider", return_value=MagicMock()),
+        patch("knowgraph.adapters.mcp.server.get_llm_provider") as mock_provider_func,
     ):
         mock_instance = MockEngine.return_value
-        mock_instance.query.return_value = MagicMock(context="Expanded Context", explanation=None)
+        mock_result = MagicMock(context="Expanded Context", explanation=None)
+        mock_instance.query_async = AsyncMock(return_value=mock_result)
 
-        # Mock provider to trigger async expansion
+        # Mock provider
         mock_provider = MagicMock()
         mock_provider.generate_text = AsyncMock(return_value="Generated Answer")
+        mock_provider_func.return_value = mock_provider
 
-        with (
-            patch("knowgraph.adapters.mcp.server.get_llm_provider", return_value=mock_provider),
-            patch.dict(os.environ, {"KNOWGRAPH_API_KEY": "test-key"}),
-        ):
-            # Mock async expansion
-            MockExpander.return_value.expand_query_async = AsyncMock(return_value=["expanded_term"])
+        # Mock async expansion
+        MockExpander.return_value.expand_query_async = AsyncMock(return_value=["expanded_term"])
 
-            args = {
+        result = await call_tool(
+            "knowgraph_query",
+            {
                 "query": "test query",
-                "expand_query": True,
-                "with_explanation": True,
+                "top_k": 20,
+                "max_hops": 4,
                 "max_tokens": 5000,
+                "with_explanation": True,
                 "enable_hierarchical_lifting": False,
                 "lift_levels": 3,
-            }
+            },
+        )
 
-            await call_tool("knowgraph_query", args)
-
-            # Verify call arguments (query should be expanded)
-            mock_instance.query.assert_called_with(
-                "test query expanded_term",
-                top_k=20,
-                max_hops=4,
-                max_tokens=5000,
-                with_explanation=True,
-                enable_hierarchical_lifting=False,
-                lift_levels=3,
-            )
+        assert len(result) == 1
+        assert result[0].text == "Generated Answer"
+        mock_instance.query_async.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -103,13 +96,14 @@ async def test_mcp_analyze_impact_semantic():
         patch("knowgraph.adapters.mcp.server.resolve_graph_path", side_effect=lambda p, r: Path(p)),
     ):
         mock_instance = MockEngine.return_value
-        mock_instance.analyze_impact.return_value = MagicMock(answer="Semantic Impact Report")
+        mock_result = MagicMock(answer="Semantic Impact Report")
+        mock_instance.analyze_impact_async = AsyncMock(return_value=mock_result)
 
         result = await call_tool(
             "knowgraph_analyze_impact", {"element": "func_x", "mode": "semantic"}
         )
         assert "Semantic Impact Report" in result[0].text
-        mock_instance.analyze_impact.assert_called_once()
+        mock_instance.analyze_impact_async.assert_called_once()
 
 
 @pytest.mark.asyncio

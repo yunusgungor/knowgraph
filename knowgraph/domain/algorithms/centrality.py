@@ -6,7 +6,6 @@ for importance-based node ranking.
 Optimized with LRU caching for repeated subgraph queries.
 """
 
-from functools import lru_cache
 from uuid import UUID
 
 import networkx as nx

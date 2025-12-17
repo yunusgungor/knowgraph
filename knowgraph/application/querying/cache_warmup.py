@@ -9,7 +9,6 @@ from pathlib import Path
 
 from knowgraph.application.querying.query_engine import QueryEngine
 
-
 # Common queries to pre-warm cache
 DEFAULT_WARMUP_QUERIES = [
     "authentication",
@@ -85,7 +84,7 @@ async def warm_cache_background(
     engine: QueryEngine,
     queries: list[str] | None = None,
     delay: float = 1.0,
-) -> asyncio.Task:
+) -> asyncio.Task[None]:
     """Warm cache in background (non-blocking).
 
     Args:
@@ -103,7 +102,7 @@ async def warm_cache_background(
         >>> await task  # Wait for completion
     """
 
-    async def _warm():
+    async def _warm() -> None:
         await asyncio.sleep(delay)
         await warm_cache(engine, queries, verbose=False)
 
@@ -123,7 +122,7 @@ def get_cache_stats(engine: QueryEngine) -> dict[str, int]:
         >>> stats = get_cache_stats(engine)
         >>> print(f"Cache size: {stats['size']}")
     """
-    from knowgraph.domain.algorithms.centrality import _centrality_cache, _cache_max_size
+    from knowgraph.domain.algorithms.centrality import _cache_max_size, _centrality_cache
 
     return {
         "size": len(_centrality_cache),
@@ -152,7 +151,7 @@ def clear_cache() -> None:
 # Example usage
 if __name__ == "__main__":
 
-    async def main():
+    async def main() -> None:
         engine = QueryEngine(Path("/Users/yunusgungor/knowrag/graphstore"))
 
         # Warm cache
@@ -160,7 +159,7 @@ if __name__ == "__main__":
 
         # Check stats
         stats = get_cache_stats(engine)
-        print(f"\nCache Stats:")
+        print("\nCache Stats:")
         print(f"  Size: {stats['size']}/{stats['max_size']}")
         print(f"  Utilization: {stats['utilization']:.1f}%")
 

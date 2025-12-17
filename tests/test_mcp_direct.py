@@ -20,7 +20,9 @@ async def test_call_tool_query():
 
         mock_resolve.return_value = "path"
         mock_engine = mock_engine_cls.return_value
-        mock_engine.query.return_value = MagicMock(context="Answer", explanation=None)
+        # Mock query_async (server uses async version)
+        mock_result = MagicMock(context="Answer", explanation=None)
+        mock_engine.query_async = AsyncMock(return_value=mock_result)
 
         # Mock provider to match protocol
         mock_provider_instance = MagicMock()

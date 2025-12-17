@@ -7,16 +7,16 @@ from pathlib import Path
 from knowgraph.application.querying.query_engine import QueryEngine
 
 
-async def benchmark_queries():
+async def benchmark_queries() -> None:
     """Benchmark query performance."""
     engine = QueryEngine(Path("/Users/yunusgungor/knowrag/graphstore"))
 
     queries = [
         "QueryEngine nedir?",
-        "async/await avantajları",
-        "batch query performansı",
+        "async/await avantajları",  # noqa: RUF001
+        "batch query performansı",  # noqa: RUF001
         "concurrency control",
-        "timeout mekanizması",
+        "timeout mekanizması",  # noqa: RUF001
     ]
 
     print("🔥 Performance Benchmark\n")
@@ -47,14 +47,14 @@ async def benchmark_queries():
 
     if speedup < 2.0:
         print("⚠️  WARNING: Batch query not showing expected speedup!")
-        print("   Expected: 3-5x, Got: {:.2f}x".format(speedup))
+        print(f"   Expected: 3-5x, Got: {speedup:.2f}x")
     else:
         print("✅ Batch query performing well!")
 
     print("\n" + "=" * 60)
 
 
-async def test_impact_analysis():
+async def test_impact_analysis() -> None:
     """Test impact analysis."""
     engine = QueryEngine(Path("/Users/yunusgungor/knowrag/graphstore"))
 
@@ -63,7 +63,7 @@ async def test_impact_analysis():
 
     try:
         result = await engine.analyze_impact_async("QueryEngine", max_hops=3)
-        print(f"✅ Impact Analysis Successful!")
+        print("✅ Impact Analysis Successful!")
         print(f"   Nodes: {len(result.seed_nodes)}")
         print(f"   Answer length: {len(result.answer)} chars")
     except Exception as e:
@@ -72,7 +72,7 @@ async def test_impact_analysis():
     print("=" * 60)
 
 
-async def main():
+async def main() -> None:
     """Run all benchmarks."""
     print("\n" + "=" * 60)
     print("KnowGraph Async Performance Benchmark")
