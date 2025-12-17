@@ -1,7 +1,10 @@
 import asyncio
 import json
+import logging
+import os
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import mcp.types as types
 from mcp.server import Server
@@ -16,9 +19,76 @@ from knowgraph.domain.algorithms.graph_validator import validate_graph_consisten
 from knowgraph.infrastructure.storage.manifest import Manifest
 
 app = Server("knowgraph-mcp")
+logger = logging.getLogger(__name__)
 
-# Path to project root for resolving relative paths (defaults to current working directory)
-PROJECT_ROOT = Path.cwd()
+# Cache for detected project root
+_PROJECT_ROOT_CACHE: dict[str, Any] = {
+    "root": None,
+    "timestamp": None,
+    "ttl": 3600,  # 1 hour cache
+}
+
+
+def _get_cached_project_root() -> Optional[Path]:
+    """Get cached project root if still valid."""
+    if _PROJECT_ROOT_CACHE["root"] is None:
+        return None
+
+    elapsed = time.time() - _PROJECT_ROOT_CACHE["timestamp"]
+    if elapsed > _PROJECT_ROOT_CACHE["ttl"]:
+        logger.debug("Project root cache expired")
+        return None
+
+    logger.debug(f"Using cached project root: {_PROJECT_ROOT_CACHE['root']}")
+    return _PROJECT_ROOT_CACHE["root"]
+
+
+def _cache_project_root(root: Path) -> None:
+    """Cache the detected project root."""
+    _PROJECT_ROOT_CACHE["root"] = root
+    _PROJECT_ROOT_CACHE["timestamp"] = time.time()
+    logger.debug(f"Cached project root: {root}")
+
+
+def _detect_project_root_sync() -> Path:
+    """Detect project root synchronously (without LLM).
+
+    Uses fast heuristic methods:
+    1. Git repository root
+    2. Project marker files
+    3. Fallback to cwd
+    """
+    from knowgraph.infrastructure.detection.project_detector import detect_project_root
+
+    # Use sync detection (no LLM)
+    detected = detect_project_root(use_llm=False)
+    logger.info(f"Auto-detected project root: {detected}")
+    return detected
+
+
+def _get_project_root() -> Path:
+    """Get project root with auto-detection and caching.
+
+    Priority:
+    1. Cached detection result
+    2. Auto-detection (git root, marker files)
+    3. Fallback to current working directory
+    """
+    # 1. Check cache
+    cached_root = _get_cached_project_root()
+    if cached_root:
+        return cached_root
+
+    # 2. Auto-detect
+    detected_root = _detect_project_root_sync()
+    _cache_project_root(detected_root)
+    return detected_root
+
+
+# Path to project root for resolving relative paths
+# Automatically detected using git root, project markers, or falls back to cwd
+# Cached for 1 hour to avoid repeated detection
+PROJECT_ROOT = _get_project_root()
 
 
 @app.call_tool()  # type: ignore

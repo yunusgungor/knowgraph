@@ -192,15 +192,39 @@ For Claude Desktop, edit `~/Library/Application Support/Claude/claude_desktop_co
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_KEY": "sk-...",
-        "KNOWGRAPH_GRAPH_PATH": "/path/to/graphstore"
+        "KNOWGRAPH_API_KEY": "sk-..."
       }
     }
   }
 }
 ```
 
-For Cursor, add to your workspace settings.
+**For Cursor/VSCode:**
+
+Same configuration works for all editors:
+
+```json
+{
+  "mcpServers": {
+    "knowgraph": {
+      "command": "knowgraph",
+      "args": ["serve"],
+      "env": {
+        "KNOWGRAPH_API_KEY": "sk-..."
+      }
+    }
+  }
+}
+```
+
+> 💡 **Auto-Detection**: KnowGraph automatically detects your project root using:
+> 1. **Git repository root** - If you're in a git repository
+> 2. **Project marker files** - Looks for pyproject.toml, package.json, Cargo.toml, go.mod, etc.
+> 3. **Current working directory** - Falls back to where the MCP server was started
+> 
+> Each project automatically uses its own `graphstore` directory!
+> 
+> **Example:** If you're working in `/Users/john/myproject` (a git repo), the graphstore will be at `/Users/john/myproject/graphstore`.
 
 ---
 

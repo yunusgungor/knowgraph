@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 # Suppress invalid escape sequence warnings from dependencies
 warnings.filterwarnings("ignore", category=SyntaxWarning, message="invalid escape sequence")
 
+from knowgraph import __version__  # noqa: E402
 from knowgraph.adapters.cli.index_command import index_command  # noqa: E402
 from knowgraph.adapters.cli.query_command import query_command  # noqa: E402
 from knowgraph.adapters.cli.update_command import update_command  # noqa: E402
@@ -17,7 +18,7 @@ load_dotenv()
 
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version=__version__)
 def cli() -> None:
     """KnowGraph - Knowledge Graph-Powered RAG System.
 

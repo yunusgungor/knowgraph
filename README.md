@@ -125,6 +125,13 @@ Add the following to your **Claude Desktop** (`claude_desktop_config.json`) or *
 }
 ```
 
+> 💡 **Auto-Detection**: KnowGraph automatically detects your project root using:
+> 1. Git repository root (if in a git repo)
+> 2. Project marker files (pyproject.toml, package.json, Cargo.toml, etc.)
+> 3. Current working directory (fallback)
+> 
+> Each project automatically uses its own `graphstore` directory!
+
 > 📝 **New in v0.3.0:** KnowGraph now supports multiple input formats:
 > - **Markdown files** (`.md`) - Original functionality
 > - **Git repositories** (GitHub, GitLab, Bitbucket) - NEW! 🎉
