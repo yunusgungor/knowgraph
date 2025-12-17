@@ -12,6 +12,9 @@ from knowgraph import __version__  # noqa: E402
 from knowgraph.adapters.cli.index_command import index_command  # noqa: E402
 from knowgraph.adapters.cli.query_command import query_command  # noqa: E402
 from knowgraph.adapters.cli.update_command import update_command  # noqa: E402
+from knowgraph.adapters.cli.discover_conversations_command import (  # noqa: E402
+    discover_and_index_conversations,
+)
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +34,7 @@ def cli() -> None:
 cli.add_command(index_command, name="index")
 cli.add_command(query_command, name="query")
 cli.add_command(update_command, name="update")
+cli.add_command(discover_and_index_conversations, name="discover-conversations")
 
 
 @cli.command(name="serve")

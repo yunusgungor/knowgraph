@@ -66,6 +66,8 @@ MANIFEST_FILENAME = "manifest.json"
 # Node Role Weights (for importance scoring)
 ROLE_WEIGHTS = {
     "code": 0.9,
+    "conversation": 0.85,  # High priority - contains context and examples
+    "tagged_snippet": 0.85,  # Same as conversation - user-tagged important content
     "config": 0.8,
     "readme": 0.7,
     "text": 0.6,

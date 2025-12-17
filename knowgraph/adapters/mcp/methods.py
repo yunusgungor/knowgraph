@@ -141,7 +141,15 @@ async def index_graph(
                 source_desc = (
                     "repository"
                     if source_type == "repository"
-                    else "code directory" if source_type == "directory" else "markdown files"
+                    else (
+                        "code directory"
+                        if source_type == "directory"
+                        else (
+                            "conversation history"
+                            if source_type == "conversation"
+                            else "markdown files"
+                        )
+                    )
                 )
 
                 return [
@@ -163,8 +171,7 @@ async def index_graph(
 def analyze_path_impact_report(
     element: str, graph_path: Path, max_hops: int
 ) -> list[types.TextContent]:
-    """Performs impact analysis based on file paths.
-    """
+    """Performs impact analysis based on file paths."""
     with contextlib.redirect_stdout(sys.stderr):
         all_node_ids = list_all_nodes(graph_path)
         all_nodes = []

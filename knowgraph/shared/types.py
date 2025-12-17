@@ -3,7 +3,9 @@
 from typing import Literal, Protocol, TypeAlias
 
 # Node types
-NodeType: TypeAlias = Literal["code", "text", "readme", "config"]
+NodeType: TypeAlias = Literal[
+    "code", "text", "config", "documentation", "conversation", "tagged_snippet"
+]
 
 # Edge types
 EdgeType: TypeAlias = Literal["semantic"]

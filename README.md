@@ -49,15 +49,43 @@ KnowGraph is built for scale. The **Smart Indexing Engine** processes large repo
 
 ## 🎯 Key Features
 
-### Multi-Source Indexing (v0.3.0)
+### Multi-Source Indexing (v0.4.0)
 
-KnowGraph now supports **three input formats** for maximum flexibility:
+KnowGraph now supports **four input formats** for maximum flexibility:
 
 | Source Type | Description | Example |
 |------------|-------------|---------|
 | 📝 **Markdown Files** | Original functionality, optimized for documentation | `knowgraph index ./docs` |
 | 🔗 **Git Repositories** | Direct indexing from GitHub, GitLab, Bitbucket | `knowgraph index https://github.com/user/repo` |
 | 📁 **Code Directories** | Automatic conversion to markdown via gitingest | `knowgraph index ./my-project` |
+| 💬 **AI Conversations** | Index chat histories from AI code editors | `knowgraph discover-conversations` |
+
+**Conversation Indexing (NEW in v0.4.0):**
+
+Index your AI coding conversations automatically - no manual export needed!
+
+```bash
+# Auto-discover and index conversations from all supported editors
+knowgraph discover-conversations --output ./graphstore
+
+# Filter by specific editor
+knowgraph discover-conversations --editor antigravity
+
+# Preview without indexing
+knowgraph discover-conversations --dry-run
+```
+
+**Supported AI Editors:**
+- 🤖 **Antigravity** (Gemini) - Conversation artifacts (task.md, walkthrough.md, implementation_plan.md)
+- 🎯 **Cursor** - .aichat files
+- 🧠 **Claude Desktop** - JSON conversation exports
+- 🐙 **GitHub Copilot** - VSCode chat histories
+
+**Why Index Conversations?**
+- 💡 Preserve important AI-generated code snippets
+- 🔍 Search across all your coding sessions
+- 📚 Build a knowledge base from your AI interactions
+- 🏷️ Tag and bookmark critical responses
 
 **Advanced Filtering:**
 ```bash
@@ -78,7 +106,10 @@ knowgraph index https://github.com/company/private-repo
 *   **⚡ Async/Await Support:** 15x faster batch queries with concurrent processing using `query_async()`
 *   **🚀 Performance Caching:** 22x speedup on repeated queries through `CacheManager`
 *   **📊 Impact Analysis:** Predict ripple effects of code changes using `ImpactAnalyzer`
-*   **🔄 Batch Processing:** Process multiple queries efficiently (15.72x faster) with `batch_query`
+*   **🎯 Hierarchical Context:** Automatic lifting of parent README context for enriched understanding
+*   **🧠 Graph Traversal:** BFS/DFS exploration of code relationships (imports, calls, inheritance)
+*   **🏷️ Semantic Bookmarking:** Tag and retrieve important AI responses with custom labels (NEW in v0.4.0)
+*   **💬 Conversation Indexing:** Automatically index and search AI coding conversations (NEW in v0.4.0)
 *   **✅ Graph Validation:** Ensure knowledge graph consistency via `GraphValidator`
 *   **📈 Statistics & Metrics:** Monitor graph health and coverage with `get_stats`
 *   **🎯 Query Expansion:** Semantic query enrichment through `QueryExpander`

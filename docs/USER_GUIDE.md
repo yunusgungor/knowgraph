@@ -1,7 +1,7 @@
 # KnowGraph User Guide
 
-**Version:** 0.3.0  
-**Last Updated:** December 2024
+**Version:** 0.4.0  
+**Last Updated:** December 2025
 
 Welcome to the comprehensive KnowGraph User Guide. This document covers everything you need to know to effectively use KnowGraph as a Graph RAG system and MCP server for your AI coding assistants.
 
@@ -232,11 +232,12 @@ Same configuration works for all editors:
 
 ### Overview
 
-Indexing transforms your source files into a searchable knowledge graph. KnowGraph supports three input formats:
+Indexing transforms your source files into a searchable knowledge graph. KnowGraph supports four input formats:
 
 1. **Markdown Files** (`.md`) - Original functionality
-2. **Git Repositories** (GitHub, GitLab, Bitbucket) - New in v0.3.0
+2. **Git Repositories** (GitHub, GitLab, Bitbucket) - Added in v0.3.0
 3. **Code Directories** - Automatic conversion to markdown
+4. **AI Conversations** - Chat histories from AI code editors - NEW in v0.4.0
 
 ### 5.1 Indexing Markdown Files
 
@@ -298,7 +299,87 @@ knowgraph index /path/to/my-project \
   --exclude "*.pyc"
 ```
 
-### 5.4 Advanced Indexing Options
+### 5.4 Indexing AI Conversations (NEW in v0.4.0)
+
+KnowGraph can automatically discover and index conversations from AI code editors - no manual export needed!
+
+**Supported Editors:**
+- 🤖 **Antigravity** (Gemini): Conversation artifacts (task.md, walkthrough.md, implementation_plan.md)
+- 🎯 **Cursor**: .aichat files
+- 🧠 **Claude Desktop**: JSON conversation exports
+- 🐙 **GitHub Copilot**: VSCode chat histories
+
+**Auto-Discovery:**
+
+```bash
+# Discover and index all conversations
+knowgraph discover-conversations
+
+# Specify output directory
+knowgraph discover-conversations --output ./graphstore
+
+# Filter by specific editor
+knowgraph discover-conversations --editor antigravity
+knowgraph discover-conversations --editor cursor
+knowgraph discover-conversations --editor copilot
+
+# Preview without indexing (dry-run)
+knowgraph discover-conversations --dry-run
+
+# Verbose output
+knowgraph discover-conversations --verbose
+```
+
+**Manual Indexing:**
+
+You can also index specific conversation files directly:
+
+```bash
+# Index a GitHub Copilot conversation
+knowgraph index path/to/conversation.json
+
+# Index a Cursor .aichat file
+knowgraph index path/to/chat.aichat
+
+# Index Claude Desktop export
+knowgraph index path/to/claude_export.json
+```
+
+**Querying Conversations:**
+
+Once indexed, conversations are searchable like any other content:
+
+```bash
+# Find FastAPI implementation examples
+knowgraph query "FastAPI REST API implementation"
+
+# Search for authentication code
+knowgraph query "JWT authentication example"
+
+# Find specific conversation topics
+knowgraph query "database migration discussion"
+```
+
+**Why Index Conversations?**
+- 💡 Preserve important AI-generated code snippets
+- 🔍 Search across all your coding sessions
+- 📚 Build a knowledge base from AI interactions
+- 🏷️ Tag and bookmark critical responses
+- 📊 Track your learning and problem-solving patterns
+
+**Via MCP (in Claude/Cursor):**
+
+```json
+{
+  "tool": "knowgraph_discover_conversations",
+  "arguments": {
+    "graph_path": "./graphstore",
+    "editor": "all"
+  }
+}
+```
+
+### 5.5 Advanced Indexing Options
 
 **Resume After Interruption:**
 ```bash
@@ -323,7 +404,7 @@ content, path, type = ingest_source(
 )
 ```
 
-### 5.5 Indexing Workflow
+### 5.6 Indexing Workflow
 
 When you run `knowgraph index`, the following happens:
 
@@ -331,6 +412,7 @@ When you run `knowgraph index`, the following happens:
 2. **Content Extraction**: 
    - Markdown: Direct parsing
    - Repository/Directory: Conversion via gitingest
+   - Conversations: Format-specific parsing
 3. **Parsing**: Splits into logical sections (H1-H4 headers)
 4. **Chunking**: Token-aware chunking (preserves context)
 5. **Entity Extraction**:
@@ -341,7 +423,7 @@ When you run `knowgraph index`, the following happens:
 7. **Indexing**: Builds TF-IDF sparse index
 8. **Persistence**: Saves to JSONL files
 
-### 5.6 Monitoring Indexing Progress
+### 5.7 Monitoring Indexing Progress
 
 ```bash
 knowgraph index /path/to/large/repo
@@ -572,6 +654,68 @@ Graph Validation Results:
 
 Status: HEALTHY
 ```
+
+### 7.3 Semantic Bookmarking (NEW in v0.4.0)
+
+Tag and save important AI responses for later retrieval.
+
+**Via MCP Tool:**
+
+```json
+{
+  "tool": "knowgraph_tag_snippet",
+  "arguments": {
+    "tag": "important implementation",
+    "snippet": "Complete FastAPI authentication example with JWT tokens...",
+    "graph_path": "./graphstore",
+    "conversation_id": "optional-conversation-id",
+    "user_question": "How do I implement JWT auth?"
+  }
+}
+```
+
+**Parameters:**
+- `tag` (required): Label for the snippet (e.g., "auth pattern", "database migration")
+- `snippet` (required): The AI response content to save
+- `graph_path` (optional): Graph storage path
+- `conversation_id` (optional): Link to source conversation
+- `user_question` (optional): Original question for context
+
+**Querying Tagged Snippets:**
+
+Tagged snippets are automatically indexed and searchable:
+
+```bash
+# Find by tag
+knowgraph query "important implementation"
+
+# Find by content
+knowgraph query "JWT authentication"
+
+# Find by question
+knowgraph query "How do I implement auth"
+```
+
+**Use Cases:**
+- 💡 Save breakthrough solutions
+- 📚 Build personal code snippet library
+- 🏷️ Organize learning by topic
+- 🔍 Quick reference for common patterns
+- 📊 Track important decisions
+
+**Example Workflow:**
+
+1. Ask AI a question in your editor
+2. Get a great response with code
+3. Tag it using `knowgraph_tag_snippet`
+4. Later, query by tag or content
+5. Retrieve the exact solution instantly
+
+**Best Practices:**
+- Use descriptive tags ("jwt-auth-pattern" not "code1")
+- Include user question for context
+- Tag only truly important responses
+- Use consistent tag naming conventions
 
 ---
 

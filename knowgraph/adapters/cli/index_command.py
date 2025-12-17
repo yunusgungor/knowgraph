@@ -76,6 +76,19 @@ async def run_index(
             # Treat the generated markdown as a single file
             files_to_process = [temp_path]
 
+        elif source_type == "conversation":
+            # It's a conversation file - convert to markdown
+            if verbose:
+                click.echo("Processing conversation file...")
+
+            from knowgraph.infrastructure.parsing.conversation_ingestor import ingest_conversation
+
+            markdown_content, temp_path = await ingest_conversation(Path(input_path))
+            temp_files_to_cleanup.append(temp_path)
+
+            # Treat the generated markdown as a single file
+            files_to_process = [temp_path]
+
         else:
             # Local path - validate and collect files
             input_path_obj = validate_path(input_path, must_exist=True, must_be_file=False)

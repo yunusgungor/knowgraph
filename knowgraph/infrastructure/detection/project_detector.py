@@ -246,6 +246,26 @@ def detect_project_root(start_path: Optional[Path] = None, use_llm: bool = True)
     if use_llm:
         logger.info("LLM-based detection requires async context, skipping in sync detection")
 
-    # Strategy 4: Fallback
-    logger.info(f"No project root detected, using current directory: {start_path}")
-    return start_path
+    # Strategy 4: Fallback to current working directory
+    # Ensure we never use root directory as project root
+    fallback = start_path.resolve()
+
+    if fallback == fallback.parent:  # This means we're at root (/)
+        # Try cwd first
+        cwd = Path.cwd().resolve()
+        if cwd != cwd.parent:  # cwd is not root
+            fallback = cwd
+            logger.warning(
+                "Detected root directory as project root, falling back to cwd: %s",
+                fallback,
+            )
+        else:
+            # cwd is also root, use home directory
+            fallback = Path.home()
+            logger.warning(
+                "Both start_path and cwd are root directory, falling back to home: %s",
+                fallback,
+            )
+
+    logger.info(f"No project root detected, using fallback: {fallback}")
+    return fallback

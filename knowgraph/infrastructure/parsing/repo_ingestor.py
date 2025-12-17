@@ -29,11 +29,11 @@ class GitingestNotInstalledError(RepositoryIngestorError):
     """Raised when gitingest is not installed."""
 
 
-SourceType = Literal["repository", "directory", "markdown"]
+SourceType = Literal["repository", "directory", "markdown", "conversation"]
 
 
 def detect_source_type(input_path: str) -> SourceType:
-    """Detect whether input is a repository URL, local directory, or markdown file.
+    """Detect whether input is a repository URL, local directory, markdown file, or conversation.
 
     Args:
     ----
@@ -41,7 +41,7 @@ def detect_source_type(input_path: str) -> SourceType:
 
     Returns:
     -------
-        Source type: "repository", "directory", or "markdown"
+        Source type: "repository", "directory", "markdown", or "conversation"
 
     """
     path_lower = input_path.lower()
@@ -54,6 +54,30 @@ def detect_source_type(input_path: str) -> SourceType:
     path_obj = Path(input_path)
     if path_obj.exists():
         if path_obj.is_file():
+            # Check for conversation files
+            if path_obj.suffix == ".aichat":
+                return "conversation"
+            if path_obj.suffix == ".txt" and "antigravity" in str(path_obj):
+                return "conversation"
+
+            # For JSON files, check content to determine if it's a conversation
+            if path_obj.suffix == ".json":
+                try:
+                    import json
+
+                    with open(path_obj, encoding="utf-8") as f:
+                        data = json.load(f)
+
+                    # Check for conversation indicators
+                    if any(
+                        key in data for key in ["messages", "entries", "chat_messages", "sessionId"]
+                    ):
+                        return "conversation"
+                    if "conversation" in path_obj.name.lower() or "chat" in path_obj.name.lower():
+                        return "conversation"
+                except (json.JSONDecodeError, OSError):
+                    pass
+
             return "markdown" if path_obj.suffix == ".md" else "directory"
         # Directory - check if it contains only markdown files
         if path_obj.is_dir():

@@ -278,6 +278,118 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error reading stats: {e!s}")]
 
+    elif name == "knowgraph_discover_conversations":
+        from knowgraph.infrastructure.detection.conversation_discovery import (
+            discover_all_conversations,
+        )
+
+        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
+        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+        editor_filter = arguments.get("editor", "all")
+
+        try:
+            # Discover all conversations
+            discovered = discover_all_conversations()
+
+            if not discovered:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text="No conversations found from any editor.\n\n"
+                        "Make sure you have one of these editors installed:\n"
+                        "  - Antigravity (Gemini)\n"
+                        "  - Cursor\n"
+                        "  - VSCode with GitHub Copilot",
+                    )
+                ]
+
+            # Filter by editor if specified
+            if editor_filter != "all":
+                discovered = {k: v for k, v in discovered.items() if k == editor_filter}
+
+            # Index all discovered conversations
+            provider = get_llm_provider(app)
+            indexed_count = 0
+            failed_count = 0
+            results_summary = []
+
+            for editor_name, files in discovered.items():
+                results_summary.append(f"\n📂 {editor_name.upper()}: {len(files)} conversations")
+
+                for file_path in files:
+                    try:
+                        await index_graph(
+                            str(file_path),
+                            graph_path,
+                            provider,
+                            resume_mode=False,
+                            gc=False,
+                        )
+                        indexed_count += 1
+                    except Exception:
+                        failed_count += 1
+
+            # Format response
+            total_files = sum(len(files) for files in discovered.items())
+            response = (
+                f"✅ Auto-discovered {total_files} conversations across {len(discovered)} editors:\n"
+                + "".join(results_summary)
+                + f"\n\n📥 Indexing complete:\n"
+                + f"  Indexed: {indexed_count} conversations\n"
+            )
+
+            if failed_count > 0:
+                response += f"  Failed: {failed_count} conversations\n"
+
+            response += f"\n📊 Graph stored in: {graph_path}"
+
+            return [types.TextContent(type="text", text=response)]
+
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error discovering conversations: {e!s}")]
+
+    elif name == "knowgraph_tag_snippet":
+        from knowgraph.application.tagging.snippet_tagger import (
+            create_tagged_snippet,
+            index_tagged_snippet,
+        )
+
+        tag = arguments.get("tag")
+        snippet = arguments.get("snippet")
+        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
+        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+        conversation_id = arguments.get("conversation_id")
+        user_question = arguments.get("user_question")
+
+        if not tag or not snippet:
+            return [
+                types.TextContent(type="text", text="Error: Both 'tag' and 'snippet' are required.")
+            ]
+
+        try:
+            # Create tagged snippet node
+            tagged_node = create_tagged_snippet(
+                tag=tag,
+                content=snippet,
+                conversation_id=conversation_id,
+                user_question=user_question,
+            )
+
+            # Index the snippet
+            await index_tagged_snippet(tagged_node, graph_path)
+
+            response = (
+                f"✅ Snippet tagged successfully!\n\n"
+                f"**Tag**: `{tag}`\n"
+                f"**Content Preview**: {snippet[:100]}{'...' if len(snippet) > 100 else ''}\n\n"
+                f"You can retrieve this later by mentioning the tag in your queries."
+            )
+
+            return [types.TextContent(type="text", text=response)]
+
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error tagging snippet: {e!s}")]
+
     elif name == "knowgraph_batch_query":
         queries = arguments.get("queries", [])
         graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
@@ -568,6 +680,54 @@ async def list_tools() -> list[types.Tool]:
                     },
                 },
                 "required": ["queries"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_discover_conversations",
+            description="Auto-discover and index conversations from AI code editors (Antigravity, Cursor, GitHub Copilot). No manual export required!",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                    "editor": {
+                        "type": "string",
+                        "enum": ["all", "antigravity", "cursor", "github_copilot"],
+                        "description": "Which editor's conversations to index (default: all).",
+                    },
+                },
+            },
+        ),
+        types.Tool(
+            name="knowgraph_tag_snippet",
+            description="Tag and index an important snippet for later retrieval. Use this to bookmark important AI responses or code examples.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tag": {
+                        "type": "string",
+                        "description": "Tag for the snippet (e.g., 'fastapi jwt detayı', 'important config')",
+                    },
+                    "snippet": {
+                        "type": "string",
+                        "description": "The content to tag and index",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Optional conversation ID for context",
+                    },
+                    "user_question": {
+                        "type": "string",
+                        "description": "Optional user question that prompted this response",
+                    },
+                },
+                "required": ["tag", "snippet"],
             },
         ),
     ]
