@@ -35,14 +35,15 @@ KnowGraph leverages **Graph Theory** and **Network Science** principles to offer
 
 ---
 
-## 🚀 Performance Engine (v0.2.0)
+## 🚀 Performance Engine (v0.3.0)
 
-KnowGraph is built for scale. The new **Smart Indexing Engine** processes large repositories efficiently:
+KnowGraph is built for scale. The **Smart Indexing Engine** processes large repositories efficiently:
 
-*   **⚡ Hybrid Intelligence:** Code files are analyzed using **AST (Abstract Syntax Tree)** for 100x speed and 0-token cost, while standard files use Batch LLM processing.
-*   **🧠 Persistent Memory:** Built-in SQLite Caching (`.knowgraph_cache`) ensures you never re-index unchanged files. Resumes instantly after interruptions.
-*   **🛡️ Smart Rate Limiter:** Automatically respects API limits (Free/Pro tiers) by dynamically throttling requests based on headers, preventing 429 errors.
-*   **🏎️ Concurrent Batching:** Processes 10 chunks per call with 20 parallel workers, maximizing throughput.
+*   **⚡ Hybrid Intelligence:** Code files are analyzed using **AST (Abstract Syntax Tree)** via `ASTAnalyzer` for 100x speed and 0-token cost, while text files use Batch LLM processing through `OpenAIProvider` or `MCPSamplingProvider`.
+*   **🧠 Persistent Memory:** Built-in SQLite Caching via `CacheManager` (`.knowgraph_cache`) ensures you never re-index unchanged files. Resumes instantly after interruptions.
+*   **🛡️ Smart Rate Limiter:** The `RateLimiter` class automatically respects API limits (Free/Pro tiers) by dynamically throttling requests based on headers, preventing 429 errors.
+*   **🏎️ Concurrent Batching:** `SmartGraphBuilder` processes 10 chunks per call with 20 parallel workers, maximizing throughput.
+*   **📊 Graph Algorithms:** Leverages NetworkX for centrality calculations (Betweenness, Degree, Closeness, Eigenvector) to identify architecturally critical components.
 
 ---
 
@@ -73,13 +74,16 @@ knowgraph index https://github.com/company/private-repo
 
 ### Core Capabilities
 
-*   **🔍 Semantic Search:** Natural language queries with context-aware retrieval
-*   **⚡ Async/Await Support:** 15x faster batch queries with concurrent processing
-*   **🚀 Performance Caching:** 22x speedup on repeated queries
-*   **📊 Impact Analysis:** Predict the ripple effects of code changes
-*   **🔄 Batch Processing:** Process multiple queries efficiently (15.72x faster)
-*   **✅ Graph Validation:** Ensure knowledge graph consistency
-*   **📈 Statistics & Metrics:** Monitor graph health and coverage
+*   **🔍 Semantic Search:** Natural language queries with context-aware retrieval via `QueryEngine`
+*   **⚡ Async/Await Support:** 15x faster batch queries with concurrent processing using `query_async()`
+*   **🚀 Performance Caching:** 22x speedup on repeated queries through `CacheManager`
+*   **📊 Impact Analysis:** Predict ripple effects of code changes using `ImpactAnalyzer`
+*   **🔄 Batch Processing:** Process multiple queries efficiently (15.72x faster) with `batch_query`
+*   **✅ Graph Validation:** Ensure knowledge graph consistency via `GraphValidator`
+*   **📈 Statistics & Metrics:** Monitor graph health and coverage with `get_stats`
+*   **🎯 Query Expansion:** Semantic query enrichment through `QueryExpander`
+*   **📝 Explanation Generation:** Transparent reasoning paths via `ExplanationObject`
+*   **🏛️ Hierarchical Lifting:** Context from parent directories for better understanding
 
 #### Performance Highlights (v0.3.0)
 

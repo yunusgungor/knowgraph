@@ -114,28 +114,101 @@ KnowGraph has a 4-layer structure designed with Clean Architecture principles:
 
 ```
 knowgraph/
-├── domain/              # Business logic and algorithms
-│   ├── models/         # Core data models (Node, Edge, Graph)
-│   ├── algorithms/     # Graph algorithms (traversal, centrality)
-│   └── intelligence/   # AI provider interfaces
-├── application/         # Use cases and orchestration
-│   ├── indexing/       # Graph building and indexing
-│   ├── querying/       # Query engine and retrieval
-│   ├── evolution/      # Incremental updates
-│   └── export/         # Data export utilities
-├── infrastructure/      # External dependencies
-│   ├── storage/        # Filesystem operations
-│   ├── parsing/        # Markdown parsing and repository ingestion
-│   │   ├── markdown_parser.py    # Markdown document parsing
-│   │   └── repo_ingestor.py      # Git repository ingestion (NEW in v0.3.0)
-│   ├── embedding/      # Sparse embeddings (TF-IDF)
-│   ├── intelligence/   # LLM providers (OpenAI, etc.)
-│   └── search/         # Vector search
-└── adapters/           # External interfaces
-    ├── cli/            # Command-line interface
-    ├── mcp/            # MCP server implementation
-    └── api/            # REST API (future)
+├── domain/                          # Business logic and algorithms (Core Layer)
+│   ├── models/                     # Core data models
+│   │   ├── node.py                # Node data model
+│   │   └── edge.py                # Edge data model
+│   ├── algorithms/                 # Graph algorithms
+│   │   ├── traversal.py           # Graph traversal (BFS/DFS)
+│   │   ├── centrality.py          # Centrality calculations (PageRank, Betweenness)
+│   │   ├── graph_validator.py     # Graph validation and consistency checks
+│   │   └── success_criteria.py    # Success metrics and evaluation
+│   └── intelligence/               # AI provider interfaces
+│       ├── provider.py            # IntelligenceProvider abstract class
+│       └── code_analyzer.py       # AST-based code analysis (ASTAnalyzer)
+│
+├── application/                     # Use cases and orchestration
+│   ├── indexing/                   # Graph building and indexing
+│   │   └── smart_graph_builder.py # Hybrid indexing engine (SmartGraphBuilder)
+│   ├── querying/                   # Query engine
+│   │   ├── query_engine.py        # Main query engine (QueryEngine, QueryResult)
+│   │   ├── retriever.py           # Graph traversal and node collection (QueryRetriever)
+│   │   ├── context_assembly.py    # Context building (ContextBlock)
+│   │   ├── query_expansion.py     # Query expansion (QueryExpander)
+│   │   ├── explanation.py         # Explanation generation (ReasoningPath, ExplanationObject)
+│   │   └── impact_analyzer.py     # Impact analysis (ImpactAnalysisResult)
+│   ├── evolution/                  # Incremental updates
+│   │   └── incremental_update.py  # Delta analysis (DeltaAnalysis)
+│   └── export/                     # Data export utilities
+│       └── graph_exporter.py      # Export to NetworkX, JSON, CSV formats
+│
+├── infrastructure/                  # External dependencies and technical infrastructure
+│   ├── storage/                    # Filesystem operations
+│   │   └── manifest.py            # Graph metadata management (Manifest)
+│   ├── parsing/                    # Source parsing
+│   │   ├── markdown_parser.py     # Markdown document parsing (MarkdownSection)
+│   │   ├── repo_ingestor.py       # Git repository ingestion (v0.3.0)
+│   │   └── chunker.py             # Token-aware chunking (Chunk)
+│   ├── embedding/                  # Embedding operations
+│   │   └── sparse_embedder.py     # TF-IDF based sparse embedding (SparseEmbedder)
+│   ├── search/                     # Search infrastructure
+│   │   └── sparse_index.py        # Sparse vector index (SparseIndex)
+│   ├── intelligence/               # LLM providers
+│   │   ├── openai_provider.py     # OpenAI integration (OpenAIProvider)
+│   │   ├── mcp_sampling_provider.py # MCP Sampling API (MCPSamplingProvider)
+│   │   └── rate_limiter.py        # Smart rate limiting (RateLimiter)
+│   └── cache/                      # Caching
+│       └── cache_manager.py       # SQLite-based entity cache (CacheManager)
+│
+├── shared/                          # Shared utility modules
+│   ├── types.py                   # Type definitions and protocols (LLMProtocol)
+│   ├── exceptions.py              # Custom exception classes (KnowGraphError hierarchy)
+│   ├── security.py                # Security utilities (path validation)
+│   └── utils.py                   # General utility functions
+│
+└── adapters/                        # External interfaces
+    ├── cli/                        # Command-line interface
+    │   └── main.py                # CLI commands (index, query, serve, validate, stats)
+    └── mcp/                        # MCP server implementation
+        └── server.py              # MCP protocol adapter
 ```
+
+### Layer Responsibilities
+
+#### 1. Domain Layer (Core)
+- **Dependencies**: No dependencies on external layers
+- **Responsibility**: Business logic, data models, graph algorithms
+- **Key Classes**:
+  - `Node`: Node model in the knowledge graph
+  - `Edge`: Relationship model between nodes
+  - `IntelligenceProvider`: AI provider interface
+  - `ASTAnalyzer`: AST parser for code analysis
+
+#### 2. Application Layer (Use Cases)
+- **Dependencies**: Only depends on Domain layer
+- **Responsibility**: Orchestrates workflows, bridges domain and infrastructure
+- **Key Classes**:
+  - `SmartGraphBuilder`: Hybrid indexing engine (AST + LLM)
+  - `QueryEngine`: Main query engine
+  - `QueryRetriever`: Graph traversal and node collection
+  - `ImpactAnalyzer`: Change impact analysis
+
+#### 3. Infrastructure Layer (Technical Infrastructure)
+- **Dependencies**: Implements Domain interfaces
+- **Responsibility**: Integration with external systems (LLM, filesystem, cache)
+- **Key Classes**:
+  - `OpenAIProvider`: OpenAI API integration
+  - `MCPSamplingProvider`: MCP Sampling API integration
+  - `CacheManager`: SQLite-based entity cache
+  - `RateLimiter`: Smart API rate limiting
+  - `SparseIndex`: TF-IDF based search index
+
+#### 4. Adapters Layer (External Interfaces)
+- **Dependencies**: Uses Application layer
+- **Responsibility**: Communication with external world (CLI, MCP server)
+- **Key Modules**:
+  - `cli/main.py`: Command-line interface
+  - `mcp/server.py`: MCP protocol adapter
 
 ### Repository Ingestion (v0.3.0)
 
@@ -229,35 +302,121 @@ The journey of an MCP request within the system is as follows:
 
 ## 🔬 How It Works
 
-### Indexing Pipeline (v0.2.0 Smart Engine)
+### Indexing Pipeline (v0.3.0 Smart Engine)
 
-KnowGraph transforms markdown files into a knowledge graph using a high-performance **Hybrid Pipeline**:
+KnowGraph transforms codebases and markdown files into a knowledge graph using a high-performance **Hybrid Pipeline**:
 
-1. **Parse Headers**: Splits document into logical sections (H1-H4).
-2. **Smart Chunking**: Token-aware chunking preserving context.
-3. **Hybrid Entity Extraction**:
-    *   **Level 1 (Memory):** Checks **SQLite Cache**. If analyzed before, returns instantly (0ms).
-    *   **Level 2 (Speed):** If chunk is code, runs **AST Analysis** (Python `ast` module). Extracts classes/functions deterministically (10ms, 0 tokens).
-    *   **Level 3 (Intelligence):** If text, batches chunks (10x) and sends to **LLM** (gpt-4o-mini) via **Smart Rate Limiter**.
-4. **Build Graph**: Creates semantic edges based on entity overlap.
-5. **Persist to Disk**: Saves nodes/edges JSONL and updates Manifest.
+#### 1. Source Detection and Preparation
+- **Source Type Detection** (`repo_ingestor.py`):
+  - Git repository URL (GitHub, GitLab, Bitbucket)
+  - Local code directory
+  - Markdown files
+- **Repository/Directory Processing**: Convert to markdown using Gitingest
+- **Filtering**: Apply include/exclude patterns
+
+#### 2. Parsing and Chunking
+- **Markdown Parsing** (`MarkdownParser`):
+  - Split document into logical sections (H1-H4)
+  - Build header hierarchy
+- **Token-Aware Chunking** (`Chunker`):
+  - Smart chunking while preserving context
+  - Size according to token limits
+
+#### 3. Hybrid Entity Extraction (3 Levels)
+- **Level 1 - Cache** (`CacheManager`):
+  - SQLite cache check
+  - Instant return if previously analyzed (0ms, 0 tokens)
+- **Level 2 - AST Analysis** (`ASTAnalyzer`):
+  - Python AST module for code chunks
+  - Deterministic extraction of classes/functions/imports (10ms, 0 tokens)
+- **Level 3 - LLM Analysis** (`OpenAIProvider` / `MCPSamplingProvider`):
+  - Batch LLM processing for text chunks
+  - Smart rate limiting (`RateLimiter`)
+  - 10 chunks/request, 20 parallel workers
+
+#### 4. Graph Building (`SmartGraphBuilder`)
+- Create semantic edges based on entity overlap
+- Build Node and Edge models
+- Calculate relationship scores
+
+#### 5. Persistent Storage
+- Save nodes/edges in JSONL format
+- Update Manifest
+- Build sparse index (TF-IDF)
 
 ### Query Pipeline
 
 A query becomes an answer in 8 steps:
 
-1. **Query Expansion** (Optional): Enriches the query (e.g., "login fail" -> "auth error").
-2. **Sparse Search**: Finds most relevant seed nodes using TF-IDF.
-3. **Graph Traversal**: Explores related nodes via BFS (max_hops).
-4. **Centrality Analysis**: Calculates node importance (betweenness, etc.) using NetworkX.
-5. **Node Scoring**: Combines similarity and centrality scores.
-6. **Context Assembly**: Selects top nodes fitting the token limit.
-7. **LLM Response**: Sends context to LLM for answer generation.
-8. **Explanation**: Generates source references and reasoning paths.
+#### 1. Query Expansion (`QueryExpander`)
+- Optional: Enrich the query
+- Example: "login fail" → "authentication error, auth failure, login exception"
 
-### Hierarchical Lifting
+#### 2. Sparse Search (`SparseIndex`)
+- Find most relevant seed nodes using TF-IDF
+- Select top-k highest scoring nodes
 
-Adds folder structure to the context, enabling the LLM to understand project hierarchy. For instance, when querying `authentication.md`, summaries of `api/README.md` and `docs/README.md` are added to the context.
+#### 3. Graph Traversal (`QueryRetriever`)
+- Discover related nodes via BFS
+- Depth control based on max_hops parameter
+- Follow semantic edges
+
+#### 4. Centrality Analysis
+- Calculate node importance using NetworkX:
+  - Betweenness centrality (architectural boundaries)
+  - Degree centrality (API surface)
+  - Closeness centrality (accessibility)
+  - Eigenvector centrality (importance)
+
+#### 5. Node Scoring
+- Combine similarity and centrality scores
+- Apply role weights (code: 0.9, config: 0.8, readme: 0.7, text: 0.6)
+- Calculate token penalty
+
+#### 6. Context Assembly (`ContextBlock`)
+- Select best nodes that fit token limit
+- Hierarchical lifting (parent READMEs)
+- Build context blocks
+
+#### 7. LLM Response
+- Send context to LLM
+- Generate answer
+
+#### 8. Explanation (`ExplanationObject`)
+- Generate source references
+- Show reasoning paths
+- Document node and edge contributions
+
+### Hierarchical Lifting (Hierarchical Context)
+
+Enables LLM to gain broader perspective by adding project hierarchy to context:
+
+- **How It Works**: When querying a file, summaries of README and documentation files in parent directories are added to context
+- **Example**: When querying `src/api/auth.py`:
+  - `src/README.md` → General architecture context
+  - `src/api/README.md` → API layer context
+  - `README.md` → Project purpose and overview
+- **Parameter**: `lift_levels` (default: 2) - How many levels to traverse up
+- **Advantage**: Interpret files within their ecosystem, not in isolation
+
+### Technology Stack
+
+Core technologies powering KnowGraph:
+
+| Technology | Use Case | Version |
+|-----------|----------|----------|
+| **Python** | Primary language | ≥3.10 |
+| **NetworkX** | Graph algorithms and analysis | ≥3.2.0 |
+| **NumPy** | Numerical computations | ≥1.26.0 |
+| **SciPy** | Scientific computations | ≥1.11.0 |
+| **OpenAI API** | LLM integration | ≥1.0.0 |
+| **Tiktoken** | Token counting | ≥0.5.0 |
+| **Gitingest** | Repository ingestion | ≥0.3.1 |
+| **MCP** | Model Context Protocol | ≥1.0.0 |
+| **Click** | CLI framework | ≥8.1.0 |
+| **Rich** | Terminal output formatting | ≥13.7.0 |
+| **Tenacity** | Async retry logic | ≥8.2.0 |
+| **SQLite** | Entity cache (built-in) | - |
 
 ## 🚀 Advanced Usage
 
@@ -286,42 +445,125 @@ class CustomProvider(IntelligenceProvider):
 
 ## 📊 Performance
 
-### Benchmarks
+### Benchmark Results (v0.3.0)
 
 | Metric | Value | Description |
 |--------|-------|-------------|
 | **Indexing Speed** | ~100 files/min | Average markdown files |
 | **Query Latency** | <2s | Sparse search + traversal + centrality |
 | **Memory Usage** | <500MB | For a graph with 10K nodes |
+| **Batch Query** | 1.19s (5 queries) | **15.72x faster** 🚀 |
+| **Warm Cache** | 0.18s | **22x faster** 🔥 |
+| **Centrality Cache** | 0.01s | **372x faster** ⚡ |
+
+### Performance Optimizations
+
+#### 1. Hybrid Entity Extraction
+- **AST Analysis**: 100x faster for code files, 0 token cost
+- **Batch LLM**: 10 chunks/request, 20 parallel workers
+- **SQLite Cache**: Prevent re-analysis (0ms)
+
+#### 2. Smart Rate Limiting
+- Dynamic limit detection from API headers
+- Automatic Free/Pro tier detection
+- 429 error prevention
+
+#### 3. Async/Await Support
+- Concurrent query processing
+- Non-blocking I/O
+- Retry logic with Tenacity
 
 ## 🔧 Troubleshooting
 
-### Common Issues
+### Common Issues and Solutions
 
-- **Empty Results**: Increase `top_k` or `max_hops`, try `expand_query=True`.
-- **Slow Queries**: Decrease `max_hops`, disable `hierarchical-lifting`.
-- **Hallucination**: Use `with_explanation=True` to verify sources.
-- **No Manifest Found**: Run `knowgraph index`.
+| Issue | Possible Cause | Solution |
+|-------|----------------|----------|
+| **Empty Results** | Narrow search scope | Increase `top_k` or `max_hops`, try `expand_query=True` |
+| **Slow Queries** | Too deep traversal | Decrease `max_hops`, disable `hierarchical-lifting` |
+| **Hallucination** | No source verification | Use `with_explanation=True`, verify sources |
+| **Manifest Not Found** | Graph not built | Run `knowgraph index` |
+| **Rate Limit Error** | Too many API requests | Check `RateLimiter` settings |
+| **Cache Error** | Corrupted SQLite file | Delete `.knowgraph_cache`, re-index |
 
-## 📖 API Reference
+## 📚 API Reference
 
-### QueryEngine
+### QueryEngine (Query Engine)
+
+Main query interface:
 
 ```python
+from pathlib import Path
+from knowgraph.application.querying.query_engine import QueryEngine
+
+# Create engine
 engine = QueryEngine(graph_store_path=Path("./graphstore"))
+
+# Synchronous query
 result = engine.query(
-    query_text="Question...",
-    top_k=20,
-    max_hops=4,
-    with_explanation=True
+    query_text="How does authentication work?",
+    top_k=20,              # Top 20 nodes
+    max_hops=4,            # 4 levels deep traversal
+    with_explanation=True  # Add explanation
+)
+
+# Async query (faster)
+result = await engine.query_async(
+    query_text="What are the API endpoints?",
+    top_k=30,
+    max_hops=6,
+    expand_query=True      # Query expansion
+)
+
+print(result.answer)       # LLM answer
+print(result.sources)      # Source nodes
+print(result.explanation)  # Reasoning path
+```
+
+### SmartGraphBuilder (Indexing)
+
+Graph building:
+
+```python
+from knowgraph.application.indexing.smart_graph_builder import SmartGraphBuilder
+from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
+
+# Create provider
+provider = OpenAIProvider(api_key="sk-...")
+
+# Create builder
+builder = SmartGraphBuilder(
+    provider=provider,
+    graph_store_path=Path("./graphstore")
+)
+
+# Index directory
+await builder.build_from_directory(
+    directory=Path("./docs"),
+    include_patterns=["*.md", "*.py"],
+    exclude_patterns=["node_modules/*"]
 )
 ```
 
-### SmartGraphBuilder
+### ImpactAnalyzer (Impact Analysis)
+
+Change impact analysis:
 
 ```python
-builder = SmartGraphBuilder(provider)
-await builder.build_from_directory(Path("./docs"))
+from knowgraph.application.querying.impact_analyzer import ImpactAnalyzer
+
+analyzer = ImpactAnalyzer(graph_store_path=Path("./graphstore"))
+
+# File-based impact analysis
+result = await analyzer.analyze_impact(
+    element="src/auth.py",
+    mode="path",      # "path" or "semantic"
+    max_hops=4
+)
+
+print(f"Affected nodes: {len(result.affected_nodes)}")
+for node in result.affected_nodes:
+    print(f"- {node.path}: {node.title}")
 ```
 
 ## 🛠️ Development and Testing
