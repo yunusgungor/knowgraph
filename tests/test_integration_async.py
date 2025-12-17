@@ -28,7 +28,7 @@ def engine(graph_store_path):
 async def test_end_to_end_async_query(engine):
     """Test complete async query flow."""
     from knowgraph.shared.exceptions import QueryError
-    
+
     try:
         result = await engine.query_async(
             "async", top_k=10, max_hops=3, timeout=30.0  # Real query from graph  # Longer timeout
@@ -198,7 +198,7 @@ async def test_performance_regression(engine):
 async def test_cache_effectiveness(engine):
     """Test that caching improves performance."""
     from knowgraph.shared.exceptions import QueryError
-    
+
     query = "test query"
 
     try:

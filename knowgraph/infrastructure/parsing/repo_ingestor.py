@@ -102,7 +102,7 @@ async def ingest_repository(
 
     """
     if ingest_async is None:
-        msg = "gitingest is not installed. " "Install it with: pip install gitingest>=0.3.1"
+        msg = "gitingest is not installed. Install it with: pip install gitingest>=0.3.1"
         raise GitingestNotInstalledError(msg)
 
     try:

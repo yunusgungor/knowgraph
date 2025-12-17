@@ -1,6 +1,6 @@
 """Tests for repository ingestor module."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
