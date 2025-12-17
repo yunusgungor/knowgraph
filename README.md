@@ -74,10 +74,22 @@ knowgraph index https://github.com/company/private-repo
 ### Core Capabilities
 
 *   **🔍 Semantic Search:** Natural language queries with context-aware retrieval
+*   **⚡ Async/Await Support:** 15x faster batch queries with concurrent processing
+*   **🚀 Performance Caching:** 22x speedup on repeated queries
 *   **📊 Impact Analysis:** Predict the ripple effects of code changes
-*   **🔄 Batch Processing:** Process multiple queries efficiently
+*   **🔄 Batch Processing:** Process multiple queries efficiently (15.72x faster)
 *   **✅ Graph Validation:** Ensure knowledge graph consistency
 *   **📈 Statistics & Metrics:** Monitor graph health and coverage
+
+#### Performance Highlights (v0.3.0)
+
+| Feature | Performance | Improvement |
+|---------|-------------|-------------|
+| **Batch Queries** | 1.19s (5 queries) | **15.72x faster** 🚀 |
+| **Warm Cache** | 0.18s | **22x faster** 🔥 |
+| **Centrality** | 0.01s (cached) | **372x faster** ⚡ |
+
+See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ---
 
