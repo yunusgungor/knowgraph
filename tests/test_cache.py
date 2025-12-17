@@ -22,7 +22,7 @@ def sample_nodes():
     return [
         Node(
             id=uuid4(),
-            hash="hash1",
+            hash="a" * 40,  # Valid 40-char hash
             title="Node 1",
             content="Content 1",
             path="test/node1.py",
@@ -32,7 +32,7 @@ def sample_nodes():
         ),
         Node(
             id=uuid4(),
-            hash="hash2",
+            hash="b" * 40,  # Valid 40-char hash
             title="Node 2",
             content="Content 2",
             path="test/node2.py",
@@ -42,7 +42,7 @@ def sample_nodes():
         ),
         Node(
             id=uuid4(),
-            hash="hash3",
+            hash="c" * 40,  # Valid 40-char hash
             title="Node 3",
             content="Content 3",
             path="test/node3.py",
@@ -62,12 +62,16 @@ def sample_edges(sample_nodes):
             target=sample_nodes[1].id,
             type="semantic",
             score=0.8,
+            created_at=0,
+            metadata={},
         ),
         Edge(
             source=sample_nodes[1].id,
             target=sample_nodes[2].id,
             type="semantic",
             score=0.7,
+            created_at=0,
+            metadata={},
         ),
     ]
 
@@ -113,14 +117,18 @@ def test_cache_eviction():
     """Test cache eviction when max size reached."""
     from knowgraph.domain.algorithms.centrality import _cache_max_size
     from uuid import uuid4
+    import hashlib
 
     clear_cache()
 
     # Fill cache to max
     for i in range(_cache_max_size + 10):
+        # Generate valid 40-char hash
+        hash_value = hashlib.sha1(f"node{i}".encode()).hexdigest()
+
         node = Node(
             id=uuid4(),
-            hash=f"hash{i}",
+            hash=hash_value,
             title=f"Node {i}",
             content=f"Content {i}",
             path=f"test/node{i}.py",
