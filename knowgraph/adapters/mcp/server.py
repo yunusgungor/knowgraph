@@ -71,7 +71,7 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
                 except Exception:
                     pass
 
-            result = engine.query(
+            result = await engine.query_async(
                 query,
                 top_k=top_k,
                 max_hops=max_hops,
@@ -160,7 +160,7 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
             else:
                 # Semantic impact analysis
                 engine = QueryEngine(graph_path)
-                result = engine.analyze_impact(element, max_hops=max_hops)
+                result = await engine.analyze_impact_async(element, max_hops=max_hops)
                 return [types.TextContent(type="text", text=result.answer)]
 
         except Exception as e:
@@ -227,27 +227,24 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
             lift_levels = arguments.get("lift_levels", 2)
 
             engine = QueryEngine(graph_path)
-            results = []
 
-            # Process queries sequentially (could be parallelized with asyncio.gather if needed)
-            for query in queries:
-                if not query or not isinstance(query, str):
-                    results.append({"query": query, "error": "Invalid query format"})
-                    continue
+            # Use async batch query for better performance
+            try:
+                results_list = await engine.batch_query_async(
+                    queries=queries,
+                    top_k=top_k,
+                    max_hops=max_hops,
+                    max_tokens=max_tokens,
+                    enable_hierarchical_lifting=enable_hierarchical_lifting,
+                    lift_levels=lift_levels,
+                )
 
-                try:
-                    result = engine.query(
-                        query,
-                        top_k=top_k,
-                        max_hops=max_hops,
-                        max_tokens=max_tokens,
-                        enable_hierarchical_lifting=enable_hierarchical_lifting,
-                        lift_levels=lift_levels,
-                    )
-
+                # Format results with LLM generation if provider available
+                results = []
+                for query, result in zip(queries, results_list):
                     # Generate answer with LLM if provider available
                     answer = result.context
-                    if provider:
+                    if provider and result.answer:  # Only if we have context
                         try:
                             prompt = (
                                 f"You are a helpful assistant. Use the following context to answer the user's question.\n\n"
@@ -269,8 +266,9 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
                             "execution_time": result.execution_time,
                         }
                     )
-                except Exception as e:
-                    results.append({"query": query, "error": str(e)})
+
+            except Exception as e:
+                return [types.TextContent(type="text", text=f"Error executing batch query: {e!s}")]
 
             # Format results as text
             output = f"Batch Query Results ({len(queries)} queries)\n" + "=" * 50 + "\n\n"

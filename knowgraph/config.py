@@ -18,6 +18,13 @@ ENABLE_QUERY_EXPANSION = True  # Enable LLM-based query expansion
 MAX_CONCURRENT_REQUESTS = 20  # Maximum concurrent API requests
 BATCH_SIZE = 10  # Number of chunks to process in a single LLM call
 
+# Async Configuration
+MAX_CONCURRENT_QUERIES = 10  # Maximum concurrent queries in async mode
+MAX_CONCURRENT_NODE_LOADS = 50  # Maximum concurrent node file loads
+QUERY_TIMEOUT_SECONDS = 30.0  # Default timeout for async queries
+BATCH_QUERY_CHUNK_SIZE = 5  # Number of queries to process concurrently in batch
+
+
 # LLM Configuration
 DEFAULT_LLM_PROVIDER = "openai"
 DEFAULT_OPENAI_MODEL = os.getenv("KNOWGRAPH_LLM_MODEL", "gpt-4o-mini")

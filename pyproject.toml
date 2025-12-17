@@ -35,7 +35,9 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "tiktoken>=0.5.0",
     "gitingest>=0.3.1",
+    "tenacity>=8.2.0",      # Retry logic for async operations
 ]
+
 
 [project.optional-dependencies]
 dev = [

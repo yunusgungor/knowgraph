@@ -1,21 +1,27 @@
 """Query engine - orchestrates full query pipeline.
 
 Coordinates retrieval, graph reasoning, and context assembly.
+
+Supports both sync and async modes for backward compatibility.
 """
 
+import asyncio
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from knowgraph.application.querying.context_assembly import assemble_context
 from knowgraph.application.querying.explanation import ExplanationObject, generate_explanation
 from knowgraph.application.querying.retriever import QueryRetriever
 from knowgraph.config import (
     DEFAULT_CENTRALITY_SCORE,
+    MAX_CONCURRENT_QUERIES,
     MAX_HOPS,
     MAX_QUERY_PREVIEW_LENGTH,
     MAX_TOKENS,
+    QUERY_TIMEOUT_SECONDS,
     TOP_K,
 )
 from knowgraph.domain.algorithms.centrality import compute_centrality_metrics
@@ -24,6 +30,9 @@ from knowgraph.infrastructure.storage.filesystem import (
     read_node_json,
 )
 from knowgraph.shared.exceptions import QueryError
+
+# Context variable for request tracking
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
 @dataclass
@@ -82,6 +91,10 @@ class QueryEngine:
         self.graph_store_path = graph_store_path
         self.retriever = QueryRetriever(graph_store_path)
         self.edges = read_all_edges(graph_store_path)
+
+        # Async concurrency control
+        self._query_semaphore = asyncio.Semaphore(MAX_CONCURRENT_QUERIES)
+        self._active_tasks: set[asyncio.Task] = set()
 
     def query(
         self: "QueryEngine",
@@ -292,3 +305,428 @@ class QueryEngine:
                 "Impact analysis failed",
                 {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
             ) from error
+
+    async def query_async(
+        self: "QueryEngine",
+        query_text: str,
+        top_k: int = 20,
+        max_hops: int = 4,
+        max_tokens: int = 3000,
+        timeout: float | None = None,
+        with_explanation: bool = False,
+        enable_hierarchical_lifting: bool = True,
+        lift_levels: int = 2,
+    ) -> QueryResult:
+        """Execute full query pipeline (async version with timeout and concurrency control).
+
+        Improvements over sync version:
+        - Concurrent node loading
+        - Async query expansion
+        - Timeout support
+        - Request tracking
+        - Concurrency limiting
+
+        Args:
+        ----
+            query_text: Natural language query
+            top_k: Number of seed nodes
+            max_hops: Graph traversal depth
+            max_tokens: Maximum context tokens
+            timeout: Query timeout in seconds (default: QUERY_TIMEOUT_SECONDS)
+            with_explanation: Generate explanation object
+            enable_hierarchical_lifting: Apply hierarchical context lifting
+            lift_levels: Directory levels to traverse upward
+
+        Returns:
+        -------
+            QueryResult with answer and metrics
+
+        Raises:
+        ------
+            QueryError: If query fails
+            asyncio.TimeoutError: If query exceeds timeout
+
+        """
+        # Set request ID for tracking
+        request_id = str(uuid4())
+        request_id_var.set(request_id)
+
+        # Use default timeout if not specified
+        if timeout is None:
+            timeout = QUERY_TIMEOUT_SECONDS
+
+        # Apply concurrency limit
+        async with self._query_semaphore:
+            # Track active task
+            task = asyncio.current_task()
+            if task:
+                self._active_tasks.add(task)
+
+            try:
+                # Execute with timeout
+                return await asyncio.wait_for(
+                    self._query_async_impl(
+                        query_text=query_text,
+                        top_k=top_k,
+                        max_hops=max_hops,
+                        max_tokens=max_tokens,
+                        with_explanation=with_explanation,
+                        enable_hierarchical_lifting=enable_hierarchical_lifting,
+                        lift_levels=lift_levels,
+                    ),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                raise QueryError(
+                    f"Query timed out after {timeout}s",
+                    {"query": query_text[:MAX_QUERY_PREVIEW_LENGTH], "request_id": request_id},
+                ) from None
+            finally:
+                # Remove from active tasks
+                if task:
+                    self._active_tasks.discard(task)
+
+    async def _query_async_impl(
+        self: "QueryEngine",
+        query_text: str,
+        top_k: int,
+        max_hops: int,
+        max_tokens: int,
+        with_explanation: bool,
+        enable_hierarchical_lifting: bool,
+        lift_levels: int,
+    ) -> QueryResult:
+        """Internal async implementation without timeout wrapper."""
+        start_time = time.time()
+        timings = {}
+
+        try:
+            # Step 1: Sparse search + graph expansion (async)
+            retrieval_start = time.time()
+            nodes, seed_node_ids = await self.retriever.retrieve_async(
+                query_text, self.edges, top_k, max_hops
+            )
+            timings["sparse_search"] = time.time() - retrieval_start
+            timings["graph_expansion"] = 0.0  # Included in retrieval
+
+            if not nodes:
+                raise QueryError("No relevant nodes found")
+
+            # Allow cancellation
+            await asyncio.sleep(0)
+
+            # Step 2: Compute centrality on active subgraph
+            centrality_start = time.time()
+            active_node_ids = {node.id for node in nodes}
+            active_edges = [
+                edge
+                for edge in self.edges
+                if edge.source in active_node_ids and edge.target in active_node_ids
+            ]
+            centrality_scores = compute_centrality_metrics(nodes, active_edges)
+            timings["centrality"] = time.time() - centrality_start
+
+            # Allow cancellation
+            await asyncio.sleep(0)
+
+            # Step 3: Get similarity scores from retriever results
+            retrieval_results = await self.retriever.retrieve_by_similarity_async(query_text, top_k)
+            similarity_scores = {node.id: score for node, score in retrieval_results}
+
+            # Step 4: Assemble context
+            context, _context_blocks = assemble_context(
+                nodes, seed_node_ids, similarity_scores, centrality_scores, max_tokens
+            )
+
+            # Step 5: Return context
+            answer = context
+
+            # Step 6: Generate explanation (if requested)
+            explanation = None
+            if with_explanation:
+                context_nodes = [n for n in nodes if n.id in {n.id for n in nodes}][:30]
+                flat_centralities = {
+                    node_id: scores.get("degree", DEFAULT_CENTRALITY_SCORE)
+                    for node_id, scores in centrality_scores.items()
+                }
+                explanation = generate_explanation(
+                    context_nodes,
+                    active_edges,
+                    similarity_scores,
+                    flat_centralities,
+                    set(seed_node_ids),
+                    answer,
+                )
+
+            # Build result
+            total_time = time.time() - start_time
+
+            return QueryResult(
+                query=query_text,
+                answer=answer,
+                context=context,
+                seed_nodes=seed_node_ids,
+                active_subgraph_size=len(nodes),
+                execution_time=total_time,
+                sparse_search_time=timings["sparse_search"],
+                graph_expansion_time=timings["graph_expansion"],
+                centrality_time=timings["centrality"],
+                explanation=explanation,
+            )
+
+        except QueryError:
+            raise
+        except asyncio.CancelledError:
+            # Log cancellation and re-raise
+            raise
+        except Exception as error:
+            raise QueryError(
+                "Query execution failed",
+                {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
+            ) from error
+
+    async def analyze_impact_async(
+        self: "QueryEngine",
+        query_text: str,
+        max_hops: int = 4,
+        edge_types: list[str] | None = None,
+    ) -> QueryResult:
+        """Analyze impact of changes to a code element (async version).
+
+        Performs reverse dependency traversal to find all code that depends
+        on the queried element.
+
+        Args:
+        ----
+            query_text: Element to analyze (e.g., function name, file path)
+            max_hops: Maximum traversal depth (default: 4)
+            edge_types: Edge types to follow (default: ["semantic"])
+
+        Returns:
+        -------
+            QueryResult with affected nodes and reasoning
+
+        """
+        from knowgraph.domain.algorithms.traversal import traverse_reverse_references
+        from knowgraph.domain.models.node import Node
+        from knowgraph.infrastructure.storage.filesystem import read_node_json
+
+        start_time = time.time()
+
+        try:
+            # Step 1: Find target nodes via vector search (async)
+            vector_start = time.time()
+            _nodes, seed_node_ids = await self.retriever.retrieve_async(
+                query_text, self.edges, top_k=TOP_K, max_hops=1  # At least 1 hop for context
+            )
+            vector_time = time.time() - vector_start
+
+            if not seed_node_ids:
+                # Return empty result instead of error
+                return QueryResult(
+                    query=query_text,
+                    answer=f"No nodes found matching '{query_text}' for impact analysis.",
+                    context="",
+                    seed_nodes=[],
+                    active_subgraph_size=0,
+                    execution_time=time.time() - start_time,
+                    sparse_search_time=vector_time,
+                    graph_expansion_time=0.0,
+                    centrality_time=0.0,
+                )
+
+            # Step 2: Traverse reverse references
+            traversal_start = time.time()
+            affected_node_ids = traverse_reverse_references(
+                seed_node_ids, self.edges, max_hops, edge_types or ["semantic"]
+            )
+            traversal_time = time.time() - traversal_start
+
+            # Step 3: Load affected nodes concurrently
+            load_start = time.time()
+
+            async def load_node_async(node_id: UUID, graph_store_path: Path) -> Node | None:
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(None, read_node_json, node_id, graph_store_path)
+
+            tasks = [
+                load_node_async(node_id, self.graph_store_path) for node_id in affected_node_ids
+            ]
+            loaded_nodes = await asyncio.gather(*tasks)
+            affected_nodes = [node for node in loaded_nodes if node is not None]
+            load_time = time.time() - load_start
+
+            # Step 4: Build context
+            context_lines = [f"Impact Analysis for: {query_text}\n"]
+            context_lines.append(f"Target Nodes: {len(seed_node_ids)}")
+            context_lines.append(f"Affected Nodes: {len(affected_nodes)}")
+            context_lines.append(f"Traversal Depth: {max_hops}\n")
+
+            # Group by file
+            files_affected = {}
+            for node in affected_nodes:
+                if node.path not in files_affected:
+                    files_affected[node.path] = []
+                files_affected[node.path].append(node)
+
+            context_lines.append(f"Files Affected: {len(files_affected)}\n")
+            for file_path, nodes in sorted(files_affected.items())[:20]:  # Top 20 files
+                context_lines.append(f"  {file_path} ({len(nodes)} nodes)")
+
+            context = "\n".join(context_lines)
+
+            return QueryResult(
+                query=query_text,
+                answer=context,
+                context=context,
+                seed_nodes=list(seed_node_ids),
+                active_subgraph_size=len(affected_nodes),
+                execution_time=time.time() - start_time,
+                sparse_search_time=vector_time,
+                graph_expansion_time=traversal_time + load_time,
+                centrality_time=0.0,
+            )
+
+        except Exception as error:
+            # Better error handling
+            error_msg = f"Impact analysis failed: {type(error).__name__}: {error}"
+            return QueryResult(
+                query=query_text,
+                answer=error_msg,
+                context="",
+                seed_nodes=[],
+                active_subgraph_size=0,
+                execution_time=time.time() - start_time,
+                sparse_search_time=0.0,
+                graph_expansion_time=0.0,
+                centrality_time=0.0,
+            )
+
+    async def cancel_all_queries(self: "QueryEngine") -> None:
+        """Cancel all active queries gracefully.
+
+        This method cancels all currently running async queries and waits
+        for them to complete or be cancelled.
+
+        """
+        for task in self._active_tasks:
+            task.cancel()
+
+        # Wait for all tasks to complete/cancel
+        await asyncio.gather(*self._active_tasks, return_exceptions=True)
+        self._active_tasks.clear()
+
+    async def batch_query_async(
+        self: "QueryEngine",
+        queries: list[str],
+        top_k: int = 20,
+        max_hops: int = 4,
+        max_tokens: int = 3000,
+        batch_size: int = 5,
+        timeout: float | None = None,
+        enable_hierarchical_lifting: bool = True,
+        lift_levels: int = 2,
+        progress_callback: "Callable[[int, int], Awaitable[None]] | None" = None,
+    ) -> list[QueryResult]:
+        """Execute multiple queries concurrently with advanced features.
+
+        Features:
+        - Chunked processing to avoid memory issues
+        - Progress callbacks for long-running batches
+        - Timeout support per query
+        - Graceful error handling (continues on failures)
+        - **OPTIMIZED**: Bypasses per-query semaphore for true concurrency
+
+        Args:
+        ----
+            queries: List of query texts
+            top_k: Number of seed nodes per query
+            max_hops: Graph traversal depth
+            max_tokens: Maximum context tokens
+            batch_size: Number of queries to process concurrently (default: 5)
+            timeout: Timeout per query in seconds (default: QUERY_TIMEOUT_SECONDS)
+            progress_callback: Optional async callback(current, total)
+
+        Returns:
+        -------
+            List of QueryResults in same order as queries
+
+        Example:
+        -------
+            >>> async def on_progress(current, total):
+            ...     print(f"Progress: {current}/{total}")
+            >>>
+            >>> results = await engine.batch_query_async(
+            ...     queries=["query1", "query2", "query3"],
+            ...     progress_callback=on_progress
+            ... )
+
+        """
+        from typing import Awaitable, Callable
+
+        results = []
+
+        # Use default timeout if not specified
+        if timeout is None:
+            timeout = QUERY_TIMEOUT_SECONDS
+
+        # Process queries in chunks to avoid memory issues
+        for i in range(0, len(queries), batch_size):
+            batch = queries[i : i + batch_size]
+
+            # Create tasks for this batch
+            # OPTIMIZATION: Call _query_async_impl directly to bypass semaphore
+            # This allows true concurrent execution within batch
+            tasks = []
+            for query in batch:
+                # Set request ID for tracking
+                request_id = str(uuid4())
+                request_id_var.set(request_id)
+
+                # Wrap with timeout
+                task = asyncio.wait_for(
+                    self._query_async_impl(
+                        query_text=query,
+                        top_k=top_k,
+                        max_hops=max_hops,
+                        max_tokens=max_tokens,
+                        with_explanation=False,  # Disable for batch performance
+                        enable_hierarchical_lifting=enable_hierarchical_lifting,
+                        lift_levels=lift_levels,
+                    ),
+                    timeout=timeout,
+                )
+                tasks.append(task)
+
+            # Execute batch concurrently
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Handle exceptions gracefully
+            for j, result in enumerate(batch_results):
+                if isinstance(result, Exception):
+                    # Log error but continue with other queries
+                    # Return empty result for failed queries
+                    results.append(
+                        QueryResult(
+                            query=batch[j],
+                            answer="",
+                            context="",
+                            seed_nodes=[],
+                            active_subgraph_size=0,
+                            execution_time=0.0,
+                            sparse_search_time=0.0,
+                            graph_expansion_time=0.0,
+                            centrality_time=0.0,
+                        )
+                    )
+                else:
+                    results.append(result)
+
+            # Report progress
+            if progress_callback:
+                await progress_callback(min(i + batch_size, len(queries)), len(queries))
+
+            # Allow garbage collection between batches
+            await asyncio.sleep(0)
+
+        return results

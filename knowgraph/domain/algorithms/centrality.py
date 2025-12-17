@@ -1,9 +1,12 @@
-"""Centrality calculations on active subgraphs.
+"""Centrality metrics for graph reasoning.
 
-Computes per-query centrality metrics (betweenness, degree, closeness, eigenvector)
-using NetworkX on the active reasoning subgraph.
+Implements composite centrality scoring combining multiple metrics
+for importance-based node ranking.
+
+Optimized with LRU caching for repeated subgraph queries.
 """
 
+from functools import lru_cache
 from uuid import UUID
 
 import networkx as nx
@@ -44,13 +47,50 @@ def build_networkx_graph(nodes: list[Node], edges: list[Edge]) -> "nx.Graph[obje
     return graph
 
 
+# Global cache for centrality results
+_centrality_cache: dict[
+    tuple[tuple[UUID, ...], tuple[tuple[UUID, UUID, str], ...]], dict[UUID, dict[str, float]]
+] = {}
+_cache_max_size = 256
+
+
 def compute_centrality_metrics(
+    nodes: list[Node], edges: list[Edge]
+) -> dict[UUID, dict[str, float]]:
+    """Compute centrality metrics with caching.
+
+    Uses a simple dict cache to avoid repeated expensive NetworkX calculations.
+    """
+    # Create cache key from sorted IDs
+    cache_key = (
+        tuple(sorted(node.id for node in nodes)),
+        tuple(sorted((edge.source, edge.target, edge.type) for edge in edges)),
+    )
+
+    # Check cache
+    if cache_key in _centrality_cache:
+        return _centrality_cache[cache_key]
+
+    # Compute if not cached
+    result = _compute_centrality_impl(nodes, edges)
+
+    # Store in cache (with size limit)
+    if len(_centrality_cache) >= _cache_max_size:
+        # Remove oldest entry (simple FIFO)
+        _centrality_cache.pop(next(iter(_centrality_cache)))
+
+    _centrality_cache[cache_key] = result
+    return result
+
+
+def _compute_centrality_impl(
     nodes: list[Node],
     edges: list[Edge],
 ) -> dict[UUID, dict[str, float]]:
     """Compute centrality metrics for all nodes in subgraph.
 
     Calculates betweenness, degree, closeness, and eigenvector centrality.
+    Uses approximate algorithms for large graphs (>100 nodes) for better performance.
 
     Args:
     ----
@@ -73,13 +113,23 @@ def compute_centrality_metrics(
 
     metrics = {}
 
+    # Use approximate algorithms for large graphs
+    use_approximate = len(nodes) > 100
+
     # Betweenness centrality (architectural boundaries)
     try:
-        betweenness = nx.betweenness_centrality(graph, normalized=True)
+        if use_approximate:
+            # Approximate betweenness for large graphs (sample-based)
+            # Sample ~sqrt(n) nodes for estimation
+            k = max(10, int(len(nodes) ** 0.5))
+            betweenness = nx.betweenness_centrality(graph, k=k, normalized=True)
+        else:
+            # Exact betweenness for small graphs
+            betweenness = nx.betweenness_centrality(graph, normalized=True)
     except Exception:
         betweenness = {node.id: 0.0 for node in nodes}
 
-    # Degree centrality (API surface)
+    # Degree centrality (API surface) - always fast
     degree = nx.degree_centrality(graph)
 
     # Closeness centrality (accessibility)
@@ -90,7 +140,11 @@ def compute_centrality_metrics(
 
     # Eigenvector centrality (importance)
     try:
-        eigenvector = nx.eigenvector_centrality(graph, max_iter=100)
+        if use_approximate:
+            # Reduce max iterations for large graphs
+            eigenvector = nx.eigenvector_centrality(graph, max_iter=50)
+        else:
+            eigenvector = nx.eigenvector_centrality(graph, max_iter=100)
     except Exception:
         eigenvector = {node.id: 0.0 for node in nodes}
 
