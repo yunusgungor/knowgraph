@@ -46,7 +46,7 @@ def write_node_json(node: Node, graph_store_path: Path) -> None:
 
     """
     # Ensure graph_store_path is a Path object
-    if isinstance(graph_store_path, str):  # type: ignore
+    if isinstance(graph_store_path, str):
         graph_store_path = Path(graph_store_path)
 
     nodes_dir = graph_store_path / "nodes"

@@ -308,7 +308,7 @@ async def list_resources() -> list[types.Resource]:
 
 
 @app.read_resource()  # type: ignore
-async def read_resource(uri: Any) -> str | bytes:  # type: ignore
+async def read_resource(uri: Any) -> str | bytes:
     if str(uri) == "knowgraph://default/manifest":
         graph_path = resolve_graph_path(DEFAULT_GRAPH_STORE_PATH, PROJECT_ROOT)
         manifest_path = graph_path / "metadata" / "manifest.json"

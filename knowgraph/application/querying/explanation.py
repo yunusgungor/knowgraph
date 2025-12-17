@@ -235,7 +235,7 @@ def extract_reasoning_paths(
             continue
 
         # Build reasoning paths
-        for _target_id, path_ids in paths_dict.items():  # type: ignore[union-attr]
+        for _target_id, path_ids in paths_dict.items():
             if len(path_ids) < 2:  # Skip trivial paths
                 continue
 

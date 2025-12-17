@@ -53,7 +53,7 @@ class Edge:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> Edge:  # type: ignore[misc]
+    def from_dict(cls, data: dict[str, object]) -> Edge:
         """Deserialize edge from dictionary."""
         from typing import cast
         from uuid import UUID

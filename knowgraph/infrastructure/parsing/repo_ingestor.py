@@ -12,11 +12,11 @@ try:
 
     GITINGEST_AVAILABLE = True
 except ImportError:
-    ingest = None  # type: ignore[assignment]
+    ingest = None
     GITINGEST_AVAILABLE = False
 
 try:
-    from gitingest import ingest_async  # type: ignore[import-untyped]
+    from gitingest import ingest_async
 except ImportError:
     ingest_async = None
 

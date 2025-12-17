@@ -95,7 +95,7 @@ class Node:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> Node:  # type: ignore[misc]
+    def from_dict(cls, data: dict[str, object]) -> Node:
         """Deserialize node from dictionary."""
         from typing import cast
         from uuid import UUID
