@@ -12,7 +12,6 @@ Optimized with:
 import asyncio
 import atexit
 from concurrent.futures import ProcessPoolExecutor
-from typing import Any
 from uuid import UUID
 
 import networkx as nx
@@ -169,10 +168,10 @@ def _compute_centrality_impl(
 
     # Use approximate algorithms for medium-sized graphs
     use_approximate = len(nodes) > CENTRALITY_APPROXIMATE_THRESHOLD
-    
+
     # Use multiprocessing for very large graphs
     use_multiprocessing = (
-        CENTRALITY_MULTIPROCESSING_ENABLED 
+        CENTRALITY_MULTIPROCESSING_ENABLED
         and len(nodes) > CENTRALITY_MULTIPROCESSING_THRESHOLD
     )
 
@@ -252,7 +251,7 @@ async def compute_centrality_metrics_async(
 
     # Determine if we should use multiprocessing
     use_multiprocessing = (
-        CENTRALITY_MULTIPROCESSING_ENABLED 
+        CENTRALITY_MULTIPROCESSING_ENABLED
         and len(nodes) > CENTRALITY_MULTIPROCESSING_THRESHOLD
     )
 

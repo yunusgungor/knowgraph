@@ -1,7 +1,6 @@
 """File system operations for nodes and edges."""
 
 import json
-from functools import lru_cache
 from pathlib import Path
 from uuid import UUID
 
@@ -93,7 +92,7 @@ def write_node_json(node: Node, graph_store_path: Path) -> None:
         with open(temp_file, "w", encoding="utf-8") as file:
             json.dump(node.to_dict(), file, indent=2, ensure_ascii=False)
         temp_file.rename(node_file)
-        
+
         # Trigger cache invalidation after successful write
         invalidate_all_caches()
     except Exception as error:
@@ -128,7 +127,7 @@ def read_node_json(node_id: UUID, graph_store_path: Path, use_cache: bool = True
         cache_key = (graph_store_path, node_id)
         if cache_key in _node_cache:
             return _node_cache[cache_key]
-    
+
     node_file = graph_store_path / "nodes" / f"{node_id}.json"
 
     if not node_file.exists():
@@ -141,12 +140,12 @@ def read_node_json(node_id: UUID, graph_store_path: Path, use_cache: bool = True
         with open(node_file, encoding="utf-8") as file:
             data = json.load(file)
         node = Node.from_dict(data)
-        
+
         # Cache the result
         if use_cache:
             _node_cache[cache_key] = node
             _prune_cache_if_needed()
-        
+
         return node
     except Exception as error:
         raise StorageError(

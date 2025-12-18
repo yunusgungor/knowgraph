@@ -1,6 +1,5 @@
 """Tests for edge cases: empty data, invalid inputs, boundary conditions."""
 
-import json
 import tempfile
 from pathlib import Path
 from uuid import uuid4
@@ -17,7 +16,6 @@ from knowgraph.infrastructure.storage.filesystem import (
 from knowgraph.infrastructure.storage.manifest import Manifest, read_manifest, write_manifest
 from knowgraph.shared.exceptions import StorageError
 from knowgraph.shared.streaming import paginate_nodes, stream_nodes_async
-
 
 # ====================
 # Node Edge Cases
@@ -176,10 +174,10 @@ def test_write_node_to_nonexistent_directory():
             created_at=1000000,
             metadata={}
         )
-        
+
         # Should create directories and write successfully
         write_node_json(node, deep_path)
-        
+
         # Verify file exists
         node_file = deep_path / "nodes" / f"{node.id}.json"
         assert node_file.exists()
@@ -199,12 +197,12 @@ def test_read_node_from_corrupted_json():
         graph_path = Path(tmpdir)
         nodes_dir = graph_path / "nodes"
         nodes_dir.mkdir(parents=True)
-        
+
         # Write corrupted JSON
         node_id = uuid4()
         corrupted_file = nodes_dir / f"{node_id}.json"
         corrupted_file.write_text("{invalid json content")
-        
+
         # Should handle gracefully
         with pytest.raises(StorageError):
             read_node_json(node_id, graph_path)
@@ -213,7 +211,7 @@ def test_read_node_from_corrupted_json():
 def test_write_node_with_empty_id():
     """Test that node with nil UUID still works."""
     from uuid import UUID
-    
+
     nil_uuid = UUID("00000000-0000-0000-0000-000000000000")
     node = Node(
         id=nil_uuid,
@@ -226,10 +224,10 @@ def test_write_node_with_empty_id():
         created_at=1000000,
         metadata={}
     )
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         write_node_json(node, Path(tmpdir))
-        
+
         # Verify can read back
         read_node = read_node_json(nil_uuid, Path(tmpdir))
         assert read_node is not None
@@ -239,11 +237,11 @@ def test_write_node_with_empty_id():
 def test_cache_with_zero_max_size():
     """Test node cache behavior at boundaries."""
     clear_node_cache()
-    
+
     # Cache should still work even with small sizes
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir)
-        
+
         node = Node(
             id=uuid4(),
             hash="h" * 40,
@@ -255,9 +253,9 @@ def test_cache_with_zero_max_size():
             created_at=1000000,
             metadata={}
         )
-        
+
         write_node_json(node, graph_path)
-        
+
         # Read with cache
         result = read_node_json(node.id, graph_path, use_cache=True)
         assert result is not None
@@ -329,13 +327,13 @@ def test_manifest_serialization_deserialization():
         sparse_index_filename="index.json",
         semantic_edge_count=50
     )
-    
+
     # Serialize to dict
     data = original.to_dict()
-    
+
     # Deserialize back
     restored = Manifest.from_dict(data)
-    
+
     assert restored.version == original.version
     assert restored.node_count == original.node_count
     assert restored.edge_count == original.edge_count
@@ -353,7 +351,7 @@ async def test_stream_empty_node_list():
     chunks_collected = []
     async for chunk in stream_nodes_async([], chunk_size=10):
         chunks_collected.append(chunk)
-    
+
     assert len(chunks_collected) == 0
 
 
@@ -371,11 +369,11 @@ async def test_stream_single_node():
         created_at=1000000,
         metadata={}
     )
-    
+
     chunks_collected = []
     async for chunk in stream_nodes_async([node], chunk_size=10):
         chunks_collected.append(chunk)
-    
+
     assert len(chunks_collected) == 1
     assert len(chunk.data) == 1
     assert chunks_collected[0].data[0] == node
@@ -398,11 +396,11 @@ async def test_stream_with_chunk_size_larger_than_list():
         )
         for i in range(5)
     ]
-    
+
     chunks_collected = []
     async for chunk in stream_nodes_async(nodes, chunk_size=100):
         chunks_collected.append(chunk)
-    
+
     # Should get single chunk with all nodes
     assert len(chunks_collected) == 1
     assert len(chunks_collected[0].data) == 5
@@ -411,7 +409,7 @@ async def test_stream_with_chunk_size_larger_than_list():
 def test_paginate_empty_list():
     """Test pagination with empty list."""
     page_nodes, state = paginate_nodes([], page=1, page_size=10)
-    
+
     assert page_nodes == []
     assert state.page == 1
     assert state.total_items == 0
@@ -432,9 +430,9 @@ def test_paginate_single_item():
         created_at=1000000,
         metadata={}
     )
-    
+
     page_nodes, state = paginate_nodes([node], page=1, page_size=10)
-    
+
     assert len(page_nodes) == 1
     assert state.total_items == 1
     assert state.has_next is False
@@ -456,10 +454,10 @@ def test_paginate_beyond_last_page():
         )
         for i in range(5)
     ]
-    
+
     # Request page 10 when only 1 page exists
     page_nodes, state = paginate_nodes(nodes, page=10, page_size=10)
-    
+
     assert page_nodes == []
     assert state.page == 10
 
@@ -480,19 +478,19 @@ def test_paginate_with_page_size_one():
         )
         for i in range(3)
     ]
-    
+
     # Page 1
     nodes1, state1 = paginate_nodes(nodes, page=1, page_size=1)
     assert len(nodes1) == 1
     assert state1.has_next is True
     assert state1.has_previous is False
-    
+
     # Page 2
     nodes2, state2 = paginate_nodes(nodes, page=2, page_size=1)
     assert len(nodes2) == 1
     assert state2.has_next is True
     assert state2.has_previous is True
-    
+
     # Page 3
     nodes3, state3 = paginate_nodes(nodes, page=3, page_size=1)
     assert len(nodes3) == 1
@@ -626,7 +624,7 @@ def test_node_with_list_in_metadata():
 def test_node_with_large_token_count():
     """Test node with large token count within limits."""
     from knowgraph.config import MAX_NODE_TOKEN_COUNT
-    
+
     node = Node(
         id=uuid4(),
         hash="t" * 40,
@@ -645,20 +643,20 @@ def test_manifest_write_read_cycle():
     """Test manifest survives write-read cycle."""
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir)
-        
+
         original = Manifest.create_new(
             edges_filename="edges.jsonl",
             sparse_index_filename="index.json"
         )
         original.node_count = 42
         original.edge_count = 84
-        
+
         # Write
         write_manifest(original, graph_path)
-        
+
         # Read back
         restored = read_manifest(graph_path)
-        
+
         assert restored is not None
         assert restored.node_count == 42
         assert restored.edge_count == 84
@@ -669,7 +667,7 @@ def test_multiple_concurrent_cache_clears():
     clear_node_cache()
     clear_node_cache()
     clear_node_cache()
-    
+
     # Should not raise any errors
 
 

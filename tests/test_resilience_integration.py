@@ -186,11 +186,11 @@ class TestAPIVersioning:
 
     def test_versioning_registered_at_startup(self):
         """Verify API versions are registered when server module loads."""
-        from knowgraph.shared.versioning import get_current_version, get_version_registry
+        import importlib
 
         # Reload server module to trigger registration
         from knowgraph.adapters.mcp import server
-        import importlib
+        from knowgraph.shared.versioning import get_current_version, get_version_registry
 
         importlib.reload(server)
 

@@ -201,7 +201,7 @@ class SmartGraphBuilder:
             warnings.append(f"{len(self_loops)} self-loop edges detected")
 
         # Check for empty entities (nodes with no extracted entities)
-        empty_entities = [n for n in nodes if not n.metadata.get("entities")]
+        empty_entities = [n for n in nodes if not (n.metadata or {}).get("entities")]
         if len(empty_entities) > len(nodes) * 0.5:  # More than 50%
             warnings.append(
                 f"{len(empty_entities)}/{len(nodes)} nodes have no entities (potential extraction failure)"

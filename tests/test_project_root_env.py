@@ -15,6 +15,7 @@ def test_project_root_auto_detection():
 
         # Re-import to pick up the change
         import importlib
+
         import knowgraph.adapters.mcp.server as server_module
 
         importlib.reload(server_module)
@@ -52,11 +53,11 @@ def test_resolve_graph_path_with_absolute_path():
 async def test_mcp_tools_use_auto_detected_root():
     """Test that MCP tools use auto-detected PROJECT_ROOT."""
     from knowgraph.adapters.mcp.server import call_tool
-    from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 
     with patch.dict(os.environ, {}, clear=True):
         # Re-import to pick up the change
         import importlib
+
         import knowgraph.adapters.mcp.server as server_module
 
         importlib.reload(server_module)

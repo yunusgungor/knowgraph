@@ -140,7 +140,7 @@ async def benchmark_parameter_tuning() -> dict[str, float]:
         {"name": "Aggressive", "top_k": 20, "max_hops": 4, "max_tokens": 5000},
     ]
 
-    results = {}
+    results: dict[str, float] = {}
 
     for config in configs:
         name = config.pop("name")

@@ -2,7 +2,7 @@
 
 import pytest
 
-from knowgraph.shared.resource_detector import ResourceDetector, PSUTIL_AVAILABLE
+from knowgraph.shared.resource_detector import PSUTIL_AVAILABLE, ResourceDetector
 
 
 def test_get_available_ram():

@@ -342,10 +342,10 @@ class QueryRetriever:
         use_code_search: bool = False,
     ) -> AsyncIterator[tuple[list[Node], bool]]:
         """Retrieve nodes in streaming chunks for memory efficiency.
-        
+
         This method is ideal for large result sets as it yields nodes in chunks
         without loading everything into memory at once.
-        
+
         Args:
         ----
             query_text: Natural language query
@@ -354,11 +354,11 @@ class QueryRetriever:
             max_hops: Graph traversal depth
             chunk_size: Nodes per chunk (default: 50)
             use_code_search: Use code embeddings
-            
+
         Yields:
         ------
             Tuple of (chunk_nodes, is_last_chunk)
-            
+
         Example:
         -------
             >>> async for nodes, is_last in retriever.retrieve_streaming_async(query, edges):
@@ -367,7 +367,7 @@ class QueryRetriever:
             ...         finalize()
         """
         from knowgraph.shared.streaming import stream_load_nodes_async
-        
+
         try:
             # Step 1: Get seed nodes
             search_text = query_text
@@ -375,24 +375,24 @@ class QueryRetriever:
                 expansion_terms = await self.expander.expand_query_async(query_text)
                 if expansion_terms:
                     search_text = f"{query_text} {' '.join(expansion_terms)}"
-            
+
             if use_code_search:
                 query_tokens = self.sparse_embedder.embed_code(search_text)
             else:
                 query_tokens = self.sparse_embedder.embed_text(search_text)
-            
+
             results = await self.sparse_index.search_async(query_tokens, top_k)
             seed_node_ids = [UUID(node_id) for node_id, _ in results]
-            
+
             # Step 2: Graph expansion
             expanded_node_ids = traverse_graph_bfs(seed_node_ids, edges, max_hops)
-            
+
             # Step 3: Stream load nodes in chunks
             async for chunk in stream_load_nodes_async(
                 expanded_node_ids, self.graph_store_path, chunk_size
             ):
                 yield (chunk.data, chunk.is_last)
-                
+
         except QueryError:
             raise
         except Exception as error:

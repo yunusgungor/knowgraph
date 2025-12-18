@@ -3,9 +3,9 @@
 import pytest
 
 from knowgraph.infrastructure.parsing.chunker import (
-    chunk_markdown,
-    MAX_FILE_SIZE_MB,
     EXTREME_FILE_SIZE_MB,
+    MAX_FILE_SIZE_MB,
+    chunk_markdown,
 )
 
 
@@ -93,7 +93,7 @@ def test_large_file_chunks_correctly():
     # 105MB file with structure
     large_structured = (
         "# Main Header\n\n"
-        + "## Section 1\n\n"
+         "## Section 1\n\n"
         + ("content " * 10_000_000)
         + "## Section 2\n\n"
         + ("more content " * 10_000_000)

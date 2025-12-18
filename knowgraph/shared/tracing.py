@@ -6,9 +6,9 @@ across the system. Supports automatic instrumentation and custom spans.
 
 import functools
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Any, Callable, TypeVar
-from uuid import uuid4
+from typing import Any
 
 try:
     from opentelemetry import trace
@@ -145,6 +145,7 @@ class KnowGraphTracer:
         -------
             Span context manager
         """
+        assert self._tracer is not None
         span = self._tracer.start_as_current_span(name)
 
         # Add attributes if OpenTelemetry is available

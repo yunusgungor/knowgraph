@@ -15,7 +15,7 @@ import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 
 class VersionStatus(Enum):
@@ -40,8 +40,8 @@ class Version:
     major: int
     minor: int
     patch: int
-    prerelease: Optional[str] = None
-    build: Optional[str] = None
+    prerelease: str | None = None
+    build: str | None = None
 
     def __str__(self) -> str:
         """Format version as string."""
@@ -156,11 +156,11 @@ class VersionInfo:
     version: Version
     status: VersionStatus
     release_date: datetime
-    deprecation_date: Optional[datetime] = None
-    sunset_date: Optional[datetime] = None
+    deprecation_date: datetime | None = None
+    sunset_date: datetime | None = None
     features: list[str] = field(default_factory=list)
     breaking_changes: list[str] = field(default_factory=list)
-    migration_guide: Optional[str] = None
+    migration_guide: str | None = None
 
     def is_active(self) -> bool:
         """Check if version is still active (not sunset)."""
@@ -170,14 +170,14 @@ class VersionInfo:
         """Check if version is currently supported."""
         return self.status in (VersionStatus.STABLE, VersionStatus.DEPRECATED)
 
-    def days_until_sunset(self) -> Optional[int]:
+    def days_until_sunset(self) -> int | None:
         """Calculate days until version is sunset."""
         if not self.sunset_date:
             return None
         delta = self.sunset_date - datetime.now()
         return max(0, delta.days)
 
-    def get_deprecation_warning(self) -> Optional[str]:
+    def get_deprecation_warning(self) -> str | None:
         """Get deprecation warning message if version is deprecated."""
         if self.status != VersionStatus.DEPRECATED:
             return None
@@ -199,18 +199,18 @@ class VersionRegistry:
     def __init__(self) -> None:
         """Initialize version registry."""
         self._versions: dict[str, VersionInfo] = {}
-        self._current_version: Optional[Version] = None
+        self._current_version: Version | None = None
 
     def register(
         self,
         version: Version | str,
         status: VersionStatus,
         release_date: datetime,
-        deprecation_date: Optional[datetime] = None,
-        sunset_date: Optional[datetime] = None,
-        features: Optional[list[str]] = None,
-        breaking_changes: Optional[list[str]] = None,
-        migration_guide: Optional[str] = None,
+        deprecation_date: datetime | None = None,
+        sunset_date: datetime | None = None,
+        features: list[str] | None = None,
+        breaking_changes: list[str] | None = None,
+        migration_guide: str | None = None,
     ) -> None:
         """Register a new API version.
 
@@ -242,20 +242,19 @@ class VersionRegistry:
         self._versions[str(version)] = version_info
 
         # Set as current if it's the first stable version or newer stable version
-        if status == VersionStatus.STABLE:
-            if (
-                not self._current_version
-                or version > self._current_version
-            ):
-                self._current_version = version
+        if status == VersionStatus.STABLE and (
+            not self._current_version
+            or version > self._current_version
+        ):
+            self._current_version = version
 
-    def get_version_info(self, version: Version | str) -> Optional[VersionInfo]:
+    def get_version_info(self, version: Version | str) -> VersionInfo | None:
         """Get information about a specific version."""
         if isinstance(version, Version):
             version = str(version)
         return self._versions.get(version)
 
-    def get_current_version(self) -> Optional[Version]:
+    def get_current_version(self) -> Version | None:
         """Get the current stable version."""
         return self._current_version
 
@@ -269,8 +268,8 @@ class VersionRegistry:
 
     def negotiate_version(
         self,
-        requested: Optional[Version | str],
-        minimum: Optional[Version | str] = None,
+        requested: Version | str | None,
+        minimum: Version | str | None = None,
     ) -> Version:
         """Negotiate the best version to use.
 
@@ -372,14 +371,14 @@ def register_version(
     _registry.register(version, status, release_date, **kwargs)
 
 
-def get_current_version() -> Optional[Version]:
+def get_current_version() -> Version | None:
     """Get the current API version."""
     return _registry.get_current_version()
 
 
 def negotiate_version(
-    requested: Optional[Version | str],
-    minimum: Optional[Version | str] = None,
+    requested: Version | str | None,
+    minimum: Version | str | None = None,
 ) -> Version:
     """Negotiate version using the global registry."""
     return _registry.negotiate_version(requested, minimum)

@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from knowgraph.infrastructure.parsing.conversation_parser import (
-    CodeBlock,
     ConversationData,
     Message,
     conversation_to_markdown,

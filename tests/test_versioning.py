@@ -11,7 +11,6 @@ from knowgraph.shared.versioning import (
     VersionRegistry,
     VersionStatus,
     get_current_version,
-    get_version_registry,
     negotiate_version,
     register_version,
 )

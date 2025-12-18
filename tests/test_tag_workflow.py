@@ -1,7 +1,6 @@
 """Complete end-to-end test: Tag snippet via MCP and retrieve it."""
 
 import asyncio
-import json
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -80,8 +79,8 @@ async def protected_route(token_data: dict = Depends(verify_token)):
                 },
             )
 
-            print(f"✅ Snippet tagged!")
-            print(f"   Tag: 'fastapi jwt complete implementation'")
+            print("✅ Snippet tagged!")
+            print("   Tag: 'fastapi jwt complete implementation'")
             print(f"   Response: {result.content[0].text[:100]}...")
 
             # Step 2: Query for the tagged snippet

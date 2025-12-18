@@ -2,7 +2,6 @@
 
 import time
 from pathlib import Path
-from uuid import UUID
 
 import pytest
 
@@ -229,8 +228,6 @@ def test_invalidate_all_caches():
     set_cached("key2", "value2")
 
     # Also test that it clears module-level caches
-    from knowgraph.infrastructure.storage.filesystem import clear_node_cache
-    from knowgraph.domain.algorithms.centrality import clear_centrality_cache
 
     # This should work without errors
     invalidate_all_caches()

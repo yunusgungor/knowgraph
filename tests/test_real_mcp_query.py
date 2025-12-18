@@ -1,7 +1,6 @@
 """Real MCP query test - query tagged snippet via MCP protocol."""
 
 import asyncio
-import json
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client

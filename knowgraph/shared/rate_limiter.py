@@ -9,7 +9,7 @@ Example:
 -------
     # Token bucket rate limiter (100 requests/minute)
     limiter = RateLimiter(rate=100, period=60, algorithm="token_bucket")
-    
+
     # Check if request is allowed
     if await limiter.allow("user_123"):
         # Process request
@@ -17,7 +17,7 @@ Example:
     else:
         # Reject request
         raise RateLimitExceeded("Too many requests")
-    
+
     # Or use as decorator
     @rate_limit(rate=10, period=60)
     async def api_endpoint(user_id: str):
@@ -28,10 +28,11 @@ Example:
 import asyncio
 import time
 from collections import defaultdict, deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import wraps
-from typing import Any, Awaitable, Callable, Dict, Deque, Optional, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -81,7 +82,7 @@ class RateLimitConfig:
     rate: int = 100  # Requests per period
     period: float = 60.0  # Time period in seconds
     algorithm: RateLimitAlgorithm = RateLimitAlgorithm.TOKEN_BUCKET
-    burst_size: Optional[int] = None  # Max burst size (for token bucket)
+    burst_size: int | None = None  # Max burst size (for token bucket)
 
 
 @dataclass
@@ -105,7 +106,7 @@ class FixedWindowState:
 class SlidingWindowState:
     """State for sliding window algorithm."""
 
-    timestamps: Deque[float] = field(default_factory=deque)  # Request timestamps
+    timestamps: deque[float] = field(default_factory=deque)  # Request timestamps
 
 
 @dataclass
@@ -134,7 +135,7 @@ class RateLimiter:
         rate: int = 100,
         period: float = 60.0,
         algorithm: str = "token_bucket",
-        burst_size: Optional[int] = None,
+        burst_size: int | None = None,
     ) -> None:
         """Initialize rate limiter.
 
@@ -152,10 +153,8 @@ class RateLimiter:
             burst_size=burst_size or rate,
         )
         self._lock = asyncio.Lock()
-        self._states: Dict[str, Any] = {}
-        self._stats: Dict[str, RateLimitStats] = defaultdict(
-            lambda: RateLimitStats(identifier="")
-        )
+        self._states: dict[str, Any] = {}
+        self._stats: dict[str, RateLimitStats] = defaultdict(lambda: RateLimitStats(identifier=""))
 
     async def allow(self, identifier: str) -> bool:
         """Check if request is allowed for identifier.
@@ -285,22 +284,22 @@ class RateLimiter:
         now = time.time()
 
         if self.config.algorithm == RateLimitAlgorithm.TOKEN_BUCKET:
-            state: TokenBucketState = self._states[identifier]
+            tb_state: TokenBucketState = self._states[identifier]
             # Time to accumulate 1 token
-            tokens_needed = 1.0 - state.tokens
+            tokens_needed = 1.0 - tb_state.tokens
             return max(0.0, tokens_needed * (self.config.period / self.config.rate))
 
         elif self.config.algorithm == RateLimitAlgorithm.FIXED_WINDOW:
-            state: FixedWindowState = self._states[identifier]
+            fw_state: FixedWindowState = self._states[identifier]
             # Time until window resets
-            return max(0.0, self.config.period - (now - state.window_start))
+            return max(0.0, self.config.period - (now - fw_state.window_start))
 
         else:  # SLIDING_WINDOW
-            state: SlidingWindowState = self._states[identifier]
-            if not state.timestamps:
+            sw_state: SlidingWindowState = self._states[identifier]
+            if not sw_state.timestamps:
                 return 0.0
             # Time until oldest timestamp expires
-            oldest = state.timestamps[0]
+            oldest = sw_state.timestamps[0]
             return max(0.0, self.config.period - (now - oldest))
 
     def get_stats(self, identifier: str) -> RateLimitStats:
@@ -347,7 +346,7 @@ class RateLimiter:
 
 
 # Global rate limiter registry
-_rate_limiters: Dict[str, RateLimiter] = {}
+_rate_limiters: dict[str, RateLimiter] = {}
 
 
 def get_rate_limiter(
@@ -387,7 +386,7 @@ def rate_limit(
     rate: int = 100,
     period: float = 60.0,
     algorithm: str = "token_bucket",
-    identifier_func: Optional[Callable[..., str]] = None,
+    identifier_func: Callable[..., str] | None = None,
 ) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     """Decorator to add rate limiting to async functions.
 
@@ -411,9 +410,7 @@ def rate_limit(
     """
     limiter = RateLimiter(rate=rate, period=period, algorithm=algorithm)
 
-    def decorator(
-        func: Callable[..., Awaitable[T]]
-    ) -> Callable[..., Awaitable[T]]:
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> T:
             # Extract identifier

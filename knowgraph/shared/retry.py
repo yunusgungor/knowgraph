@@ -14,12 +14,12 @@ Example:
     async def api_call():
         response = await client.get("/data")
         return response
-    
+
     # Retry specific exceptions only
     @retry(max_attempts=5, retry_on=[ConnectionError, TimeoutError])
     async def unstable_operation():
         pass
-    
+
     # Use retry context directly
     async with RetryContext(max_attempts=3) as retry:
         result = await retry.execute(some_async_function, arg1, arg2)
@@ -29,10 +29,11 @@ Example:
 import asyncio
 import random
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import wraps
-from typing import Any, Awaitable, Callable, List, Optional, Tuple, Type, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -81,9 +82,9 @@ class RetryConfig:
     max_delay: float = 60.0  # Maximum delay between retries
     multiplier: float = 2.0  # Backoff multiplier (for exponential/linear)
     jitter: bool = True  # Add random jitter to delays
-    timeout: Optional[float] = None  # Total timeout for all retries
-    retry_on: Optional[List[Type[Exception]]] = None  # Exceptions to retry
-    retry_on_result: Optional[Callable[[Any], bool]] = None  # Retry based on result
+    timeout: float | None = None  # Total timeout for all retries
+    retry_on: list[type[Exception]] | None = None  # Exceptions to retry
+    retry_on_result: Callable[[Any], bool] | None = None  # Retry based on result
 
 
 @dataclass
@@ -95,7 +96,7 @@ class RetryStats:
     failed_attempts: int = 0
     total_retries: int = 0
     total_delay: float = 0.0
-    exceptions: List[Tuple[Type[Exception], str]] = field(default_factory=list)
+    exceptions: list[tuple[type[Exception], str]] = field(default_factory=list)
 
     def add_exception(self, exc: Exception) -> None:
         """Record an exception.
@@ -118,9 +119,9 @@ class RetryContext:
         max_delay: float = 60.0,
         multiplier: float = 2.0,
         jitter: bool = True,
-        timeout: Optional[float] = None,
-        retry_on: Optional[List[Type[Exception]]] = None,
-        retry_on_result: Optional[Callable[[Any], bool]] = None,
+        timeout: float | None = None,
+        retry_on: list[type[Exception]] | None = None,
+        retry_on_result: Callable[[Any], bool] | None = None,
     ) -> None:
         """Initialize retry context.
 
@@ -157,10 +158,9 @@ class RetryContext:
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Exit context."""
-        pass
 
     def _should_retry(
-        self, exc: Optional[Exception], result: Any, attempt: int
+        self, exc: Exception | None, result: Any, attempt: int
     ) -> tuple[bool, str]:
         """Determine if we should retry.
 
@@ -251,7 +251,7 @@ class RetryContext:
         ------
             RetryError: If all retry attempts are exhausted
         """
-        last_exception: Optional[Exception] = None
+        last_exception: Exception | None = None
         result: Any = None
 
         for attempt in range(self.config.max_attempts):
@@ -330,9 +330,9 @@ def retry(
     max_delay: float = 60.0,
     multiplier: float = 2.0,
     jitter: bool = True,
-    timeout: Optional[float] = None,
-    retry_on: Optional[List[Type[Exception]]] = None,
-    retry_on_result: Optional[Callable[[Any], bool]] = None,
+    timeout: float | None = None,
+    retry_on: list[type[Exception]] | None = None,
+    retry_on_result: Callable[[Any], bool] | None = None,
 ) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     """Decorator to add retry logic to async functions.
 

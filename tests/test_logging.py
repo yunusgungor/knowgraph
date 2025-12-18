@@ -2,7 +2,6 @@
 
 import json
 import logging
-from pathlib import Path
 
 import pytest
 
@@ -10,7 +9,6 @@ from knowgraph.shared.logging import (
     KnowGraphLogger,
     LogContext,
     LogLevel,
-    PerformanceLogger,
     clear_log_context,
     configure_logging,
     get_logger,
@@ -274,7 +272,7 @@ class TestLoggingDecorators:
         # Reset to get fresh logger
         import logging
         logging.getLogger().handlers.clear()
-        
+
         configure_logging(level=LogLevel.DEBUG, use_json=False)
 
         @log_function_call
@@ -293,7 +291,7 @@ class TestLoggingDecorators:
         """Test function call logging with error."""
         import logging
         logging.getLogger().handlers.clear()
-        
+
         configure_logging(level=LogLevel.DEBUG, use_json=False)
 
         @log_function_call
@@ -311,7 +309,7 @@ class TestLoggingDecorators:
         """Test async function call logging decorator."""
         import logging
         logging.getLogger().handlers.clear()
-        
+
         configure_logging(level=LogLevel.DEBUG, use_json=False)
 
         @log_async_function_call
@@ -328,7 +326,7 @@ class TestLoggingDecorators:
         """Test async function call logging with error."""
         import logging
         logging.getLogger().handlers.clear()
-        
+
         configure_logging(level=LogLevel.DEBUG, use_json=False)
 
         @log_async_function_call

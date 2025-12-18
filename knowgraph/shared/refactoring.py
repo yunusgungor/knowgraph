@@ -9,7 +9,6 @@ from typing import Any
 from uuid import UUID
 
 from knowgraph.domain.models.edge import Edge
-from knowgraph.domain.models.node import Node
 
 
 def filter_active_edges(edges: list[Edge], active_node_ids: set[UUID]) -> list[Edge]:
@@ -141,7 +140,7 @@ def extract_query_parameters(arguments: dict[str, Any]) -> dict[str, Any]:
         "max_tokens": arguments.get("max_tokens", 3000),
         "enable_hierarchical_lifting": arguments.get("enable_hierarchical_lifting", True),
         "lift_levels": arguments.get("lift_levels", 2),
-        "system_prompt": arguments.get("system_prompt", None),
+        "system_prompt": arguments.get("system_prompt"),
     }
 
 
@@ -170,7 +169,7 @@ def build_llm_prompt(
         else "You are a helpful assistant. Use the following context to answer the user's question."
     )
 
-    prompt = f"{base_system}\n\n" f"Context:\n{context}\n\n" f"Question: {query}\n\n" f"Answer:"
+    prompt = f"{base_system}\n\nContext:\n{context}\n\nQuestion: {query}\n\nAnswer:"
 
     if explanation_data:
         prompt += f"\n\nExplanation Data:\n{explanation_data}"
@@ -205,7 +204,7 @@ def build_conversation_discovery_response(
     response = (
         f"✅ Auto-discovered {total_files} conversations across {len(discovered)} editors:\n"
         + "".join(results_summary)
-        + f"\n\n📥 Indexing complete:\n"
+        + "\n\n📥 Indexing complete:\n"
         + f"  Indexed: {indexed_count} conversations\n"
     )
 

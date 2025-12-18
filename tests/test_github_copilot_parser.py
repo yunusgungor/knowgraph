@@ -1,10 +1,6 @@
 """Tests for GitHub Copilot conversation parser."""
 
 import json
-from datetime import datetime
-from pathlib import Path
-
-import pytest
 
 from knowgraph.infrastructure.parsing.conversation_parser import (
     detect_conversation_format,

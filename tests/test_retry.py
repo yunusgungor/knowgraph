@@ -1,7 +1,6 @@
 """Tests for retry logic."""
 
 import asyncio
-import time
 
 import pytest
 
@@ -69,7 +68,7 @@ class TestRetryStats:
         """Test adding exceptions."""
         stats = RetryStats()
         stats.add_exception(ValueError("test error"))
-        
+
         assert len(stats.exceptions) == 1
         assert stats.exceptions[0][0] == ValueError
         assert stats.exceptions[0][1] == "test error"
@@ -268,7 +267,8 @@ class TestRetryContext:
 
         # Delays should be slightly different due to jitter
         # (might occasionally be equal, but unlikely)
-        assert delays1[0] > 0 and delays2[0] > 0
+        assert delays1[0] > 0
+        assert delays2[0] > 0
 
     @pytest.mark.asyncio
     async def test_retry_on_specific_exceptions(self):

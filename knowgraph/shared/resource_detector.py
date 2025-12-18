@@ -1,7 +1,6 @@
 """Resource detection for auto-tuning based on system resources."""
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,7 @@
 """CLI command for auto-discovering and indexing conversations from AI editors."""
 
 import asyncio
+
 import click
 
 from knowgraph.adapters.cli.index_command import run_index
@@ -102,7 +103,7 @@ def discover_and_index_conversations(
                 if verbose:
                     click.echo(f"  ❌ Failed: {e}")
 
-    click.echo(f"\n✅ Indexing complete!")
+    click.echo("\n✅ Indexing complete!")
     click.echo(f"  Indexed: {indexed_count} conversations")
     if failed_count > 0:
         click.echo(f"  Failed: {failed_count} conversations")

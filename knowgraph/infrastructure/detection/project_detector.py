@@ -10,7 +10,6 @@ This module provides intelligent project root detection using:
 import logging
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class ProjectDetectionError(Exception):
     """Base exception for project detection errors."""
 
 
-def detect_git_root(start_path: Optional[Path] = None) -> Optional[Path]:
+def detect_git_root(start_path: Path | None = None) -> Path | None:
     """Detect Git repository root directory.
 
     Args:
@@ -75,7 +74,7 @@ def detect_git_root(start_path: Optional[Path] = None) -> Optional[Path]:
     return None
 
 
-def detect_project_markers(start_path: Optional[Path] = None) -> Optional[Path]:
+def detect_project_markers(start_path: Path | None = None) -> Path | None:
     """Detect project root by searching for marker files.
 
     Searches upward from start_path for common project marker files.
@@ -147,8 +146,8 @@ def analyze_directory_structure(path: Path, max_depth: int = 3) -> dict:
 
 
 async def detect_project_root_with_llm(
-    start_path: Optional[Path] = None,
-) -> Optional[Path]:
+    start_path: Path | None = None,
+) -> Path | None:
     """Detect project root using LLM analysis.
 
     This is the most intelligent but slowest method. It analyzes the
@@ -167,8 +166,8 @@ async def detect_project_root_with_llm(
         start_path = Path.cwd()
 
     try:
-        from knowgraph.adapters.mcp.utils import get_llm_provider
         from knowgraph.adapters.mcp.server import app
+        from knowgraph.adapters.mcp.utils import get_llm_provider
 
         provider = get_llm_provider(app)
 
@@ -207,7 +206,7 @@ async def detect_project_root_with_llm(
     return None
 
 
-def detect_project_root(start_path: Optional[Path] = None, use_llm: bool = True) -> Path:
+def detect_project_root(start_path: Path | None = None, use_llm: bool = True) -> Path:
     """Detect project root using multiple strategies.
 
     Tries strategies in order of speed and reliability:

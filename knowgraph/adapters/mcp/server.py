@@ -1,10 +1,9 @@
 import asyncio
-import json
 import logging
-import os
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import mcp.types as types
 from mcp.server import Server
@@ -20,21 +19,13 @@ from knowgraph.adapters.mcp.handlers import (
     handle_tag_snippet,
     handle_validate,
 )
-from knowgraph.adapters.mcp.methods import analyze_path_impact_report, index_graph
 from knowgraph.adapters.mcp.utils import get_llm_provider, resolve_graph_path
-from knowgraph.application.querying.query_engine import QueryEngine
-from knowgraph.application.querying.query_expansion import QueryExpander
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
-from knowgraph.domain.algorithms.graph_validator import validate_graph_consistency
-from knowgraph.infrastructure.storage.manifest import Manifest
 from knowgraph.shared.versioning import (
-    Version,
     VersionStatus,
-    register_version,
     get_current_version,
-    negotiate_version,
+    register_version,
 )
-from datetime import datetime, timedelta
 
 app = Server("knowgraph-mcp")
 logger = logging.getLogger(__name__)
@@ -43,7 +34,7 @@ logger = logging.getLogger(__name__)
 def _register_api_versions():
     """Register all KnowGraph API versions."""
     now = datetime.now()
-    
+
     # Version 1.0.0 - Initial stable release
     register_version(
         version="1.0.0",
@@ -56,7 +47,7 @@ def _register_api_versions():
             "Graph validation",
         ],
     )
-    
+
     # Version 1.1.0 - Current stable with resilience patterns
     register_version(
         version="1.1.0",
@@ -73,7 +64,7 @@ def _register_api_versions():
             "Conversation discovery",
         ],
     )
-    
+
     logger.info(f"Registered API versions, current: {get_current_version()}")
 
 _register_api_versions()
@@ -86,7 +77,7 @@ _PROJECT_ROOT_CACHE: dict[str, Any] = {
 }
 
 
-def _get_cached_project_root() -> Optional[Path]:
+def _get_cached_project_root() -> Path | None:
     """Get cached project root if still valid."""
     if _PROJECT_ROOT_CACHE["root"] is None:
         return None
@@ -152,31 +143,31 @@ PROJECT_ROOT = _get_project_root()
 async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
     """Route tool calls to appropriate handlers."""
     provider = get_llm_provider(app)
-    
+
     if name == "knowgraph_query":
         return await handle_query(arguments, provider, PROJECT_ROOT)
-    
+
     elif name == "knowgraph_index":
         return await handle_index(arguments, provider, PROJECT_ROOT)
-    
+
     elif name == "knowgraph_analyze_impact":
         return await handle_analyze_impact(arguments, PROJECT_ROOT)
-    
+
     elif name == "knowgraph_validate":
         return await handle_validate(arguments, PROJECT_ROOT)
-    
+
     elif name == "knowgraph_get_stats":
         return await handle_get_stats(arguments, PROJECT_ROOT)
-    
+
     elif name == "knowgraph_discover_conversations":
         return await handle_discover_conversations(arguments, provider, PROJECT_ROOT)
-    
+
     elif name == "knowgraph_tag_snippet":
         return await handle_tag_snippet(arguments, PROJECT_ROOT)
-    
+
     elif name == "knowgraph_batch_query":
         return await handle_batch_query(arguments, provider, PROJECT_ROOT)
-    
+
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
 

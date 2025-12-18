@@ -1,10 +1,8 @@
 """Test MCP server tools with real MCP protocol."""
 
 import asyncio
-import json
 
 import pytest
-
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 

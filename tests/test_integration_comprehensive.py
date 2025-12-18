@@ -167,7 +167,7 @@ class TestCacheIntegration:
         cache_mgr = CacheVersionManager(temp_graph_path)
 
         # Initial state
-        from knowgraph.shared.cache_versioning import set_cached, get_cached
+        from knowgraph.shared.cache_versioning import get_cached, set_cached
 
         set_cached("key1", "value1", graph_store_path=temp_graph_path)
         assert get_cached("key1") == "value1"
@@ -367,7 +367,7 @@ class TestConcurrentOperations:
         """Test concurrent cache read/write operations."""
         cache_mgr = CacheVersionManager(temp_graph_path)
 
-        from knowgraph.shared.cache_versioning import set_cached, get_cached
+        from knowgraph.shared.cache_versioning import get_cached, set_cached
 
         async def cache_operation(key, value):
             await asyncio.sleep(0.01)

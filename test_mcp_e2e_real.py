@@ -4,8 +4,8 @@ Tests all 8 MCP tools with real MCP client.
 """
 
 import asyncio
-import json
 from pathlib import Path
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -42,14 +42,14 @@ async def test_mcp_server_complete():
             print("1️⃣ Testing knowgraph_get_stats (auto-detection)...")
             try:
                 result = await session.call_tool("knowgraph_get_stats", arguments={})
-                response = result.content[0].text
+                response = result.content[0].text  # type: ignore
 
                 # Check for read-only error
                 if "read-only" in response.lower() or "errno 30" in response.lower():
-                    print(f"   ❌ FAIL: Read-only file system error")
+                    print("   ❌ FAIL: Read-only file system error")
                     errors.append("get_stats: Read-only file system")
                 else:
-                    print(f"   ✅ PASS")
+                    print("   ✅ PASS")
                     print(f"   Response: {response[:100]}...")
                     results["get_stats"] = True
             except Exception as e:
@@ -62,13 +62,13 @@ async def test_mcp_server_complete():
                 result = await session.call_tool(
                     "knowgraph_query", arguments={"query": "test query", "top_k": 5}
                 )
-                response = result.content[0].text
+                response = result.content[0].text  # type: ignore
 
                 if "read-only" in response.lower() or "errno 30" in response.lower():
-                    print(f"   ❌ FAIL: Read-only file system error")
+                    print("   ❌ FAIL: Read-only file system error")
                     errors.append("query: Read-only file system")
                 else:
-                    print(f"   ✅ PASS")
+                    print("   ✅ PASS")
                     print(f"   Response: {response[:100]}...")
                     results["query"] = True
             except Exception as e:
@@ -79,13 +79,13 @@ async def test_mcp_server_complete():
             print("\n3️⃣ Testing knowgraph_validate (auto-detection)...")
             try:
                 result = await session.call_tool("knowgraph_validate", arguments={})
-                response = result.content[0].text
+                response = result.content[0].text  # type: ignore
 
                 if "read-only" in response.lower() or "errno 30" in response.lower():
-                    print(f"   ❌ FAIL: Read-only file system error")
+                    print("   ❌ FAIL: Read-only file system error")
                     errors.append("validate: Read-only file system")
                 else:
-                    print(f"   ✅ PASS")
+                    print("   ✅ PASS")
                     print(f"   Response: {response[:100]}...")
                     results["validate"] = True
             except Exception as e:
@@ -103,13 +103,13 @@ async def test_mcp_server_complete():
                         "graph_path": "./test_mcp_e2e_graphstore",
                     },
                 )
-                response = result.content[0].text
+                response = result.content[0].text  # type: ignore
 
                 if "read-only" in response.lower() or "errno 30" in response.lower():
-                    print(f"   ❌ FAIL: Read-only file system error")
+                    print("   ❌ FAIL: Read-only file system error")
                     errors.append("tag_snippet: Read-only file system")
                 elif "successfully" in response.lower() or "tagged" in response.lower():
-                    print(f"   ✅ PASS")
+                    print("   ✅ PASS")
                     print(f"   Response: {response[:100]}...")
                     results["tag_snippet"] = True
                 else:
@@ -126,13 +126,13 @@ async def test_mcp_server_complete():
                     "knowgraph_discover_conversations",
                     arguments={"graph_path": "./test_mcp_e2e_graphstore", "editor": "antigravity"},
                 )
-                response = result.content[0].text
+                response = result.content[0].text  # type: ignore
 
                 if "read-only" in response.lower() or "errno 30" in response.lower():
-                    print(f"   ❌ FAIL: Read-only file system error")
+                    print("   ❌ FAIL: Read-only file system error")
                     errors.append("discover_conversations: Read-only file system")
                 else:
-                    print(f"   ✅ PASS")
+                    print("   ✅ PASS")
                     print(f"   Response: {response[:150]}...")
                     results["discover_conversations"] = True
             except Exception as e:
@@ -146,13 +146,13 @@ async def test_mcp_server_complete():
                     "knowgraph_batch_query",
                     arguments={"queries": ["test query 1", "test query 2"], "top_k": 3},
                 )
-                response = result.content[0].text
+                response = result.content[0].text  # type: ignore
 
                 if "read-only" in response.lower() or "errno 30" in response.lower():
-                    print(f"   ❌ FAIL: Read-only file system error")
+                    print("   ❌ FAIL: Read-only file system error")
                     errors.append("batch_query: Read-only file system")
                 else:
-                    print(f"   ✅ PASS")
+                    print("   ✅ PASS")
                     print(f"   Response: {response[:100]}...")
                     results["batch_query"] = True
             except Exception as e:
@@ -166,13 +166,13 @@ async def test_mcp_server_complete():
                     "knowgraph_analyze_impact",
                     arguments={"element": "test_element", "mode": "semantic"},
                 )
-                response = result.content[0].text
+                response = result.content[0].text  # type: ignore
 
                 if "read-only" in response.lower() or "errno 30" in response.lower():
-                    print(f"   ❌ FAIL: Read-only file system error")
+                    print("   ❌ FAIL: Read-only file system error")
                     errors.append("analyze_impact: Read-only file system")
                 else:
-                    print(f"   ✅ PASS")
+                    print("   ✅ PASS")
                     print(f"   Response: {response[:100]}...")
                     results["analyze_impact"] = True
             except Exception as e:
@@ -194,13 +194,13 @@ async def test_mcp_server_complete():
                         "graph_path": "./test_mcp_e2e_graphstore",
                     },
                 )
-                response = result.content[0].text
+                response = result.content[0].text  # type: ignore
 
                 if "read-only" in response.lower() or "errno 30" in response.lower():
-                    print(f"   ❌ FAIL: Read-only file system error")
+                    print("   ❌ FAIL: Read-only file system error")
                     errors.append("index: Read-only file system")
                 elif "successfully" in response.lower() or "indexed" in response.lower():
-                    print(f"   ✅ PASS")
+                    print("   ✅ PASS")
                     print(f"   Response: {response[:100]}...")
                     results["index"] = True
                 else:
@@ -225,7 +225,7 @@ async def test_mcp_server_complete():
             print(f"\n🎯 Score: {total}/{len(results)} tests passed")
 
             if errors:
-                print(f"\n❌ ERRORS:\n")
+                print("\n❌ ERRORS:\n")
                 for error in errors:
                     print(f"   - {error}")
 

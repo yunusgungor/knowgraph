@@ -2,9 +2,8 @@
 
 import os
 import subprocess
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -190,7 +189,6 @@ class TestMCPServerIntegration:
 
     def test_cache_mechanism(self):
         """Test that cache mechanism works."""
-        import importlib
 
         import knowgraph.adapters.mcp.server as server_module
 
@@ -209,7 +207,6 @@ class TestMCPServerIntegration:
 
     def test_cache_expiration(self):
         """Test that cache expires after TTL."""
-        import importlib
         import time
 
         import knowgraph.adapters.mcp.server as server_module

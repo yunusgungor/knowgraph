@@ -2,7 +2,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from knowgraph.adapters.mcp import server
 from knowgraph.adapters.mcp.server import call_tool
 
 

@@ -11,12 +11,12 @@ Example:
 -------
     # Create throttle with max 10 concurrent requests
     throttle = RequestThrottle(max_concurrent=10, queue_size=100)
-    
+
     # Use as decorator
     @throttle_requests(max_concurrent=5)
     async def api_call(data: str):
         pass
-    
+
     # Or use directly
     async with throttle.acquire():
         # Make request
@@ -28,11 +28,11 @@ import asyncio
 import heapq
 import time
 from asyncio import Semaphore
-from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import wraps
-from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -49,7 +49,6 @@ class Priority(int, Enum):
 class ThrottleError(Exception):
     """Raised when throttling fails."""
 
-    pass
 
 
 class QueueFullError(ThrottleError):
@@ -79,7 +78,7 @@ class ThrottleConfig:
     queue_size: int = 100  # Maximum queued requests
     min_delay: float = 0.0  # Minimum delay between requests (seconds)
     adaptive: bool = True  # Enable adaptive throttling based on load
-    timeout: Optional[float] = None  # Request timeout (seconds)
+    timeout: float | None = None  # Request timeout (seconds)
 
 
 @dataclass
@@ -128,7 +127,7 @@ class RequestThrottle:
         queue_size: int = 100,
         min_delay: float = 0.0,
         adaptive: bool = True,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> None:
         """Initialize request throttle.
 
@@ -148,7 +147,7 @@ class RequestThrottle:
             timeout=timeout,
         )
         self._semaphore = Semaphore(max_concurrent)
-        self._queue: List[PrioritizedRequest] = []
+        self._queue: list[PrioritizedRequest] = []
         self._stats = ThrottleStats()
         self._lock = asyncio.Lock()
         self._last_request_time = 0.0
@@ -158,7 +157,7 @@ class RequestThrottle:
     async def acquire(
         self,
         priority: Priority = Priority.NORMAL,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> "ThrottleContext":
         """Acquire throttle slot.
 
@@ -344,7 +343,7 @@ class ThrottleContext:
 
 
 # Global throttle registry
-_throttles: Dict[str, RequestThrottle] = {}
+_throttles: dict[str, RequestThrottle] = {}
 
 
 def get_throttle(

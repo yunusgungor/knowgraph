@@ -30,11 +30,11 @@ class SemanticSearch:
         self.model = SentenceTransformer(model_name)
         self.documents = []
         self.embeddings = None
-    
+
     def index_documents(self, documents):
         self.documents = documents
         self.embeddings = self.model.encode(documents)
-    
+
     def search(self, query, top_k=5):
         query_embedding = self.model.encode([query])
         similarities = cosine_similarity(query_embedding, self.embeddings)[0]
@@ -74,7 +74,7 @@ Key points:
         if manifest_path.exists():
             with open(manifest_path) as f:
                 manifest = json.load(f)
-            print(f"   Graph stats:")
+            print("   Graph stats:")
             print(f"   - Nodes: {manifest.get('node_count', 0)}")
             print(f"   - Edges: {manifest.get('edge_count', 0)}")
     except Exception as e:

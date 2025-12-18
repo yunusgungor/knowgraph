@@ -9,12 +9,12 @@ import logging
 import sys
 import time
 from contextvars import ContextVar
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 
 class LogLevel(str, Enum):
@@ -30,7 +30,7 @@ class LogLevel(str, Enum):
 @dataclass
 class LogContext:
     """Contextual information for log entries.
-    
+
     Attributes
     ----------
         request_id: Unique identifier for request tracking
@@ -66,11 +66,11 @@ class StructuredFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON.
-        
+
         Args:
         ----
             record: Log record to format
-            
+
         Returns:
         -------
             JSON string representation of log entry
@@ -111,7 +111,7 @@ class PerformanceLogger:
 
     def __init__(self, logger: logging.Logger, operation: str):
         """Initialize performance logger.
-        
+
         Args:
         ----
             logger: Logger instance to use
@@ -147,7 +147,7 @@ class PerformanceLogger:
 
 class KnowGraphLogger:
     """Main logging interface for KnowGraph.
-    
+
     Provides structured logging with context management,
     performance tracking, and consistent formatting.
     """
@@ -160,7 +160,7 @@ class KnowGraphLogger:
         use_json: bool = True,
     ):
         """Initialize KnowGraph logger.
-        
+
         Args:
         ----
             name: Logger name (usually module name)
@@ -199,7 +199,7 @@ class KnowGraphLogger:
 
     def set_context(self, context: LogContext) -> None:
         """Set logging context for current execution.
-        
+
         Args:
         ----
             context: Log context to set
@@ -212,7 +212,7 @@ class KnowGraphLogger:
 
     def get_context(self) -> LogContext | None:
         """Get current logging context.
-        
+
         Returns:
         -------
             Current context or None
@@ -221,7 +221,7 @@ class KnowGraphLogger:
 
     def debug(self, message: str, **kwargs) -> None:
         """Log debug message.
-        
+
         Args:
         ----
             message: Log message
@@ -231,7 +231,7 @@ class KnowGraphLogger:
 
     def info(self, message: str, **kwargs) -> None:
         """Log info message.
-        
+
         Args:
         ----
             message: Log message
@@ -241,7 +241,7 @@ class KnowGraphLogger:
 
     def warning(self, message: str, **kwargs) -> None:
         """Log warning message.
-        
+
         Args:
         ----
             message: Log message
@@ -251,7 +251,7 @@ class KnowGraphLogger:
 
     def error(self, message: str, exc_info: bool = False, **kwargs) -> None:
         """Log error message.
-        
+
         Args:
         ----
             message: Log message
@@ -262,7 +262,7 @@ class KnowGraphLogger:
 
     def critical(self, message: str, exc_info: bool = False, **kwargs) -> None:
         """Log critical message.
-        
+
         Args:
         ----
             message: Log message
@@ -273,11 +273,11 @@ class KnowGraphLogger:
 
     def track_performance(self, operation: str) -> PerformanceLogger:
         """Create performance logger for operation.
-        
+
         Args:
         ----
             operation: Name of operation to track
-            
+
         Returns:
         -------
             Performance logger context manager
@@ -296,14 +296,14 @@ def get_logger(
     use_json: bool = True,
 ) -> KnowGraphLogger:
     """Get or create a KnowGraph logger.
-    
+
     Args:
     ----
         name: Logger name (defaults to "knowgraph")
         level: Minimum log level
         output_file: Optional file path for log output
         use_json: Whether to use JSON formatting
-        
+
     Returns:
     -------
         KnowGraph logger instance
@@ -324,7 +324,7 @@ def configure_logging(
     use_json: bool = True,
 ) -> None:
     """Configure global logging settings.
-    
+
     Args:
     ----
         level: Minimum log level
@@ -342,14 +342,14 @@ def set_log_context(
     **metadata,
 ) -> LogContext:
     """Set logging context for current execution.
-    
+
     Args:
     ----
         operation: Current operation name
         user_id: Optional user identifier
         graph_path: Path to graph store
         **metadata: Additional context metadata
-        
+
     Returns:
     -------
         Created log context
@@ -371,11 +371,11 @@ def clear_log_context() -> None:
 
 def log_function_call(func):
     """Decorator to automatically log function calls.
-    
+
     Args:
     ----
         func: Function to wrap
-        
+
     Returns:
     -------
         Wrapped function with logging
@@ -405,11 +405,11 @@ def log_function_call(func):
 
 def log_async_function_call(func):
     """Decorator to automatically log async function calls.
-    
+
     Args:
     ----
         func: Async function to wrap
-        
+
     Returns:
     -------
         Wrapped async function with logging

@@ -132,19 +132,19 @@ async def index_tagged_snippet(
         graph_path: Path to graph storage
 
     """
-    from knowgraph.adapters.cli.index_command import run_index
-    from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
-
     # Create temporary markdown file
     import tempfile
 
+    from knowgraph.adapters.cli.index_command import run_index
+    from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
+
     snippet_data = TaggedSnippet(
-        tag=snippet.metadata.get("tag", "unknown"),
+        tag=(snippet.metadata or {}).get("tag", "unknown"),
         content=snippet.content,
-        conversation_id=snippet.metadata.get("conversation_id"),
-        user_question=snippet.metadata.get("user_question"),
+        conversation_id=(snippet.metadata or {}).get("conversation_id"),
+        user_question=(snippet.metadata or {}).get("user_question"),
         timestamp=datetime.fromisoformat(
-            snippet.metadata.get("timestamp", datetime.now().isoformat())
+            (snippet.metadata or {}).get("timestamp", datetime.now().isoformat())
         ),
     )
 

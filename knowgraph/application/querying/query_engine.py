@@ -37,15 +37,15 @@ from knowgraph.infrastructure.storage.filesystem import (
     read_all_edges,
     read_node_json,
 )
+from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from knowgraph.shared.exceptions import QueryError
+from knowgraph.shared.metrics import get_metrics
 from knowgraph.shared.refactoring import (
     filter_active_edges,
     flatten_centrality_scores,
 )
-from knowgraph.shared.retry import RetryConfig, RetryContext, BackoffStrategy
-from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
-from knowgraph.shared.throttle import RequestThrottle, ThrottleConfig
-from knowgraph.shared.metrics import get_metrics
+from knowgraph.shared.retry import BackoffStrategy, RetryConfig, RetryContext
+from knowgraph.shared.throttle import RequestThrottle
 
 # Context variable for request tracking
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)

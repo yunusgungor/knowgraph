@@ -17,6 +17,10 @@ from knowgraph.application.querying.query_expansion import QueryExpander
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.domain.algorithms.graph_validator import validate_graph_consistency
 from knowgraph.infrastructure.storage.manifest import Manifest
+from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from knowgraph.shared.rate_limiter import (
+    RateLimiter as SharedRateLimiter,
+)
 from knowgraph.shared.refactoring import (
     build_conversation_discovery_response,
     build_error_response,
@@ -27,20 +31,11 @@ from knowgraph.shared.refactoring import (
     format_impact_result,
     validate_required_argument,
 )
-from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
-from knowgraph.shared.rate_limiter import (
-    RateLimiter as SharedRateLimiter,
-    RateLimitAlgorithm,
-)
+from knowgraph.shared.tracing import trace_operation
 from knowgraph.shared.versioning import (
-    Version,
-    VersionStatus,
     get_current_version,
     negotiate_version,
-    register_version,
 )
-from knowgraph.shared.tracing import trace_operation
-from datetime import datetime, timedelta
 
 # Global resilience patterns - shared across all handlers
 _global_circuit_breaker = CircuitBreaker(

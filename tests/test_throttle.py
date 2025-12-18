@@ -10,7 +10,6 @@ from knowgraph.shared.throttle import (
     QueueFullError,
     RequestThrottle,
     ThrottleConfig,
-    ThrottleError,
     ThrottleStats,
     clear_throttles,
     get_throttle,
@@ -66,14 +65,14 @@ class TestThrottleStats:
         stats = ThrottleStats()
         stats.completed_requests = 1
         stats.update_wait_time(1.0)
-        
+
         assert stats.total_wait_time == 1.0
         assert stats.max_wait_time == 1.0
         assert stats.avg_wait_time == 1.0
-        
+
         stats.completed_requests = 2
         stats.update_wait_time(2.0)
-        
+
         assert stats.total_wait_time == 3.0
         assert stats.max_wait_time == 2.0
         assert stats.avg_wait_time == 1.5
@@ -139,7 +138,7 @@ class TestRequestThrottle:
     async def test_min_delay(self):
         """Test minimum delay between requests."""
         throttle = RequestThrottle(max_concurrent=10, min_delay=0.1)
-        
+
         start = time.time()
         async with await throttle.acquire():
             pass

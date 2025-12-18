@@ -8,12 +8,12 @@ import atexit
 
 def register_cleanup_handlers() -> None:
     """Register all cleanup handlers at module initialization.
-    
+
     This ensures proper resource cleanup on application exit.
     """
-    from knowgraph.domain.algorithms.centrality import _shutdown_process_pool
     from knowgraph.application.querying.centrality_mp import shutdown_process_pool
-    
+    from knowgraph.domain.algorithms.centrality import _shutdown_process_pool
+
     # Register cleanup for both process pools
     atexit.register(_shutdown_process_pool)
     atexit.register(shutdown_process_pool)
@@ -21,24 +21,24 @@ def register_cleanup_handlers() -> None:
 
 def cleanup_all_resources() -> None:
     """Manually cleanup all resources.
-    
+
     Useful for explicit cleanup in tests or before application restart.
     """
-    from knowgraph.domain.algorithms.centrality import _shutdown_process_pool
     from knowgraph.application.querying.centrality_mp import shutdown_process_pool
+    from knowgraph.domain.algorithms.centrality import _shutdown_process_pool
     from knowgraph.infrastructure.storage.filesystem import clear_node_cache
-    
+
     # Shutdown process pools
     try:
         _shutdown_process_pool()
     except Exception:
         pass
-    
+
     try:
         shutdown_process_pool()
     except Exception:
         pass
-    
+
     # Clear caches
     try:
         clear_node_cache()
