@@ -13,6 +13,7 @@ from knowgraph.config import (
     ALPHA,
     BETA,
     DEFAULT_CENTRALITY_SCORE,
+    DEFAULT_OPENAI_MODEL,
     DEFAULT_SIMILARITY_SCORE,
     GAMMA,
     MAX_TOKEN_COUNT_FOR_PENALTY,
@@ -103,7 +104,10 @@ def assemble_context(
         (formatted_context, context_blocks)
 
     """
-    tokenizer = tiktoken.get_encoding("cl100k_base")
+    try:
+        tokenizer = tiktoken.encoding_for_model(DEFAULT_OPENAI_MODEL)
+    except KeyError:
+        tokenizer = tiktoken.get_encoding("o200k_base")
 
     # Score and sort nodes
     blocks = []

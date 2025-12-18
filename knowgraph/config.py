@@ -7,7 +7,9 @@ Clean Code principles.
 import os
 
 # Chunking Configuration
-DEFAULT_CHUNK_SIZE = 20000  # Maximum characters per chunk (Optimized from 24000 for better memory usage)
+DEFAULT_CHUNK_SIZE = (
+    20000  # Maximum characters per chunk (Optimized from 24000 for better memory usage)
+)
 DEFAULT_CHUNK_OVERLAP = 100  # Token overlap between chunks (increased for better context)
 MIN_CHUNK_SIZE = 150  # Minimum chunk size to avoid noise (increased from 100)
 
@@ -27,7 +29,7 @@ BATCH_QUERY_CHUNK_SIZE = 8  # Number of queries to process concurrently in batch
 
 # LLM Configuration
 DEFAULT_LLM_PROVIDER = "openai"
-DEFAULT_OPENAI_MODEL = os.getenv("KNOWGRAPH_LLM_MODEL", "gpt-4o-mini")
+DEFAULT_OPENAI_MODEL = os.getenv("KNOWGRAPH_LLM_MODEL", "gpt-5-nano")
 KNOWGRAPH_LLM_MODEL = DEFAULT_OPENAI_MODEL
 LLM_TEMPERATURE = 0.0
 MAX_EXPANSION_TERMS = 5  # Number of expansion terms

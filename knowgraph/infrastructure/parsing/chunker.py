@@ -11,7 +11,12 @@ try:
 except ImportError:
     tiktoken = None  # type: ignore
 
-from knowgraph.config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, MIN_CHUNK_SIZE
+from knowgraph.config import (
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_OPENAI_MODEL,
+    MIN_CHUNK_SIZE,
+)
 from knowgraph.infrastructure.parsing.markdown_parser import MarkdownSection, parse_markdown
 
 
@@ -94,7 +99,10 @@ def chunk_markdown(
     chunks = []
     chunks = []
     if tiktoken:
-        tokenizer = tiktoken.get_encoding("cl100k_base")  # GPT-4 tokenizer
+        try:
+            tokenizer = tiktoken.encoding_for_model(DEFAULT_OPENAI_MODEL)
+        except KeyError:
+            tokenizer = tiktoken.get_encoding("o200k_base")  # Fallback for newer models
     else:
         tokenizer = None
 
@@ -285,7 +293,10 @@ def _combine_chunks(chunk1: Chunk, chunk2: Chunk) -> Chunk:
     combined_content = f"{chunk1.content}\n\n{chunk2.content}"
 
     if tiktoken:
-        tokenizer = tiktoken.get_encoding("cl100k_base")
+        try:
+            tokenizer = tiktoken.encoding_for_model(DEFAULT_OPENAI_MODEL)
+        except KeyError:
+            tokenizer = tiktoken.get_encoding("o200k_base")
         combined_tokens = len(tokenizer.encode(combined_content))
     else:
         combined_tokens = len(combined_content.split())

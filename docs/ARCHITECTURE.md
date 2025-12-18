@@ -164,7 +164,12 @@ knowgraph/
 │   ├── types.py                   # Type definitions and protocols (LLMProtocol)
 │   ├── exceptions.py              # Custom exception classes (KnowGraphError hierarchy)
 │   ├── security.py                # Security utilities (path validation)
-│   └── utils.py                   # General utility functions
+│   ├── utils.py                   # General utility functions
+│   ├── circuit_breaker.py         # Circuit breaker pattern (v0.5.0)
+│   ├── rate_limiter.py            # Shared rate limiter with token bucket (v0.5.0)
+│   ├── retry.py                   # Retry logic with backoff strategies (v0.5.0)
+│   ├── throttle.py                # Request throttling with adaptive control (v0.5.0)
+│   └── versioning.py              # API versioning with SemVer (v0.5.0)
 │
 └── adapters/                        # External interfaces
     ├── cli/                        # Command-line interface
@@ -565,6 +570,191 @@ print(f"Affected nodes: {len(result.affected_nodes)}")
 for node in result.affected_nodes:
     print(f"- {node.path}: {node.title}")
 ```
+
+### Resilience Patterns (v0.5.0)
+
+KnowGraph includes enterprise-grade resilience patterns for production deployments:
+
+#### CircuitBreaker (Failure Protection)
+
+**Location:** `shared/circuit_breaker.py`
+
+Automatic failure detection and recovery with three states:
+
+```python
+from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+
+circuit_breaker = CircuitBreaker(
+    name="query_engine",
+    config=CircuitBreakerConfig(
+        failure_threshold=5,    # Open after 5 failures
+        timeout=30.0,           # Reset after 30 seconds
+        success_threshold=3     # Close after 3 successes
+    )
+)
+
+# Use circuit breaker
+result = await circuit_breaker.call(risky_operation)
+```
+
+**State Machine:**
+- **CLOSED**: Normal operation, all requests pass
+- **OPEN**: Too many failures, requests rejected immediately
+- **HALF_OPEN**: Testing recovery, limited requests allowed
+
+**Integration Points:**
+- QueryEngine: Protects query execution
+- MCP Handlers: Protects all MCP operations
+
+#### SharedRateLimiter (API Protection)
+
+**Location:** `shared/rate_limiter.py`
+
+Token bucket algorithm with per-user tracking:
+
+```python
+from knowgraph.shared.rate_limiter import SharedRateLimiter
+
+rate_limiter = SharedRateLimiter(
+    rate=10,              # 10 requests
+    period=1.0,           # per second
+    algorithm="token_bucket",
+    burst_size=20         # Allow bursts up to 20
+)
+
+# Use rate limiter
+await rate_limiter.allow(user_id)
+```
+
+**Features:**
+- Per-user identification and tracking
+- Burst capacity for traffic spikes
+- Automatic token refill
+- Thread-safe implementation
+
+**Integration Points:**
+- MCP Handlers: Rate limits all API requests
+
+#### RetryContext (Transient Failure Recovery)
+
+**Location:** `shared/retry.py`
+
+Smart retry strategies with configurable backoff:
+
+```python
+from knowgraph.shared.retry import RetryContext, RetryConfig, BackoffStrategy
+
+retry_config = RetryConfig(
+    max_attempts=3,
+    backoff_strategy=BackoffStrategy.EXPONENTIAL,
+    initial_delay=1.0,
+    max_delay=10.0,
+    timeout=30.0
+)
+
+# Sync usage
+with RetryContext(retry_config) as retry:
+    result = retry.execute(unstable_operation)
+
+# Async usage
+async with RetryContext(retry_config) as retry:
+    result = await retry.execute_async(unstable_operation)
+```
+
+**Backoff Strategies:**
+- **IMMEDIATE**: No delay (0s)
+- **LINEAR**: Fixed delay (1s, 1s, 1s)
+- **EXPONENTIAL**: Growing delay (1s, 2s, 4s, 8s) with jitter
+
+**Integration Points:**
+- QueryEngine.query(): Automatic retry for transient failures
+
+#### RequestThrottle (Concurrency Control)
+
+**Location:** `shared/throttle.py`
+
+Adaptive concurrency control with queue management:
+
+```python
+from knowgraph.shared.throttle import RequestThrottle
+
+throttle = RequestThrottle(
+    max_concurrent=15,    # Max 15 concurrent requests
+    queue_size=100,       # Queue up to 100 requests
+    adaptive=True,        # Dynamic adjustment
+    timeout=30.0
+)
+
+# Use throttle
+throttle_context = await throttle.acquire()
+async with throttle_context:
+    # Process request
+    result = await process()
+```
+
+**Features:**
+- Adaptive concurrency based on response times
+- Queue management with timeout
+- Metrics tracking (active, queued, rejected)
+- Automatic adjustment based on system load
+
+**Integration Points:**
+- QueryEngine.query_async(): Throttles concurrent queries
+
+#### API Versioning (Backward Compatibility)
+
+**Location:** `shared/versioning.py`
+
+Semantic versioning with automatic negotiation:
+
+```python
+from knowgraph.shared.versioning import (
+    register_version,
+    negotiate_version,
+    Version
+)
+
+# Register versions
+register_version(
+    version=Version("1.0.0"),
+    status="STABLE",
+    features={"basic": "Core functionality"}
+)
+
+register_version(
+    version=Version("1.1.0"),
+    status="STABLE",
+    features={"resilience": "Enterprise patterns"}
+)
+
+# Negotiate version
+version = negotiate_version(
+    requested="1.x",
+    default=Version("1.1.0")
+)
+```
+
+**Features:**
+- SemVer (MAJOR.MINOR.PATCH) support
+- Version lifecycle (DEVELOPMENT → STABLE → DEPRECATED → SUNSET)
+- Automatic negotiation with constraints
+- Deprecation warnings
+
+**Integration Points:**
+- MCP Server: Version registration and negotiation
+- MCP Handlers: Version-aware request handling
+
+#### Resilience Metrics
+
+| Pattern | Coverage | Tests | Status |
+|---------|----------|-------|--------|
+| Circuit Breaker | 97.78% | 25 | ✅ Active |
+| Rate Limiter | 98.73% | 28 | ✅ Active |
+| Retry Logic | 92.00% | 20 | ✅ Active |
+| Throttle | 97.48% | 21 | ✅ Active |
+| API Versioning | 96.62% | 29 | ✅ Active |
+
+**Total:** 123 tests, all passing ✅
 
 ## 🛠️ Development and Testing
 

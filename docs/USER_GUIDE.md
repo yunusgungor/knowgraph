@@ -42,6 +42,9 @@ KnowGraph is a **Graph RAG (Retrieval-Augmented Generation)** system that transf
 - 📊 **Impact Analysis**: Predict ripple effects of code changes
 - 🚀 **High Performance**: Smart caching and hybrid intelligence
 - 🔌 **MCP Compatible**: Works with Claude Desktop, Cursor, and other AI editors
+- 🛡️ **Production Ready**: Enterprise resilience patterns (Circuit Breaker, Rate Limiting, Retry Logic)
+- 🎚️ **Adaptive Throttling**: Dynamic concurrency control based on system load
+- 📋 **API Versioning**: Semantic versioning with backward compatibility
 
 ### Architecture Overview
 
@@ -152,7 +155,7 @@ KnowGraph uses environment variables for configuration:
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
 | `KNOWGRAPH_API_KEY` | Yes | OpenAI API key for LLM operations | - |
-| `KNOWGRAPH_MODEL` | No | OpenAI model to use | `gpt-4o-mini` |
+| `KNOWGRAPH_MODEL` | No | OpenAI model to use | `gpt-5-nano` |
 | `KNOWGRAPH_GRAPH_PATH` | No | Path to graph storage | `./graphstore` |
 | `GITHUB_TOKEN` | No | GitHub PAT for private repos | - |
 
@@ -161,14 +164,14 @@ KnowGraph uses environment variables for configuration:
 **macOS/Linux:**
 ```bash
 export KNOWGRAPH_API_KEY="sk-..."
-export KNOWGRAPH_MODEL="gpt-4o-mini"
+export KNOWGRAPH_MODEL="gpt-5-nano"
 export GITHUB_TOKEN="github_pat_..."
 ```
 
 **Windows (PowerShell):**
 ```powershell
 $env:KNOWGRAPH_API_KEY="sk-..."
-$env:KNOWGRAPH_MODEL="gpt-4o-mini"
+$env:KNOWGRAPH_MODEL="gpt-5-nano"
 ```
 
 **Persistent Configuration:**
@@ -177,7 +180,7 @@ Add to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.):
 ```bash
 # KnowGraph Configuration
 export KNOWGRAPH_API_KEY="sk-..."
-export KNOWGRAPH_MODEL="gpt-4o-mini"
+export KNOWGRAPH_MODEL="gpt-5-nano"
 export KNOWGRAPH_GRAPH_PATH="$HOME/.knowgraph/graphstore"
 ```
 
@@ -837,6 +840,161 @@ export KNOWGRAPH_WORKERS=5
 # Disable hierarchical lifting
 knowgraph query "..." --no-hierarchical-lifting
 ```
+
+### 8.6 Resilience Patterns (v0.5.0)
+
+KnowGraph includes enterprise-grade resilience patterns for production deployments:
+
+#### Circuit Breaker
+
+Automatic failure detection and recovery:
+
+```python
+from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+
+# Configure circuit breaker
+circuit_breaker = CircuitBreaker(
+    name="query_engine",
+    config=CircuitBreakerConfig(
+        failure_threshold=5,      # Open after 5 failures
+        timeout=30.0,             # Reset after 30 seconds
+        success_threshold=3       # Close after 3 successes
+    )
+)
+
+# Use circuit breaker
+async def protected_operation():
+    return await circuit_breaker.call(risky_operation)
+```
+
+**States:**
+- **CLOSED**: Normal operation, all requests pass through
+- **OPEN**: Too many failures, all requests rejected immediately
+- **HALF_OPEN**: Testing recovery, limited requests allowed
+
+#### Rate Limiting
+
+Token bucket algorithm with per-user tracking:
+
+```python
+from knowgraph.shared.rate_limiter import SharedRateLimiter
+
+# Configure rate limiter
+rate_limiter = SharedRateLimiter(
+    rate=10,              # 10 requests
+    period=1.0,           # per second
+    algorithm="token_bucket",
+    burst_size=20         # Allow bursts up to 20
+)
+
+# Use rate limiter
+async def handle_request(user_id: str):
+    await rate_limiter.allow(user_id)
+    # Process request
+```
+
+**Features:**
+- Per-user tracking with identifier
+- Burst capacity for traffic spikes
+- Token bucket algorithm
+- Automatic token refill
+
+#### Retry Logic
+
+Smart retry strategies with backoff:
+
+```python
+from knowgraph.shared.retry import RetryContext, RetryConfig, BackoffStrategy
+
+# Configure retry logic
+retry_config = RetryConfig(
+    max_attempts=3,
+    backoff_strategy=BackoffStrategy.EXPONENTIAL,
+    initial_delay=1.0,
+    max_delay=10.0,
+    timeout=30.0
+)
+
+# Use retry context
+with RetryContext(retry_config) as retry:
+    result = retry.execute(unstable_operation)
+```
+
+**Backoff Strategies:**
+- **IMMEDIATE**: No delay (0s)
+- **LINEAR**: Fixed delay (1s, 1s, 1s)
+- **EXPONENTIAL**: Growing delay (1s, 2s, 4s, 8s)
+
+#### Request Throttling
+
+Adaptive concurrency control:
+
+```python
+from knowgraph.shared.throttle import RequestThrottle
+
+# Configure throttle
+throttle = RequestThrottle(
+    max_concurrent=15,    # Max 15 concurrent requests
+    queue_size=100,       # Queue up to 100 requests
+    adaptive=True,        # Dynamic adjustment
+    timeout=30.0
+)
+
+# Use throttle
+async def process_request():
+    throttle_context = await throttle.acquire()
+    async with throttle_context:
+        # Process request
+        pass
+```
+
+**Features:**
+- Adaptive concurrency based on system load
+- Queue management with timeout
+- Metrics tracking (active, queued, rejected)
+
+#### API Versioning
+
+Semantic versioning with negotiation:
+
+```python
+from knowgraph.shared.versioning import (
+    register_version,
+    negotiate_version,
+    Version
+)
+
+# Register API versions
+register_version(Version("1.0.0"), "stable", {"feature": "basic"})
+register_version(Version("1.1.0"), "stable", {"feature": "resilience"})
+
+# Negotiate version
+version = negotiate_version(
+    requested="1.x",        # Client requests
+    default=Version("1.1.0")
+)
+# Returns: Version("1.1.0")
+```
+
+**Features:**
+- SemVer (MAJOR.MINOR.PATCH) support
+- Automatic version negotiation
+- Backward compatibility checking
+- Deprecation warnings
+
+#### Integration Status
+
+All resilience patterns are **actively integrated** in production code:
+
+| Component | Patterns | Status |
+|-----------|----------|--------|
+| **QueryEngine** | Circuit Breaker, Retry, Throttle | ✅ Active |
+| **MCP Handlers** | Circuit Breaker, Rate Limiter | ✅ Active |
+| **MCP Server** | API Versioning | ✅ Active |
+
+**Test Coverage:** 123 tests, 92-98% coverage per module, all passing ✅
+
+For detailed integration information, see [RESILIENCE_INTEGRATION_SUMMARY.md](../RESILIENCE_INTEGRATION_SUMMARY.md).
 
 ---
 

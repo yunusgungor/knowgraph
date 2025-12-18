@@ -47,6 +47,58 @@ KnowGraph is built for scale. The **Smart Indexing Engine** processes large repo
 
 ---
 
+## 🛡️ Resilience & Production Readiness (v0.5.0)
+
+KnowGraph is built for production with enterprise-grade resilience patterns:
+
+*   **🔌 Circuit Breaker:** Automatic failure detection and recovery with half-open state testing. Prevents cascading failures by temporarily blocking failing operations.
+*   **⏱️ Rate Limiting:** Token bucket algorithm with configurable burst capacity. Protects API quotas with per-user tracking and intelligent throttling.
+*   **🔄 Retry Logic:** Exponential backoff with jitter for transient failures. Smart retry strategies (immediate, linear, exponential) with maximum attempt limits.
+*   **🚦 Request Throttling:** Adaptive concurrency control with queue management. Dynamically adjusts based on system load and response times.
+*   **📋 API Versioning:** Semantic versioning (SemVer) with automatic negotiation. Backward-compatible API changes with deprecation warnings.
+
+### Resilience Statistics
+
+| Pattern | Test Coverage | Status | Location |
+|---------|--------------|--------|----------|
+| **Circuit Breaker** | 97.78% (25 tests) | ✅ Active | `knowgraph/shared/circuit_breaker.py` |
+| **Rate Limiter** | 98.73% (28 tests) | ✅ Active | `knowgraph/shared/rate_limiter.py` |
+| **Retry Logic** | 92.00% (20 tests) | ✅ Active | `knowgraph/shared/retry.py` |
+| **Throttle** | 97.48% (21 tests) | ✅ Active | `knowgraph/shared/throttle.py` |
+| **API Versioning** | 96.62% (29 tests) | ✅ Active | `knowgraph/shared/versioning.py` |
+
+**Total Resilience Tests:** 123 tests, all passing ✅
+
+### Integration Points
+
+**QueryEngine Protection:**
+```python
+# Automatic retry for transient failures
+with RetryContext(max_attempts=3, backoff="exponential"):
+    result = engine.query("complex query")
+
+# Throttling for concurrent query management
+async with throttle.acquire():
+    result = await engine.query_async("query")
+
+# Circuit breaker prevents cascading failures
+await circuit_breaker.call(execute_query)
+```
+
+**MCP Handler Protection:**
+```python
+# Rate limiting with per-user tracking
+await rate_limiter.allow(user_id)  # 10 req/s
+
+# Version negotiation for backward compatibility
+version = negotiate_version(requested="1.1.0")
+
+# Global circuit breaker for all MCP operations
+await global_circuit_breaker.call(handler)
+```
+
+---
+
 ## 🎯 Key Features
 
 ### Multi-Source Indexing (v0.4.0)
@@ -115,6 +167,11 @@ knowgraph index https://github.com/company/private-repo
 *   **🎯 Query Expansion:** Semantic query enrichment through `QueryExpander`
 *   **📝 Explanation Generation:** Transparent reasoning paths via `ExplanationObject`
 *   **🏛️ Hierarchical Lifting:** Context from parent directories for better understanding
+*   **🛡️ Circuit Breaker:** Automatic failure detection and recovery with half-open state (NEW in v0.5.0)
+*   **⏱️ Rate Limiting:** Token bucket algorithm with burst capacity and per-user tracking (NEW in v0.5.0)
+*   **🔄 Retry Logic:** Smart retry strategies with exponential backoff and jitter (NEW in v0.5.0)
+*   **🚦 Request Throttling:** Adaptive concurrency control with queue management (NEW in v0.5.0)
+*   **📋 API Versioning:** SemVer with automatic negotiation and deprecation warnings (NEW in v0.5.0)
 
 #### Performance Highlights (v0.3.0)
 
@@ -312,6 +369,8 @@ For those who want to dive into the deep tech:
 *   **[🔧 MCP Rules & Detailed Prompts](docs/KNOWGRAPH_MCP_RULES.md)**: Best practices for using KnowGraph with AI assistants.
 *   **[🏗️ Architecture & Algorithms](docs/ARCHITECTURE.md)**: Graph theory, node weighting algorithms, and system architecture.
 *   **[📦 Repository Indexing](docs/REPOSITORY_INDEXING.md)**: Guide for indexing Git repositories and code directories.
+*   **[🛡️ Resilience Integration](RESILIENCE_INTEGRATION_SUMMARY.md)**: Enterprise resilience patterns and production readiness guide.
+*   **[✅ Integration Approval](ENTEGRASYON_ONAY.md)**: Complete integration verification and validation report (Turkish).
 
 ## 🤝 Contribute to Science
 
