@@ -1,6 +1,7 @@
 """Manifest management for graph metadata and versioning."""
 
 import json
+import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -9,6 +10,8 @@ from pathlib import Path
 
 from knowgraph.shared.cache_versioning import invalidate_all_caches
 from knowgraph.shared.exceptions import StorageError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -178,12 +181,13 @@ def acquire_manifest_lock(graph_store_path: Path, timeout: float = 30.0) -> Iter
 
 
 def write_manifest(manifest: Manifest, graph_store_path: Path) -> None:
-    """Write manifest to JSON file with exclusive locking.
+    """Write manifest to JSON file with exclusive locking and automatic backup.
 
     Uses file locking to ensure thread-safe concurrent updates.
-
+    Creates timestamped backup before writing to prevent data loss.
 
     File location: {graph_store_path}/metadata/manifest.json
+    Backups: {graph_store_path}/metadata/backups/manifest.*.backup
 
     Args:
     ----
@@ -195,18 +199,33 @@ def write_manifest(manifest: Manifest, graph_store_path: Path) -> None:
         StorageError: If write operation fails
 
     """
+    # Import here to avoid circular dependency
+    from knowgraph.infrastructure.storage.manifest_backup import ManifestBackupManager
+
     with acquire_manifest_lock(graph_store_path):
         metadata_dir = graph_store_path / "metadata"
         metadata_dir.mkdir(parents=True, exist_ok=True)
 
         manifest_file = metadata_dir / "manifest.json"
+
+        # Create backup before writing (only if manifest exists)
+        if manifest_file.exists():
+            try:
+                backup_mgr = ManifestBackupManager(metadata_dir)
+                backup_path = backup_mgr.backup_manifest(max_backups=5)
+                if backup_path:
+                    logger.debug(f"Created manifest backup: {backup_path}")
+            except Exception as backup_error:
+                # Log but don't fail the write operation
+                logger.warning(f"Failed to create manifest backup: {backup_error}")
+
         temp_file = manifest_file.with_suffix(".tmp")
 
         try:
             with open(temp_file, "w", encoding="utf-8") as file:
                 json.dump(manifest.to_dict(), file, indent=2, ensure_ascii=False)
             temp_file.rename(manifest_file)
-            
+
             # Trigger cache invalidation after successful manifest update
             invalidate_all_caches()
         except Exception as error:
@@ -219,7 +238,10 @@ def write_manifest(manifest: Manifest, graph_store_path: Path) -> None:
 
 
 def read_manifest(graph_store_path: Path) -> Manifest | None:
-    """Read manifest from JSON file.
+    """Read manifest from JSON file with automatic backup recovery.
+
+    If the manifest file is corrupted, automatically attempts to restore
+    from the latest backup.
 
     Args:
     ----
@@ -234,6 +256,9 @@ def read_manifest(graph_store_path: Path) -> Manifest | None:
         StorageError: If read operation fails (excluding not found)
 
     """
+    # Import here to avoid circular dependency
+    from knowgraph.infrastructure.storage.manifest_backup import ManifestBackupManager
+
     manifest_file = graph_store_path / "metadata" / "manifest.json"
 
     if not manifest_file.exists():
@@ -243,7 +268,34 @@ def read_manifest(graph_store_path: Path) -> Manifest | None:
         with open(manifest_file, encoding="utf-8") as file:
             data = json.load(file)
         return Manifest.from_dict(data)
+    except (json.JSONDecodeError, KeyError, ValueError) as error:
+        # Manifest is corrupted, try to restore from backup
+        logger.error(f"Manifest corrupted: {error}. Attempting recovery from backup...")
+
+        try:
+            backup_mgr = ManifestBackupManager(graph_store_path / "metadata")
+            if backup_mgr.restore_latest_backup():
+                logger.info("Successfully restored manifest from backup")
+                # Try reading again
+                with open(manifest_file, encoding="utf-8") as file:
+                    data = json.load(file)
+                return Manifest.from_dict(data)
+            else:
+                raise StorageError(
+                    "Failed to restore manifest from backup (no backups available)",
+                    {"error": str(error), "path": str(manifest_file)},
+                ) from error
+        except Exception as recovery_error:
+            raise StorageError(
+                "Failed to read and recover manifest",
+                {
+                    "original_error": str(error),
+                    "recovery_error": str(recovery_error),
+                    "path": str(manifest_file),
+                },
+            ) from recovery_error
     except Exception as error:
+        # Other errors (permission, IO, etc.)
         raise StorageError(
             "Failed to read manifest",
             {"error": str(error), "path": str(manifest_file)},

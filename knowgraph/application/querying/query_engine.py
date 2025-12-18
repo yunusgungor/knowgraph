@@ -45,6 +45,7 @@ from knowgraph.shared.refactoring import (
 from knowgraph.shared.retry import RetryConfig, RetryContext, BackoffStrategy
 from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from knowgraph.shared.throttle import RequestThrottle, ThrottleConfig
+from knowgraph.shared.metrics import get_metrics
 
 # Context variable for request tracking
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
@@ -134,6 +135,9 @@ class QueryEngine:
             timeout=30.0,
         )
 
+        # Metrics tracking
+        self.metrics = get_metrics()
+
     def __del__(self) -> None:
         """Cleanup resources on deletion."""
         # Import here to avoid circular dependency issues
@@ -178,16 +182,26 @@ class QueryEngine:
         """
         # Note: Retry logic only available in query_async()
         # This sync version calls implementation directly
-        return self._execute_query_with_retry(
-            None,  # No retry context for sync version
-            query_text,
-            top_k,
-            max_hops,
-            max_tokens,
-            with_explanation,
-            enable_hierarchical_lifting,
-            lift_levels,
-        )
+        start_time = time.time()
+        try:
+            result = self._execute_query_with_retry(
+                None,  # No retry context for sync version
+                query_text,
+                top_k,
+                max_hops,
+                max_tokens,
+                with_explanation,
+                enable_hierarchical_lifting,
+                lift_levels,
+            )
+            # Record successful query
+            self.metrics.record_request("query", "success")
+            self.metrics.record_latency("query", time.time() - start_time)
+            return result
+        except Exception as error:
+            # Record failed query
+            self.metrics.record_error(type(error).__name__, "query")
+            raise
 
     def _execute_query_with_retry(
         self: "QueryEngine",
@@ -432,6 +446,8 @@ class QueryEngine:
 
                 try:
                     # Execute with timeout and circuit breaker protection
+                    start_time_inner = time.time()
+
                     async def _execute():
                         return await self._query_async_impl(
                             query_text=query_text,
@@ -443,15 +459,25 @@ class QueryEngine:
                             lift_levels=lift_levels,
                         )
 
-                    return await asyncio.wait_for(
+                    result = await asyncio.wait_for(
                         self._circuit_breaker.call(_execute),
                         timeout=timeout,
                     )
+
+                    # Record successful async query
+                    self.metrics.record_request("query_async", "success")
+                    self.metrics.record_latency("query_async", time.time() - start_time_inner)
+                    return result
+
                 except asyncio.TimeoutError:
+                    self.metrics.record_error("TimeoutError", "query_async")
                     raise QueryError(
                         f"Query timed out after {timeout}s",
                         {"query": query_text[:MAX_QUERY_PREVIEW_LENGTH], "request_id": request_id},
                     ) from None
+                except Exception as error:
+                    self.metrics.record_error(type(error).__name__, "query_async")
+                    raise
                 finally:
                     # Remove from active tasks
                     if task:
