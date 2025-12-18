@@ -200,29 +200,35 @@ class SparseEmbedder:
         Returns both split tokens AND original identifiers for maximum recall.
         Example: 'getUserById' → ['get', 'user', 'by', 'id', 'getuserbyid']
         """
-        code_lower = code.lower()
-
-        # First, extract all identifiers (alphanumeric sequences)
-        raw_tokens = self.token_pattern.findall(code_lower)
-
+        # First, extract all identifiers BEFORE lowercasing (for camelCase detection)
+        raw_tokens_original = self.token_pattern.findall(code)
+        # First, extract all identifiers BEFORE lowercasing (for camelCase detection)
+        raw_tokens_original = self.token_pattern.findall(code)
+        # First, extract all identifiers BEFORE lowercasing (for camelCase detection)
         expanded_tokens = []
 
-        for token in raw_tokens:
+        for token_original in raw_tokens_original:
+            token_lower = token_original.lower()
+            
             # Skip stop words but NOT code keywords
-            if token in self.stop_words and not self._is_code_keyword(token):
+            if token_lower in self.stop_words and not self._is_code_keyword(token_lower):
                 continue
-
-            # Always include the original token
-            expanded_tokens.append(token)
-
+            
+            # Always include the lowercased token
+            expanded_tokens.append(token_lower)
+            
             # Split camelCase: getUserById → ['get', 'user', 'by', 'id']
-            camel_parts = re.findall(r"[a-z]+|[A-Z][a-z]*", token)
+            # Use ORIGINAL case for detection, then lowercase the parts
+            camel_parts = re.findall(r'[a-z]+|[A-Z][a-z]*', token_original)
             if len(camel_parts) > 1:
-                expanded_tokens.extend(camel_parts)
-
+                expanded_tokens.extend([p.lower() for p in camel_parts])
+            
             # Split snake_case: user_profile → ['user', 'profile']
-            if "_" in token:
-                snake_parts = token.split("_")
+            if '_' in token_lower:
+                snake_parts = token_lower.split('_')
+                expanded_tokens.extend([p for p in snake_parts if p and p not in self.stop_words])
+            if "_" in token_lower:
+                snake_parts = token_lower.split("_")
                 expanded_tokens.extend([p for p in snake_parts if p and p not in self.stop_words])
 
         # Deduplicate while preserving some order

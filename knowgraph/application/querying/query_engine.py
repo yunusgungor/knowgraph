@@ -51,6 +51,55 @@ from knowgraph.shared.throttle import RequestThrottle
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
+# Query Result Cache (LRU with TTL)
+@dataclass
+class CachedQueryResult:
+    """Cached query result with timestamp."""
+
+    result: "QueryResult"
+    timestamp: float
+
+
+_query_result_cache: dict[str, CachedQueryResult] = {}
+_query_cache_max_size = 128  # Maximum cached queries
+_query_cache_ttl = 300.0  # 5 minutes TTL
+
+
+def _get_query_cache_key(
+    query_text: str,
+    top_k: int,
+    max_hops: int,
+    max_tokens: int,
+    enable_hierarchical_lifting: bool,
+    lift_levels: int,
+) -> str:
+    """Generate cache key for query parameters."""
+    import hashlib
+
+    key_parts = (
+        f"{query_text}|{top_k}|{max_hops}|{max_tokens}|{enable_hierarchical_lifting}|{lift_levels}"
+    )
+    return hashlib.md5(key_parts.encode()).hexdigest()
+
+
+def clear_query_result_cache() -> None:
+    """Clear query result cache."""
+    _query_result_cache.clear()
+
+
+def get_query_cache_stats() -> dict[str, int]:
+    """Get query cache statistics."""
+    return {
+        "size": len(_query_result_cache),
+        "max_size": _query_cache_max_size,
+        "utilization": (
+            int((len(_query_result_cache) / _query_cache_max_size) * 100)
+            if _query_cache_max_size > 0
+            else 0
+        ),
+    }
+
+
 @dataclass
 class QueryResult:
     """Result from query execution.
@@ -180,6 +229,20 @@ class QueryEngine:
             QueryError: If query fails
 
         """
+        # Check cache first (for identical queries)
+        cache_key = _get_query_cache_key(
+            query_text, top_k, max_hops, max_tokens, enable_hierarchical_lifting, lift_levels
+        )
+
+        if cache_key in _query_result_cache:
+            cached = _query_result_cache[cache_key]
+            # Check if cache is still valid (TTL)
+            if time.time() - cached.timestamp < _query_cache_ttl:
+                return cached.result
+            else:
+                # Expired, remove from cache
+                del _query_result_cache[cache_key]
+
         # Note: Retry logic only available in query_async()
         # This sync version calls implementation directly
         start_time = time.time()
@@ -194,6 +257,15 @@ class QueryEngine:
                 enable_hierarchical_lifting,
                 lift_levels,
             )
+
+            # Store in cache
+            _query_result_cache[cache_key] = CachedQueryResult(result=result, timestamp=time.time())
+
+            # Prune cache if needed (simple FIFO)
+            if len(_query_result_cache) > _query_cache_max_size:
+                oldest_key = next(iter(_query_result_cache))
+                del _query_result_cache[oldest_key]
+
             # Record successful query
             self.metrics.record_request("query", "success")
             self.metrics.request_duration.labels(operation="query").observe(
@@ -229,6 +301,21 @@ class QueryEngine:
 
             if not nodes:
                 raise QueryError("No relevant nodes found")
+
+            # Step 1.5: Hierarchical Context Lifting (if enabled)
+            if enable_hierarchical_lifting:
+                from knowgraph.application.querying.hierarchical_lifting import (
+                    lift_hierarchical_context,
+                )
+
+                original_count = len(nodes)
+                nodes = lift_hierarchical_context(
+                    nodes, self.graph_store_path, lift_levels=lift_levels, max_additional_nodes=5
+                )
+                if len(nodes) > original_count:
+                    # Update seed_node_ids to not include lifted nodes as seeds
+                    # (they're context, not direct matches)
+                    pass  # seed_node_ids stays the same
 
             # Step 2: Compute centrality on active subgraph
             centrality_start = time.time()
