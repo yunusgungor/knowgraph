@@ -10,6 +10,7 @@ from uuid import UUID
 from knowgraph.application.indexing.graph_builder import (
     create_nodes_from_chunks,
     create_semantic_edges,
+    create_reference_edges,
 )
 from knowgraph.config import BATCH_SIZE, MAX_CONCURRENT_REQUESTS
 from knowgraph.domain.intelligence.code_analyzer import ASTAnalyzer
@@ -27,8 +28,8 @@ logger = logging.getLogger(__name__)
 class SmartGraphBuilder:
     """Graph builder that uses Intelligence Provider for semantic analysis."""
 
-    def __init__(self, provider: IntelligenceProvider):
-        """Initialize builder with provider."""
+    def __init__(self, provider: IntelligenceProvider | None = None):
+        """Initialize builder with optional provider."""
         self.provider = provider
         # CacheManager will be initialized in build() when path is known
         self.cache_manager: CacheManager | None = None
@@ -91,13 +92,14 @@ class SmartGraphBuilder:
                     nodes_needing_llm.append(node)
 
             # Phase 2: LLM Batch Processing
-            if nodes_needing_llm:
+            if nodes_needing_llm and self.provider:
+                # ... (Existing LLM logic) ...
+                # (Skipping ahead for brevity in replacement, but I'll replace the whole if/else block)
                 with self.perf_tracker.track("llm_processing"):
 
                     async def process_batch(
                         batch_nodes: list[Node],
                     ) -> list[tuple[Node, list[Any]]]:
-                        """Process a batch of nodes and return (node, entities) pairs."""
                         texts = [node.content for node in batch_nodes]
                         async with semaphore:
                             for attempt in range(5):
@@ -105,13 +107,11 @@ class SmartGraphBuilder:
                                     batch_entities = await self.provider.extract_entities_batch(
                                         texts
                                     )
-                                    # Record successes
                                     for _ in batch_nodes:
                                         self.metrics.record_llm_success()
                                     return list(zip(batch_nodes, batch_entities))
                                 except Exception as e:
                                     if attempt == 4:
-                                        # Final failure
                                         for node in batch_nodes:
                                             self.metrics.record_llm_failure(
                                                 str(e), f"node_{node.id}"
@@ -127,15 +127,16 @@ class SmartGraphBuilder:
                         tasks.append(process_batch(batch))
 
                     batch_results = await asyncio.gather(*tasks)
-
-                    # Process LLM Results
                     for batch_res in batch_results:
                         for node, entities in batch_res:
-                            # Save to Cache (even if empty, to avoid re-asking next time)
                             self.cache_manager.save_entities(node.hash, entities)
                             final_nodes_map[node.id] = replace(
                                 node, metadata={"entities": [e._asdict() for e in entities]}
                             )
+            elif nodes_needing_llm:
+                # If LLM skipped, still add nodes to map (without entities)
+                for node in nodes_needing_llm:
+                    final_nodes_map[node.id] = node
 
             # Reassemble final nodes in original order
             final_nodes = [final_nodes_map[node.id] for node in initial_nodes]
@@ -144,13 +145,48 @@ class SmartGraphBuilder:
             self.metrics.finalize()
             logger.info(f"\n{self.metrics.get_summary()}")
 
-            # 4. Create Semantic Edges
+            # 4. Create Edges (Semantic + Reference)
             with self.perf_tracker.track("edge_creation"):
+                # Load existing nodes for global reference context
+                from knowgraph.infrastructure.storage.filesystem import (
+                    list_all_nodes,
+                    read_node_json,
+                )
+
+                existing_nodes = []
+                graph_path_obj = Path(graph_path)
+                if graph_path_obj.exists():
+                    try:
+                        node_ids = list_all_nodes(graph_path_obj)
+                        for n_id in node_ids:
+                            # Skip nodes we just built (they are already in final_nodes)
+                            if any(fn.id == n_id for fn in final_nodes):
+                                continue
+                            node_obj = read_node_json(n_id, graph_path_obj)
+                            if node_obj:
+                                existing_nodes.append(node_obj)
+                    except Exception as e:
+                        logger.warning(f"Could not load existing nodes for reference context: {e}")
+
+                all_context_nodes = final_nodes + existing_nodes
+
                 semantic_edges = create_semantic_edges(final_nodes)
+                # create_reference_edges uses global context to resolve symbols
+                reference_edges = create_reference_edges(all_context_nodes)
+
+                # Filter reference_edges: We only want edges where at least one side is a NEW node
+                new_node_ids = {n.id for n in final_nodes}
+                relevant_reference_edges = [
+                    e
+                    for e in reference_edges
+                    if e.source in new_node_ids or e.target in new_node_ids
+                ]
+
+                all_edges = semantic_edges + relevant_reference_edges
 
             # Auto-validate graph before returning
             with self.perf_tracker.track("validation"):
-                validation_warnings = self._validate_build_results(final_nodes, semantic_edges)
+                validation_warnings = self._validate_build_results(final_nodes, all_edges)
                 if validation_warnings:
                     logger.warning(
                         f"Graph validation warnings: {len(validation_warnings)} issues detected"
@@ -163,7 +199,7 @@ class SmartGraphBuilder:
         if perf_summary:
             logger.info(f"\nBuild Performance Summary: {perf_summary}")
 
-        return final_nodes, semantic_edges
+        return final_nodes, all_edges
 
     def _validate_build_results(self, nodes: list[Node], edges: list[Edge]) -> list[str]:
         """Validate build results for common issues.

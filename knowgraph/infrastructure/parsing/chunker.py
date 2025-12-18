@@ -53,6 +53,7 @@ class Chunk:
     line_end: int
     token_count: int
     has_code: bool
+    source_path: str = ""
     chunk_id: str | None = None
 
 
@@ -155,11 +156,14 @@ def chunk_markdown(
                     line_end=section.line_end,
                     token_count=tokens,
                     has_code=section.has_code,
+                    source_path=source_path,
                 )
             )
         else:
             # Split section into smaller chunks
-            sub_chunks = _split_large_section(section, max_chars, overlap_tokens, tokenizer)
+            sub_chunks = _split_large_section(
+                section, max_chars, overlap_tokens, tokenizer, source_path
+            )
             chunks.extend(sub_chunks)
 
     # Merge tiny chunks
@@ -173,6 +177,7 @@ def _split_large_section(
     max_chars: int,
     overlap_tokens: int,  # noqa: ARG001
     tokenizer: Any,
+    source_path: str = "",
 ) -> list[Chunk]:
     """Split a large section into smaller chunks.
 
@@ -204,13 +209,88 @@ def _split_large_section(
     for para in paragraphs:
         para_size = len(para) + 2  # +2 for \n\n
 
+        # Handle oversized paragraphs (e.g. minified code)
+        if para_size > max_chars:
+            # 1. Flush current pending parts
+            if current_chunk_parts:
+                chunk_content = "".join(current_chunk_parts).strip()
+                if tokenizer:
+                    tokens = len(tokenizer.encode(chunk_content))
+                else:
+                    # Fallback: estimate tokens (approx 3.5 chars per token for code)
+                    tokens = int(len(chunk_content) / 3.5)
+
+                chunks.append(
+                    Chunk(
+                        content=chunk_content,
+                        header=f"{section.header} (part {chunk_index + 1})",
+                        header_depth=section.level,
+                        header_path=section.header_path,
+                        line_start=section.line_start,
+                        line_end=section.line_end,
+                        token_count=tokens,
+                        has_code=section.has_code,
+                        source_path=source_path,
+                        chunk_id=f"{section.header}_{chunk_index}",
+                    )
+                )
+                chunk_index += 1
+                current_chunk_parts = []
+                current_size = 0
+
+            # 2. Hard split the large paragraph
+            # We must split this specific paragraph into multiple chunks
+            start = 0
+            raw_para_len = len(para)
+            while start < raw_para_len:
+                # Calculate slice end, ensuring we don't exceed max_chars
+                # Leave room for header context if needed, though here we just slice raw
+                slice_len = max_chars - len(header_text)
+                if slice_len <= 0:
+                    slice_len = max_chars  # Fallback if header is huge (unlikely)
+
+                piece = para[start : start + slice_len]
+
+                # Create a chunk for this piece immediately
+                # Always prefix with header to maintain context
+                full_piece_content = (header_text + piece).strip()
+
+                if tokenizer:
+                    tokens = len(tokenizer.encode(full_piece_content))
+                else:
+                    # Fallback: estimate tokens (approx 3.5 chars per token for code)
+                    tokens = int(len(full_piece_content) / 3.5)
+
+                chunks.append(
+                    Chunk(
+                        content=full_piece_content,
+                        header=f"{section.header} (part {chunk_index + 1})",
+                        header_depth=section.level,
+                        header_path=section.header_path,
+                        line_start=section.line_start,
+                        line_end=section.line_end,
+                        token_count=tokens,
+                        has_code=section.has_code,
+                        source_path=source_path,
+                        chunk_id=f"{section.header}_{chunk_index}",
+                    )
+                )
+                chunk_index += 1
+                start += slice_len
+
+            # Reset current context for next paragraphs
+            current_chunk_parts = [header_text]
+            current_size = len(header_text)
+            continue
+
         if current_size + para_size > max_chars and current_chunk_parts:
             # Save current chunk
             chunk_content = "".join(current_chunk_parts).strip()
             if tokenizer:
                 tokens = len(tokenizer.encode(chunk_content))
             else:
-                tokens = len(chunk_content.split())
+                # Fallback: estimate tokens (approx 3.5 chars per token for code)
+                tokens = int(len(chunk_content) / 3.5)
 
             chunks.append(
                 Chunk(
@@ -222,6 +302,7 @@ def _split_large_section(
                     line_end=section.line_end,
                     token_count=tokens,
                     has_code=section.has_code,
+                    source_path=source_path,
                     chunk_id=f"{section.header}_{chunk_index}",
                 )
             )
@@ -240,7 +321,8 @@ def _split_large_section(
         if tokenizer:
             tokens = len(tokenizer.encode(chunk_content))
         else:
-            tokens = len(chunk_content.split())
+            # Fallback: estimate tokens (approx 3.5 chars per token for code)
+            tokens = int(len(chunk_content) / 3.5)
 
         chunks.append(
             Chunk(
@@ -256,6 +338,7 @@ def _split_large_section(
                 line_end=section.line_end,
                 token_count=tokens,
                 has_code=section.has_code,
+                source_path=source_path,
                 chunk_id=f"{section.header}_{chunk_index}" if chunk_index > 0 else None,
             )
         )
@@ -338,5 +421,6 @@ def _combine_chunks(chunk1: Chunk, chunk2: Chunk) -> Chunk:
         line_end=chunk2.line_end,
         token_count=combined_tokens,
         has_code=chunk1.has_code or chunk2.has_code,
+        source_path=chunk1.source_path,
         chunk_id=chunk1.chunk_id,
     )

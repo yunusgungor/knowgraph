@@ -45,8 +45,13 @@ def create_node_from_chunk(chunk: Chunk, source_path: str, node_type: str | None
         else:
             node_type = "text"
 
+    # Use chunk source path if available, otherwise fallback to provided path
+    # (chunk.source_path will be the specific file path from indexing,
+    # source_path argument might be just the project root)
+    actual_path = chunk.source_path if chunk.source_path else source_path
+
     # Ensure path is relative (remove leading slash if present)
-    relative_path = source_path.lstrip("/")
+    relative_path = actual_path.lstrip("/")
 
     return Node(
         id=node_id,
@@ -228,4 +233,84 @@ def create_semantic_edges(nodes: list[Node], threshold: float = 0.1) -> list[Edg
                             },
                         )
                     )
+    return edges
+
+
+def create_reference_edges(nodes: list[Node]) -> list[Edge]:
+    """Create directed edges based on definition/reference roles.
+
+    If Node A references symbol 'foo' and Node B defines symbol 'foo',
+    an edge A -> B is created with type 'reference'.
+
+    Args:
+    ----
+        nodes: List of nodes with metadata['entities']
+
+    Returns:
+    -------
+        List of reference edges
+    """
+    edges = []
+    created_at = int(time.time())
+
+    # 1. Build Global symbol table (Symbol -> Defining Node IDs)
+    symbol_definitions: dict[str, list[UUID]] = {}
+    node_references: dict[UUID, set[str]] = {}
+
+    for node in nodes:
+        if not node.metadata or "entities" not in node.metadata:
+            continue
+
+        entities = node.metadata["entities"]
+        if not isinstance(entities, list):
+            continue
+
+        refs = set()
+        for e in entities:
+            if not isinstance(e, dict):
+                continue
+
+            name = e.get("name", "")
+            if not name:
+                continue
+
+            e_type = e.get("type", "semantic")
+
+            if e_type == "definition":
+                if name not in symbol_definitions:
+                    symbol_definitions[name] = []
+                symbol_definitions[name].append(node.id)
+            elif e_type in ["reference", "call", "import"]:
+                refs.add(name)
+
+        if refs:
+            node_references[node.id] = refs
+
+    # 2. Create Edges: Referencer -> Definer
+    existing_edges = set()  # (src, target, symbol) to prevent duplicates
+
+    for ref_node_id, refs in node_references.items():
+        for symbol in refs:
+            if symbol in symbol_definitions:
+                for def_node_id in symbol_definitions[symbol]:
+                    # Avoid self-references
+                    if ref_node_id == def_node_id:
+                        continue
+
+                    edge_key = (ref_node_id, def_node_id, symbol)
+                    if edge_key in existing_edges:
+                        continue
+                    existing_edges.add(edge_key)
+
+                    edges.append(
+                        Edge(
+                            source=ref_node_id,
+                            target=def_node_id,
+                            type="reference",
+                            score=1.0,
+                            created_at=created_at,
+                            metadata={"symbol": symbol, "relation": "dependency"},
+                        )
+                    )
+
     return edges

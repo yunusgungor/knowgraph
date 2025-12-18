@@ -2,7 +2,10 @@
 
 import asyncio
 import glob
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -16,6 +19,58 @@ from knowgraph.config import (
     DEFAULT_GRAPH_STORE_PATH,
     EDGES_FILENAME,
 )
+
+LANGUAGE_MAP = {
+    "py": "python",
+    "js": "javascript",
+    "ts": "typescript",
+    "jsx": "javascript",
+    "tsx": "typescript",
+    "rs": "rust",
+    "rb": "ruby",
+    "md": "markdown",
+    "java": "java",
+    "go": "go",
+    "php": "php",
+    "html": "html",
+    "css": "css",
+    "txt": "text",
+    "sql": "sql",
+    "json": "json",
+    "yml": "yaml",
+    "yaml": "yaml",
+    "xml": "xml",
+    "csv": "csv",
+    "tsv": "tsv",
+    "ini": "ini",
+    "conf": "conf",
+    "cfg": "cfg",
+    "properties": "properties",
+    "toml": "toml",
+    "cpp": "cpp",
+    "cxx": "cpp",
+    "cc": "cpp",
+    "c": "c",
+    "h": "c",
+    "hpp": "cpp",
+    "cs": "csharp",
+    "kt": "kotlin",
+    "swift": "swift",
+    "m": "objectivec",
+    "dart": "dart",
+    "scala": "scala",
+    "erl": "erlang",
+    "ex": "elixir",
+    "lua": "lua",
+    "sh": "shell",
+    "bash": "shell",
+}
+
+# Derived maps for easier access
+EXT_MAP = {f".{ext}": lang for ext, lang in LANGUAGE_MAP.items()}
+CODE_PATTERNS = [f"**/*.{ext}" for ext in LANGUAGE_MAP.keys()]
+
+
 from knowgraph.domain.intelligence.provider import IntelligenceProvider
 from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
 from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
@@ -28,7 +83,7 @@ from knowgraph.infrastructure.parsing.repo_ingestor import (
 )
 from knowgraph.infrastructure.search.sparse_index import SparseIndex
 from knowgraph.infrastructure.storage.filesystem import write_all_edges, write_node_json
-from knowgraph.infrastructure.storage.manifest import Manifest, write_manifest
+from knowgraph.infrastructure.storage.manifest import Manifest, write_manifest, read_manifest
 from knowgraph.shared.security import validate_path
 
 
@@ -61,20 +116,116 @@ async def run_index(
         if source_type == "repository" or (
             source_type == "directory" and not Path(input_path).exists()
         ):
-            # It's a repository URL or remote directory - use gitingest
+            # It's a repository URL or remote directory - use git clone/zip
             if verbose:
-                click.echo("Processing repository with gitingest...")
+                click.echo("Remote repository detected...")
 
-            markdown_content, temp_path, _ = await ingest_source(
-                input_path=input_path,
-                include_patterns=include_patterns,
-                exclude_patterns=exclude_patterns,
-                access_token=access_token,
-            )
+            # Create unique temp dir
+            temp_dir = tempfile.mkdtemp(prefix="knowgraph_repo_")
+            temp_path = Path(temp_dir)
             temp_files_to_cleanup.append(temp_path)
 
-            # Treat the generated markdown as a single file
-            files_to_process = [temp_path]
+            # Check for git
+            if shutil.which("git") is not None:
+                # Use git clone if available
+                if verbose:
+                    click.echo("Cloning repository (git)...")
+
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", input_path, str(temp_path)],
+                    check=True,
+                    capture_output=True,
+                )
+            else:
+                # Fallback to ZIP download
+                if verbose:
+                    click.echo("Git not found. Attempting ZIP download...")
+
+                import urllib.request
+                import zipfile
+                import io
+
+                # Heuristic for GitHub URLs
+                # https://github.com/user/repo -> https://github.com/user/repo/archive/refs/heads/main.zip
+                normalized_url = input_path.rstrip("/")
+                if normalized_url.endswith(".git"):
+                    normalized_url = normalized_url[:-4]
+
+                # Try 'main', then 'master'
+                branches = ["main", "master"]
+                downloaded = False
+
+                for branch in branches:
+                    zip_url = f"{normalized_url}/archive/refs/heads/{branch}.zip"
+                    try:
+                        if verbose:
+                            click.echo(f"  Trying {branch} branch...")
+
+                        with urllib.request.urlopen(zip_url, timeout=30) as response:
+                            if response.status == 200:
+                                zip_content = response.read()
+                                with zipfile.ZipFile(io.BytesIO(zip_content)) as zip_ref:
+                                    zip_ref.extractall(temp_path)
+
+                                # Move content up if nested (GitHub zips usually put content in repo-branch/ folder)
+                                items = list(temp_path.glob("*"))
+                                if len(items) == 1 and items[0].is_dir():
+                                    # Nested dir found, move contents up
+                                    nested_dir = items[0]
+                                    for item in nested_dir.iterdir():
+                                        shutil.move(str(item), str(temp_path))
+                                    nested_dir.rmdir()
+
+                                downloaded = True
+                                if verbose:
+                                    click.echo(f"  Successfully downloaded {branch} branch.")
+                                break
+                    except Exception as e:
+                        if verbose:
+                            click.echo(f"  Failed to download {branch}: {e}")
+                        continue
+
+                if not downloaded:
+                    raise RuntimeError(
+                        "Failed to download repository ZIP. Please install Git or check URL."
+                    )
+
+            # Set base path for relative path calculation
+            base_path = temp_path
+
+            # Find all code files in the cloned/downloaded repo
+            # ... (Existing logic continues)
+
+            # Update input_path to point to the cloned repo
+            input_path_obj = temp_path
+            # FORCE source_type to directory so it falls into the else block below
+            source_type = "directory"
+
+            # Find all code files
+            files_to_process = []
+
+            for pattern in CODE_PATTERNS:
+                for match in glob.glob(str(temp_path / pattern), recursive=True):
+                    path_obj = Path(match)
+                    if not path_obj.is_file():
+                        continue
+
+                    # Skip if matches exclusion patterns
+                    if exclude_patterns:
+                        should_exclude = False
+                        for exclude in exclude_patterns:
+                            if Path(exclude).name in str(path_obj):
+                                should_exclude = True
+                                break
+                        if should_exclude:
+                            continue
+
+                    files_to_process.append(path_obj)
+
+            files_to_process = sorted(list(set(files_to_process)))
+
+            if verbose:
+                click.echo(f"  Found {len(files_to_process)} files in cloned repo.")
 
         elif source_type == "conversation":
             # It's a conversation file - convert to markdown
@@ -92,6 +243,7 @@ async def run_index(
         else:
             # Local path - validate and collect files
             input_path_obj = validate_path(input_path, must_exist=True, must_be_file=False)
+            base_path = input_path_obj if input_path_obj.is_dir() else input_path_obj.parent
 
             # Check if directory contains code files (not just markdown)
             if input_path_obj.is_dir():
@@ -103,19 +255,39 @@ async def run_index(
                 )
 
                 if has_code_files:
-                    # Directory contains code - use gitingest to convert to markdown
+                    # Directory contains code - process files individually
                     if verbose:
-                        click.echo("Detected code directory, using gitingest for conversion...")
+                        click.echo("Detected code directory, indexing files individually...")
 
-                    markdown_content, temp_path, _ = await ingest_source(
-                        input_path=input_path,
-                        include_patterns=include_patterns,
-                        exclude_patterns=exclude_patterns,
-                        access_token=access_token,
-                        force_type="directory",
-                    )
-                    temp_files_to_cleanup.append(temp_path)
-                    files_to_process = [temp_path]
+                    files_to_process = []
+
+                    # Find all code files
+                    for pattern in CODE_PATTERNS:
+                        for match in glob.glob(str(input_path_obj / pattern), recursive=True):
+                            path_obj = Path(match)
+                            if not path_obj.is_file():
+                                continue
+
+                            # Skip if matches exclusion patterns
+                            if exclude_patterns:
+                                should_exclude = False
+                                for exclude in exclude_patterns:
+                                    if Path(exclude).name in str(
+                                        path_obj
+                                    ):  # Simple check, ideally use pathspec
+                                        should_exclude = True
+                                        break
+                                if should_exclude:
+                                    continue
+
+                            files_to_process.append(path_obj)
+
+                    # Remove duplicates while preserving order
+                    files_to_process = sorted(list(set(files_to_process)))
+
+                    if verbose:
+                        click.echo(f"Found {len(files_to_process)} code files to index.")
+
                 else:
                     # Pure markdown directory - use original logic
                     files_to_process = sorted(
@@ -136,33 +308,130 @@ async def run_index(
         graph_store_path = validate_path(output_path, must_exist=False, must_be_file=False)
 
         all_chunks = []
-        file_hashes = {}
+        # file_hashes = {} # This will be replaced by current_hashes
 
-        # Step 2: Load, normalize, and chunk each file
+        # Step 3: Check for modifications (Incremental Optimization)
+        # Load existing manifest if present
+        manifest_path = Path(output_path) / "metadata" / "manifest.json"
+        existing_manifest = None
+        if manifest_path.exists():
+            try:
+                existing_manifest = read_manifest(manifest_path)
+                if verbose:
+                    click.echo(f"Loaded existing manifest (v{existing_manifest.version})")
+            except Exception:
+                pass
+
+        # Pre-calculate hashes and prepare files
+        current_hashes = {}
+        files_ready_to_chunk = []
+
+        # We must iterate all found files to check state
+        if verbose:
+            click.echo("Analysing file states...")
+
         for file_path in files_to_process:
-            with open(file_path, encoding="utf-8") as file:
-                markdown_content = file.read()
+            try:
+                # Read content
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    # Basic binary check or fallback
+                    try:
+                        content = file_path.read_text(encoding="latin-1")
+                    except Exception:
+                        continue  # Skip binary
 
-            normalized_content = normalize_markdown_content(markdown_content)
-            file_hash = hash_content(normalized_content)
-            file_hashes[str(file_path)] = file_hash
+                # Calculate relative path
+                try:
+                    relative_path = file_path.relative_to(base_path)
+                except ValueError:
+                    relative_path = Path(file_path.name)
 
-            if verbose:
-                click.echo(f"✓ Loaded {file_path.name} ({len(normalized_content)} chars)")
+                # Normalize and Hash
+                # Note: We duplicate normalize/hash call here, but it's cheap compared to API
+                # Ideally we reuse this result.
 
-            # Chunk markdown
-            chunks = chunk_markdown(normalized_content, str(file_path))
-            all_chunks.extend(chunks)
+                # Simple header logic for normalization context (must match chunk logic for consistency)
+                # Determine simple lang for hashing context (optional, but normalization needs content)
+                # Actually `normalize_markdown_content` takes raw text.
+                # But wait, in the main loop we create `markdown_content` first!
+                # So we must replicate that logic to get persistent hash.
+
+                # Moving the markdown wrapping logic HERE to be efficient and consistent.
+                lang = EXT_MAP.get(file_path.suffix, "text")
+                markdown_wrapper = f"# {relative_path.as_posix()}\n\n```{lang}\n{content}\n```"
+
+                normalized = normalize_markdown_content(markdown_wrapper)
+                f_hash = hash_content(normalized)
+
+                current_hashes[str(relative_path.as_posix())] = f_hash
+                files_ready_to_chunk.append((file_path, normalized, relative_path))
+
+            except Exception as e:
+                if verbose:
+                    click.echo(f"Warning during file check {file_path}: {e}")
+                continue
+
+        # COMPARE HASHES
+        if existing_manifest:
+            # Check if identical
+            if existing_manifest.file_hashes == current_hashes and existing_manifest.finalized:
+                click.echo(
+                    f"✓ No changes detected. Graph is up to date ({len(current_hashes)} files)."
+                )
+                if verbose:
+                    click.echo(f"Manifest at {manifest_path} matches current state.")
+                return
+
+            elif verbose:
+                click.echo("Changes detected. Re-indexing...")
+
+        # Step 4: Iterate PREPARED files
+        file_hashes = current_hashes
+
+        for file_path, normalized_content, relative_path in files_ready_to_chunk:
+            try:
+                if verbose:
+                    click.echo(f"✓ Processing {relative_path} ({len(normalized_content)} chars)")
+
+                # We already normalized it above to get the hash
+                chunks = chunk_markdown(normalized_content, str(relative_path.as_posix()))
+                all_chunks.extend(chunks)
+
+            except Exception as e:
+                path_str = str(file_path)
+                if verbose:
+                    click.echo(f"Error processing {path_str}: {e}")
+                continue
 
         if verbose:
-            click.echo(f"✓ Created {len(all_chunks)} chunks from {len(files_to_process)} files")
+            click.echo(f"✓ Created {len(all_chunks)} chunks from {len(files_ready_to_chunk)} files")
 
-        # Step 3: Build Nodes and Edges (AI Only)
+        # Step 3: Build Nodes and Edges
         if not provider:
-            # Default to OpenAI if not provided (e.g. CLI usage)
-            provider = OpenAIProvider()
+            try:
+                # Default to OpenAI if not provided (e.g. CLI usage)
+                from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
 
-        builder = SmartGraphBuilder(provider)
+                provider = OpenAIProvider()
+
+                from knowgraph.application.indexing.smart_graph_builder import SmartGraphBuilder
+
+                builder = SmartGraphBuilder(provider)
+            except Exception as e:
+                if verbose:
+                    click.echo(f"  AI features disabled (Provider init failed): {e}")
+
+                # Fallback to smart builder without provider (uses AST only)
+                from knowgraph.application.indexing.smart_graph_builder import SmartGraphBuilder
+
+                builder = SmartGraphBuilder(provider=None)
+        else:
+            from knowgraph.application.indexing.smart_graph_builder import SmartGraphBuilder
+
+            builder = SmartGraphBuilder(provider)
+
         nodes, all_edges = await builder.build(
             all_chunks, str(input_path), "", str(graph_store_path)
         )
@@ -190,7 +459,34 @@ async def run_index(
         for node in nodes:
             write_node_json(node, graph_store_path)
 
-        write_all_edges(all_edges, graph_store_path)
+        merged_edges = all_edges
+        if existing_manifest:
+            try:
+                from knowgraph.infrastructure.storage.filesystem import read_all_edges
+
+                old_edges = read_all_edges(graph_store_path)
+
+                # Identify nodes that were just re-indexed
+                new_node_ids = {n.id for n in nodes}
+
+                # Keep old edges ONLY if they DON'T involve any of the newly re-indexed nodes
+                # (because builder already recalculated edges for new nodes including cross-references)
+                filtered_old_edges = [
+                    e
+                    for e in old_edges
+                    if e.source not in new_node_ids and e.target not in new_node_ids
+                ]
+
+                merged_edges = filtered_old_edges + all_edges
+                if verbose:
+                    click.echo(
+                        f"✓ Merged {len(all_edges)} new edges with {len(filtered_old_edges)} existing edges"
+                    )
+            except Exception as e:
+                if verbose:
+                    click.echo(f"  Warning: Could not merge existing edges: {e}")
+
+        write_all_edges(merged_edges, graph_store_path)
 
         # Step 6: Create Manifest
         semantic_count = len(all_edges)
@@ -204,6 +500,21 @@ async def run_index(
         manifest.file_hashes = file_hashes
         manifest.semantic_edge_count = semantic_count
         manifest.finalized = True
+
+        # Create backup of existing manifest before overwriting
+        try:
+            from knowgraph.infrastructure.storage.manifest_backup import ManifestBackupManager
+
+            # Manager expects the directory containing manifest.json (metadata dir)
+            metadata_dir = Path(graph_store_path) / "metadata"
+            if metadata_dir.exists():
+                backup_manager = ManifestBackupManager(metadata_dir)
+                backup_path = backup_manager.backup_manifest()
+                if verbose and backup_path:
+                    click.echo(f"  Manifest backed up to {backup_path}")
+        except Exception as e:
+            if verbose:
+                click.echo(f"  Warning: Could not create manifest backup: {e}")
 
         write_manifest(manifest, graph_store_path)
 
