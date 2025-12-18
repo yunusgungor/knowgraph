@@ -89,9 +89,6 @@ async def test_mcp_query_advanced():
         mock_instance.query_async.assert_called_once()
 
 
-@pytest.mark.skip(
-    reason="Complex mock - handlers module integration test, covered by integration tests"
-)
 @pytest.mark.asyncio
 async def test_mcp_analyze_impact_semantic():
     """Test knowgraph_analyze_impact in semantic mode."""
@@ -102,7 +99,7 @@ async def test_mcp_analyze_impact_semantic():
         ),
     ):
         mock_instance = MockEngine.return_value
-        mock_result = MagicMock(answer="Semantic Impact Report")
+        mock_result = MagicMock(active_subgraph_size=10, context="Semantic Impact Report")
         mock_instance.analyze_impact_async = AsyncMock(return_value=mock_result)
 
         result = await call_tool(
@@ -114,7 +111,6 @@ async def test_mcp_analyze_impact_semantic():
         assert "failed" not in result[0].text.lower() or "Semantic Impact Report" in result[0].text
 
 
-@pytest.mark.skip(reason="Complex mock - path impact analysis covered by integration tests")
 @pytest.mark.asyncio
 async def test_mcp_analyze_impact_path():
     """Test knowgraph_analyze_impact in path mode."""

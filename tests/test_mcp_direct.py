@@ -10,11 +10,11 @@ from knowgraph.adapters.mcp.server import call_tool
 async def test_call_tool_query():
     # Mock resolve_graph_path to ignore PROJECT_ROOT logic
     with (
-        patch("knowgraph.adapters.mcp.server.resolve_graph_path") as mock_resolve,
-        patch("knowgraph.adapters.mcp.server.QueryEngine") as mock_engine_cls,
+        patch("knowgraph.adapters.mcp.handlers.resolve_graph_path") as mock_resolve,
+        patch("knowgraph.adapters.mcp.handlers.QueryEngine") as mock_engine_cls,
         patch("knowgraph.adapters.mcp.server.get_llm_provider") as mock_provider_func,
         patch(
-            "knowgraph.adapters.mcp.server.QueryExpander"
+            "knowgraph.adapters.mcp.handlers.QueryExpander"
         ),  # Mock expander too to avoid side effects
     ):
 

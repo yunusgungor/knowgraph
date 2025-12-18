@@ -37,7 +37,7 @@ class ManifestBackupManager:
 
         try:
             # Create timestamped backup
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             backup_path = self.backup_dir / f"manifest.{timestamp}.backup"
 
             shutil.copy2(self.manifest_path, backup_path)
@@ -117,8 +117,9 @@ class ManifestBackupManager:
             return []
 
         backups = list(self.backup_dir.glob("manifest.*.backup"))
-        # Sort by modification time, newest first
-        backups.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        # Sort by name (which contains timestamp), newest first
+        # We rely on name sort because mtime might be identical in fast tests
+        backups.sort(key=lambda p: p.name, reverse=True)
         return backups
 
     def _prune_old_backups(self, max_backups: int) -> None:

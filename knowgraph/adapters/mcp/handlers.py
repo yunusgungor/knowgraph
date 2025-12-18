@@ -24,6 +24,7 @@ from knowgraph.shared.refactoring import (
     build_llm_prompt,
     build_validation_response,
     extract_query_parameters,
+    format_impact_result,
     validate_required_argument,
 )
 from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
@@ -321,9 +322,11 @@ async def handle_analyze_impact(
             try:
                 engine = QueryEngine(graph_path)
                 if mode == "path":
-                    result = await engine.analyze_path_impact_async(element, max_hops)
+                    # Path analysis uses specialized report generator
+                    return analyze_path_impact_report(element, graph_path, max_hops)
                 else:
-                    result = await engine.analyze_semantic_impact_async(element, max_hops)
+                    # Semantic analysis uses QueryEngine
+                    result = await engine.analyze_impact_async(element, max_hops)
 
                 trace.add_event(
                     "analysis_completed",

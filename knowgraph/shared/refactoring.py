@@ -14,54 +14,49 @@ from knowgraph.domain.models.node import Node
 
 def filter_active_edges(edges: list[Edge], active_node_ids: set[UUID]) -> list[Edge]:
     """Filter edges to only those within active subgraph.
-    
+
     Args:
     ----
         edges: All edges
         active_node_ids: Set of active node IDs
-        
+
     Returns:
     -------
         Filtered edges within active subgraph
     """
     return [
-        edge
-        for edge in edges
-        if edge.source in active_node_ids and edge.target in active_node_ids
+        edge for edge in edges if edge.source in active_node_ids and edge.target in active_node_ids
     ]
 
 
 def flatten_centrality_scores(
-    centrality_scores: dict[UUID, dict[str, float]], 
+    centrality_scores: dict[UUID, dict[str, float]],
     metric: str = "degree",
     default: float = 0.0,
 ) -> dict[UUID, float]:
     """Flatten nested centrality scores to single metric.
-    
+
     Args:
     ----
         centrality_scores: Nested centrality scores by node ID
         metric: Metric to extract (default: "degree")
         default: Default value if metric not found
-        
+
     Returns:
     -------
         Flattened scores by node ID
     """
-    return {
-        node_id: scores.get(metric, default)
-        for node_id, scores in centrality_scores.items()
-    }
+    return {node_id: scores.get(metric, default) for node_id, scores in centrality_scores.items()}
 
 
 def validate_required_argument(arguments: dict[str, Any], key: str) -> str | None:
     """Validate and extract required argument from MCP arguments.
-    
+
     Args:
     ----
         arguments: MCP tool arguments
         key: Required key to extract
-        
+
     Returns:
     -------
         Error message if missing, None if valid
@@ -74,12 +69,12 @@ def validate_required_argument(arguments: dict[str, Any], key: str) -> str | Non
 
 def build_error_response(error: Exception, prefix: str = "Error") -> str:
     """Build consistent error response message.
-    
+
     Args:
     ----
         error: Exception that occurred
         prefix: Error message prefix
-        
+
     Returns:
     -------
         Formatted error message
@@ -89,11 +84,11 @@ def build_error_response(error: Exception, prefix: str = "Error") -> str:
 
 def build_graph_stats_response(manifest: Any) -> str:
     """Build graph statistics response message.
-    
+
     Args:
     ----
         manifest: Manifest object with graph statistics
-        
+
     Returns:
     -------
         Formatted statistics message
@@ -109,11 +104,11 @@ def build_graph_stats_response(manifest: Any) -> str:
 
 def build_validation_response(result: Any) -> str:
     """Build validation result response message.
-    
+
     Args:
     ----
         result: ValidationResult object
-        
+
     Returns:
     -------
         Formatted validation message
@@ -129,11 +124,11 @@ def build_validation_response(result: Any) -> str:
 
 def extract_query_parameters(arguments: dict[str, Any]) -> dict[str, Any]:
     """Extract and validate query parameters from MCP arguments.
-    
+
     Args:
     ----
         arguments: MCP tool arguments
-        
+
     Returns:
     -------
         Dictionary of extracted parameters with defaults
@@ -157,14 +152,14 @@ def build_llm_prompt(
     explanation_data: str | None = None,
 ) -> str:
     """Build LLM prompt from query and context.
-    
+
     Args:
     ----
         query: User query
         context: Retrieved context
         system_prompt: Optional system prompt override
         explanation_data: Optional explanation JSON
-        
+
     Returns:
     -------
         Complete prompt for LLM
@@ -174,17 +169,12 @@ def build_llm_prompt(
         if system_prompt
         else "You are a helpful assistant. Use the following context to answer the user's question."
     )
-    
-    prompt = (
-        f"{base_system}\n\n"
-        f"Context:\n{context}\n\n"
-        f"Question: {query}\n\n"
-        f"Answer:"
-    )
-    
+
+    prompt = f"{base_system}\n\n" f"Context:\n{context}\n\n" f"Question: {query}\n\n" f"Answer:"
+
     if explanation_data:
         prompt += f"\n\nExplanation Data:\n{explanation_data}"
-    
+
     return prompt
 
 
@@ -195,14 +185,14 @@ def build_conversation_discovery_response(
     graph_path: Path,
 ) -> str:
     """Build conversation discovery response message.
-    
+
     Args:
     ----
         discovered: Dictionary of editor names to file paths
         indexed_count: Number of successfully indexed conversations
         failed_count: Number of failed indexing attempts
         graph_path: Path to graph storage
-        
+
     Returns:
     -------
         Formatted discovery response
@@ -210,7 +200,7 @@ def build_conversation_discovery_response(
     results_summary = []
     for editor_name, files in discovered.items():
         results_summary.append(f"\n📂 {editor_name.upper()}: {len(files)} conversations")
-    
+
     total_files = sum(len(files) for files in discovered.values())
     response = (
         f"✅ Auto-discovered {total_files} conversations across {len(discovered)} editors:\n"
@@ -218,10 +208,43 @@ def build_conversation_discovery_response(
         + f"\n\n📥 Indexing complete:\n"
         + f"  Indexed: {indexed_count} conversations\n"
     )
-    
+
     if failed_count > 0:
         response += f"  Failed: {failed_count} conversations\n"
-    
+
     response += f"\n📊 Graph stored in: {graph_path}"
-    
+
     return response
+
+
+def format_impact_result(result: Any) -> str:
+    """Format impact analysis result to string.
+
+    Args:
+    ----
+        result: QueryResult from impact analysis
+
+    Returns:
+    -------
+        Formatted text report
+    """
+    output = "Impact Analysis (Semantic)\n"
+    output += "--------------------------\n"
+
+    if hasattr(result, "original_question") and result.original_question:
+        output += f"Target: {result.original_question}\n"
+
+    if hasattr(result, "active_subgraph_size"):
+        output += f"Affected Nodes: {result.active_subgraph_size}\n"
+
+    output += "\nReasoning & Details:\n"
+    output += result.context
+
+    if hasattr(result, "explanation") and result.explanation:
+        explanation = result.explanation
+        if hasattr(explanation, "reasoning_paths") and explanation.reasoning_paths:
+            output += "\n\nKey Dependencies:\n"
+            for path in explanation.reasoning_paths[:5]:
+                output += f"- {path}\n"
+
+    return output
