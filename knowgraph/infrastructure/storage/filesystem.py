@@ -1,12 +1,45 @@
 """File system operations for nodes and edges."""
 
 import json
+from functools import lru_cache
 from pathlib import Path
 from uuid import UUID
 
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
+from knowgraph.shared.cache_versioning import invalidate_all_caches
 from knowgraph.shared.exceptions import StorageError
+
+# LRU cache for frequently accessed nodes (improves repeated queries)
+_node_cache: dict[tuple[Path, UUID], Node | None] = {}
+_cache_max_size = 1000
+_cache_version: int = 0  # Incremented on invalidation
+
+
+def _prune_cache_if_needed() -> None:
+    """Prune cache if it exceeds max size (simple FIFO)."""
+    if len(_node_cache) > _cache_max_size:
+        # Remove oldest 20% of entries
+        to_remove = len(_node_cache) // 5
+        for _ in range(to_remove):
+            _node_cache.pop(next(iter(_node_cache)))
+
+
+def clear_node_cache() -> None:
+    """Clear the node cache. Useful for testing or memory management."""
+    global _cache_version
+    _node_cache.clear()
+    _cache_version += 1
+
+
+def get_cache_stats() -> dict[str, int]:
+    """Get cache statistics."""
+    return {
+        "size": len(_node_cache),
+        "max_size": _cache_max_size,
+        "utilization": int((len(_node_cache) / _cache_max_size) * 100),
+        "version": _cache_version,
+    }
 
 
 def ensure_directory(directory_path: Path) -> None:
@@ -60,6 +93,9 @@ def write_node_json(node: Node, graph_store_path: Path) -> None:
         with open(temp_file, "w", encoding="utf-8") as file:
             json.dump(node.to_dict(), file, indent=2, ensure_ascii=False)
         temp_file.rename(node_file)
+        
+        # Trigger cache invalidation after successful write
+        invalidate_all_caches()
     except Exception as error:
         if temp_file.exists():
             temp_file.unlink()
@@ -69,13 +105,14 @@ def write_node_json(node: Node, graph_store_path: Path) -> None:
         ) from error
 
 
-def read_node_json(node_id: UUID, graph_store_path: Path) -> Node | None:
-    """Read node from JSON file.
+def read_node_json(node_id: UUID, graph_store_path: Path, use_cache: bool = True) -> Node | None:
+    """Read node from JSON file with optional caching.
 
     Args:
     ----
         node_id: Node UUID to read
         graph_store_path: Root graph storage directory
+        use_cache: Whether to use in-memory cache (default: True)
 
     Returns:
     -------
@@ -86,15 +123,31 @@ def read_node_json(node_id: UUID, graph_store_path: Path) -> Node | None:
         StorageError: If read operation fails (excluding not found)
 
     """
+    # Check cache first
+    if use_cache:
+        cache_key = (graph_store_path, node_id)
+        if cache_key in _node_cache:
+            return _node_cache[cache_key]
+    
     node_file = graph_store_path / "nodes" / f"{node_id}.json"
 
     if not node_file.exists():
+        if use_cache:
+            _node_cache[cache_key] = None
+            _prune_cache_if_needed()
         return None
 
     try:
         with open(node_file, encoding="utf-8") as file:
             data = json.load(file)
-        return Node.from_dict(data)
+        node = Node.from_dict(data)
+        
+        # Cache the result
+        if use_cache:
+            _node_cache[cache_key] = node
+            _prune_cache_if_needed()
+        
+        return node
     except Exception as error:
         raise StorageError(
             f"Failed to read node: {node_id}",

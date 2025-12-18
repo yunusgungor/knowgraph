@@ -7,22 +7,22 @@ Clean Code principles.
 import os
 
 # Chunking Configuration
-DEFAULT_CHUNK_SIZE = 24000  # Maximum characters per chunk (Optimization for large files)
-DEFAULT_CHUNK_OVERLAP = 50  # Token overlap between chunks
-MIN_CHUNK_SIZE = 100  # Minimum chunk size to avoid noise
+DEFAULT_CHUNK_SIZE = 20000  # Maximum characters per chunk (Optimized from 24000 for better memory usage)
+DEFAULT_CHUNK_OVERLAP = 100  # Token overlap between chunks (increased for better context)
+MIN_CHUNK_SIZE = 150  # Minimum chunk size to avoid noise (increased from 100)
 
 # Retrieval Configuration
 TOP_K = 20  # Number of seed nodes from vector search
-MAX_NODES = 200  # Maximum nodes in active subgraph
+MAX_NODES = 250  # Maximum nodes in active subgraph (increased from 200)
 ENABLE_QUERY_EXPANSION = True  # Enable LLM-based query expansion
-MAX_CONCURRENT_REQUESTS = 20  # Maximum concurrent API requests
-BATCH_SIZE = 10  # Number of chunks to process in a single LLM call
+MAX_CONCURRENT_REQUESTS = 30  # Maximum concurrent API requests (increased from 20)
+BATCH_SIZE = 15  # Number of chunks to process in a single LLM call (increased from 10)
 
 # Async Configuration
-MAX_CONCURRENT_QUERIES = 10  # Maximum concurrent queries in async mode
-MAX_CONCURRENT_NODE_LOADS = 50  # Maximum concurrent node file loads
+MAX_CONCURRENT_QUERIES = 15  # Maximum concurrent queries in async mode (increased from 10)
+MAX_CONCURRENT_NODE_LOADS = 100  # Maximum concurrent node file loads (increased from 50)
 QUERY_TIMEOUT_SECONDS = 30.0  # Default timeout for async queries
-BATCH_QUERY_CHUNK_SIZE = 5  # Number of queries to process concurrently in batch
+BATCH_QUERY_CHUNK_SIZE = 8  # Number of queries to process concurrently in batch (increased from 5)
 
 
 # LLM Configuration

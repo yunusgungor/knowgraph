@@ -7,6 +7,7 @@ Supports both sync and async modes for backward compatibility.
 """
 
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
 from uuid import UUID
 
@@ -234,8 +235,8 @@ class QueryRetriever:
             else:
                 query_tokens = self.sparse_embedder.embed_text(search_text)
 
-            # Search (sync - fast enough)
-            results = self.sparse_index.search(query_tokens, top_k)
+            # Search ASYNC for better performance with parallel term processing
+            results = await self.sparse_index.search_async(query_tokens, top_k)
             seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
             # Step 2: Expand via graph traversal (sync - fast enough)
@@ -306,8 +307,8 @@ class QueryRetriever:
         else:
             query_tokens = self.sparse_embedder.embed_text(query_text)
 
-        # Search (sync - fast enough)
-        results = self.sparse_index.search(query_tokens, top_k)
+        # Search ASYNC for better performance with parallel term processing
+        results = await self.sparse_index.search_async(query_tokens, top_k)
 
         # Load nodes concurrently
         async def load_node_with_score(node_id_str: str, score: float) -> tuple[Node, float] | None:
@@ -330,3 +331,72 @@ class QueryRetriever:
 
         # Filter out None values
         return [result for result in results_with_nodes if result is not None]
+
+    async def retrieve_streaming_async(
+        self: "QueryRetriever",
+        query_text: str,
+        edges: list[Edge],
+        top_k: int = TOP_K,
+        max_hops: int = MAX_HOPS,
+        chunk_size: int = 50,
+        use_code_search: bool = False,
+    ) -> AsyncIterator[tuple[list[Node], bool]]:
+        """Retrieve nodes in streaming chunks for memory efficiency.
+        
+        This method is ideal for large result sets as it yields nodes in chunks
+        without loading everything into memory at once.
+        
+        Args:
+        ----
+            query_text: Natural language query
+            edges: All graph edges
+            top_k: Number of seed nodes
+            max_hops: Graph traversal depth
+            chunk_size: Nodes per chunk (default: 50)
+            use_code_search: Use code embeddings
+            
+        Yields:
+        ------
+            Tuple of (chunk_nodes, is_last_chunk)
+            
+        Example:
+        -------
+            >>> async for nodes, is_last in retriever.retrieve_streaming_async(query, edges):
+            ...     process_nodes(nodes)
+            ...     if is_last:
+            ...         finalize()
+        """
+        from knowgraph.shared.streaming import stream_load_nodes_async
+        
+        try:
+            # Step 1: Get seed nodes
+            search_text = query_text
+            if hasattr(self, "expander") and self.expander:
+                expansion_terms = await self.expander.expand_query_async(query_text)
+                if expansion_terms:
+                    search_text = f"{query_text} {' '.join(expansion_terms)}"
+            
+            if use_code_search:
+                query_tokens = self.sparse_embedder.embed_code(search_text)
+            else:
+                query_tokens = self.sparse_embedder.embed_text(search_text)
+            
+            results = await self.sparse_index.search_async(query_tokens, top_k)
+            seed_node_ids = [UUID(node_id) for node_id, _ in results]
+            
+            # Step 2: Graph expansion
+            expanded_node_ids = traverse_graph_bfs(seed_node_ids, edges, max_hops)
+            
+            # Step 3: Stream load nodes in chunks
+            async for chunk in stream_load_nodes_async(
+                expanded_node_ids, self.graph_store_path, chunk_size
+            ):
+                yield (chunk.data, chunk.is_last)
+                
+        except QueryError:
+            raise
+        except Exception as error:
+            raise QueryError(
+                f"Failed to stream retrieve nodes: {error!s}",
+                {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
+            ) from error

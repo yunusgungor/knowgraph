@@ -5,7 +5,7 @@ Coordinates retrieval, graph reasoning, and context assembly.
 Supports both sync and async modes for backward compatibility.
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -29,12 +29,22 @@ from knowgraph.config import (
     QUERY_TIMEOUT_SECONDS,
     TOP_K,
 )
-from knowgraph.domain.algorithms.centrality import compute_centrality_metrics
+from knowgraph.domain.algorithms.centrality import (
+    compute_centrality_metrics,
+    compute_centrality_metrics_async,
+)
 from knowgraph.infrastructure.storage.filesystem import (
     read_all_edges,
     read_node_json,
 )
 from knowgraph.shared.exceptions import QueryError
+from knowgraph.shared.refactoring import (
+    filter_active_edges,
+    flatten_centrality_scores,
+)
+from knowgraph.shared.retry import RetryConfig, RetryContext, BackoffStrategy
+from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from knowgraph.shared.throttle import RequestThrottle, ThrottleConfig
 
 # Context variable for request tracking
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
@@ -101,6 +111,39 @@ class QueryEngine:
         self._query_semaphore = asyncio.Semaphore(MAX_CONCURRENT_QUERIES)
         self._active_tasks: set[asyncio.Task[QueryResult]] = set()
 
+        # Resilience patterns
+        self._circuit_breaker = CircuitBreaker(
+            name="query_engine",
+            config=CircuitBreakerConfig(
+                failure_threshold=5,
+                timeout=30.0,  # Use 'timeout' not 'recovery_timeout'
+                success_threshold=3,  # Use 'success_threshold' not 'half_open_max_calls'
+            )
+        )
+        self._retry_config = RetryConfig(
+            max_attempts=3,
+            backoff_strategy=BackoffStrategy.EXPONENTIAL,  # Correct parameter name
+            initial_delay=1.0,  # Use 'initial_delay' not 'base_delay'
+            max_delay=10.0,
+            timeout=30.0,
+        )
+        self._throttle = RequestThrottle(
+            max_concurrent=MAX_CONCURRENT_QUERIES,
+            queue_size=100,
+            adaptive=True,
+            timeout=30.0,
+        )
+
+    def __del__(self) -> None:
+        """Cleanup resources on deletion."""
+        # Import here to avoid circular dependency issues
+        from knowgraph.domain.algorithms.centrality import _shutdown_process_pool
+        try:
+            _shutdown_process_pool()
+        except Exception:
+            # Ignore errors during cleanup
+            pass
+
     def query(
         self: "QueryEngine",
         query_text: str,
@@ -111,7 +154,7 @@ class QueryEngine:
         enable_hierarchical_lifting: bool = True,
         lift_levels: int = 2,
     ) -> QueryResult:
-        """Execute full query pipeline.
+        """Execute full query pipeline with retry logic.
 
         Args:
         ----
@@ -132,6 +175,33 @@ class QueryEngine:
             QueryError: If query fails
 
         """
+        # Execute with retry logic for resilience
+        from knowgraph.shared.retry import RetryContext
+        
+        with RetryContext(self._retry_config) as retry_ctx:
+            return self._execute_query_with_retry(
+                retry_ctx,
+                query_text,
+                top_k,
+                max_hops,
+                max_tokens,
+                with_explanation,
+                enable_hierarchical_lifting,
+                lift_levels,
+            )
+    
+    def _execute_query_with_retry(
+        self: "QueryEngine",
+        retry_ctx: "RetryContext",
+        query_text: str,
+        top_k: int,
+        max_hops: int,
+        max_tokens: int,
+        with_explanation: bool,
+        enable_hierarchical_lifting: bool,
+        lift_levels: int,
+    ) -> QueryResult:
+        """Internal query execution with retry support."""
         start_time = time.time()
         timings = {}
 
@@ -147,13 +217,8 @@ class QueryEngine:
 
             # Step 2: Compute centrality on active subgraph
             centrality_start = time.time()
-            # Filter edges to active subgraph
             active_node_ids = {node.id for node in nodes}
-            active_edges = [
-                edge
-                for edge in self.edges
-                if edge.source in active_node_ids and edge.target in active_node_ids
-            ]
+            active_edges = filter_active_edges(self.edges, active_node_ids)
             centrality_scores = compute_centrality_metrics(nodes, active_edges)
             timings["centrality"] = time.time() - centrality_start
 
@@ -172,13 +237,10 @@ class QueryEngine:
             # Step 6: Generate explanation (if requested, now context-based only)
             explanation = None
             if with_explanation:
-                # Get context nodes from context_blocks
                 context_nodes = [n for n in nodes if n.id in {n.id for n in nodes}][:30]
-                # Flatten centrality scores to single dict
-                flat_centralities = {
-                    node_id: scores.get("degree", DEFAULT_CENTRALITY_SCORE)
-                    for node_id, scores in centrality_scores.items()
-                }
+                flat_centralities = flatten_centrality_scores(
+                    centrality_scores, "degree", DEFAULT_CENTRALITY_SCORE
+                )
                 explanation = generate_explanation(
                     context_nodes,
                     active_edges,
@@ -360,36 +422,41 @@ class QueryEngine:
         if timeout is None:
             timeout = QUERY_TIMEOUT_SECONDS
 
-        # Apply concurrency limit
-        async with self._query_semaphore:
-            # Track active task
-            task = asyncio.current_task()
-            if task:
-                self._active_tasks.add(task)
-
-            try:
-                # Execute with timeout
-                return await asyncio.wait_for(
-                    self._query_async_impl(
-                        query_text=query_text,
-                        top_k=top_k,
-                        max_hops=max_hops,
-                        max_tokens=max_tokens,
-                        with_explanation=with_explanation,
-                        enable_hierarchical_lifting=enable_hierarchical_lifting,
-                        lift_levels=lift_levels,
-                    ),
-                    timeout=timeout,
-                )
-            except asyncio.TimeoutError:
-                raise QueryError(
-                    f"Query timed out after {timeout}s",
-                    {"query": query_text[:MAX_QUERY_PREVIEW_LENGTH], "request_id": request_id},
-                ) from None
-            finally:
-                # Remove from active tasks
+        # Apply concurrency limit with throttle protection
+        throttle_context = await self._throttle.acquire()
+        async with throttle_context:
+            async with self._query_semaphore:
+                # Track active task
+                task = asyncio.current_task()
                 if task:
-                    self._active_tasks.discard(task)
+                    self._active_tasks.add(task)
+
+                try:
+                    # Execute with timeout and circuit breaker protection
+                    async def _execute():
+                        return await self._query_async_impl(
+                            query_text=query_text,
+                            top_k=top_k,
+                            max_hops=max_hops,
+                            max_tokens=max_tokens,
+                            with_explanation=with_explanation,
+                            enable_hierarchical_lifting=enable_hierarchical_lifting,
+                            lift_levels=lift_levels,
+                        )
+                    
+                    return await asyncio.wait_for(
+                        self._circuit_breaker.call(_execute),
+                        timeout=timeout,
+                    )
+                except asyncio.TimeoutError:
+                    raise QueryError(
+                        f"Query timed out after {timeout}s",
+                        {"query": query_text[:MAX_QUERY_PREVIEW_LENGTH], "request_id": request_id},
+                    ) from None
+                finally:
+                    # Remove from active tasks
+                    if task:
+                        self._active_tasks.discard(task)
 
     async def _query_async_impl(
         self: "QueryEngine",
@@ -420,15 +487,11 @@ class QueryEngine:
             # Allow cancellation
             await asyncio.sleep(0)
 
-            # Step 2: Compute centrality on active subgraph
+            # Step 2: Compute centrality on active subgraph (ASYNC with multiprocessing)
             centrality_start = time.time()
             active_node_ids = {node.id for node in nodes}
-            active_edges = [
-                edge
-                for edge in self.edges
-                if edge.source in active_node_ids and edge.target in active_node_ids
-            ]
-            centrality_scores = compute_centrality_metrics(nodes, active_edges)
+            active_edges = filter_active_edges(self.edges, active_node_ids)
+            centrality_scores = await compute_centrality_metrics_async(nodes, active_edges)
             timings["centrality"] = time.time() - centrality_start
 
             # Allow cancellation
@@ -450,10 +513,9 @@ class QueryEngine:
             explanation = None
             if with_explanation:
                 context_nodes = [n for n in nodes if n.id in {n.id for n in nodes}][:30]
-                flat_centralities = {
-                    node_id: scores.get("degree", DEFAULT_CENTRALITY_SCORE)
-                    for node_id, scores in centrality_scores.items()
-                }
+                flat_centralities = flatten_centrality_scores(
+                    centrality_scores, "degree", DEFAULT_CENTRALITY_SCORE
+                )
                 explanation = generate_explanation(
                     context_nodes,
                     active_edges,
@@ -734,3 +796,106 @@ class QueryEngine:
             await asyncio.sleep(0)
 
         return results
+
+    async def query_streaming_async(
+        self: "QueryEngine",
+        query_text: str,
+        top_k: int = TOP_K,
+        max_hops: int = MAX_HOPS,
+        max_tokens: int = MAX_TOKENS,
+        chunk_size: int = 50,
+        enable_hierarchical_lifting: bool = True,
+        lift_levels: int = 2,
+    ) -> AsyncIterator[tuple[str, dict]]:
+        """Execute query with streaming results for memory efficiency.
+        
+        Yields context chunks as nodes are processed, allowing for:
+        - Lower memory usage on large result sets
+        - Progressive UI updates
+        - Early termination if needed
+        
+        Args:
+        ----
+            query_text: Natural language query
+            top_k: Number of seed nodes
+            max_hops: Graph traversal depth
+            max_tokens: Maximum context tokens
+            chunk_size: Nodes per chunk (default: 50)
+            enable_hierarchical_lifting: Apply hierarchical context lifting
+            lift_levels: Directory levels to traverse upward
+            
+        Yields:
+        ------
+            Tuple of (context_chunk, metadata_dict)
+            
+        Example:
+        -------
+            >>> async for context, meta in engine.query_streaming_async(query):
+            ...     print(f"Chunk {meta['chunk_index']}: {len(context)} chars")
+            ...     display_partial_results(context)
+            ...     if meta['is_last']:
+            ...         print(f"Total nodes: {meta['total_nodes']}")
+        """
+        start_time = time.time()
+        
+        try:
+            all_nodes = []
+            seed_node_ids = []
+            
+            # Stream retrieve nodes in chunks
+            chunk_index = 0
+            async for nodes_chunk, is_last in self.retriever.retrieve_streaming_async(
+                query_text, self.edges, top_k, max_hops, chunk_size
+            ):
+                all_nodes.extend(nodes_chunk)
+                
+                # Build partial context from accumulated nodes
+                if all_nodes:
+                    # Get similarity scores (only need to do once)
+                    if chunk_index == 0:
+                        retrieval_results = await self.retriever.retrieve_by_similarity_async(
+                            query_text, top_k
+                        )
+                        similarity_scores = {node.id: score for node, score in retrieval_results}
+                        seed_node_ids = [node.id for node, _ in retrieval_results[:top_k]]
+                    
+                    # Compute centrality on accumulated nodes
+                    active_node_ids = {node.id for node in all_nodes}
+                    active_edges = [
+                        edge for edge in self.edges
+                        if edge.source in active_node_ids and edge.target in active_node_ids
+                    ]
+                    
+                    centrality_scores = await compute_centrality_metrics_async(
+                        all_nodes, active_edges
+                    )
+                    
+                    # Assemble context from accumulated nodes
+                    context, _ = assemble_context(
+                        all_nodes,
+                        seed_node_ids,
+                        similarity_scores,
+                        centrality_scores,
+                        max_tokens,
+                    )
+                    
+                    # Yield chunk with metadata
+                    metadata = {
+                        "chunk_index": chunk_index,
+                        "nodes_in_chunk": len(nodes_chunk),
+                        "total_nodes_so_far": len(all_nodes),
+                        "is_last": is_last,
+                        "elapsed_time": time.time() - start_time,
+                    }
+                    
+                    yield (context, metadata)
+                
+                chunk_index += 1
+                
+        except QueryError:
+            raise
+        except Exception as error:
+            raise QueryError(
+                "Streaming query execution failed",
+                {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
+            ) from error

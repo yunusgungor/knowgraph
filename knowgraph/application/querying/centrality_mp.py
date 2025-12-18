@@ -5,6 +5,7 @@ Optimized to minimize serialization overhead.
 """
 
 import asyncio
+import atexit
 from concurrent.futures import ProcessPoolExecutor
 from uuid import UUID
 
@@ -23,6 +24,8 @@ def get_process_pool() -> ProcessPoolExecutor:
     global _process_pool
     if _process_pool is None:
         _process_pool = ProcessPoolExecutor(max_workers=_pool_size)
+        # Register cleanup on exit to prevent resource leaks
+        atexit.register(shutdown_process_pool)
     return _process_pool
 
 

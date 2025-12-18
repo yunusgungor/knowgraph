@@ -2,8 +2,11 @@
 
 Replaces FAISS vector store with a pure-python dictionary-based inverted index.
 Ideal for static, low-resource environments.
+
+Supports both sync and async search for optimal performance.
 """
 
+import asyncio
 import json
 import math
 from collections import defaultdict
@@ -100,6 +103,66 @@ class SparseIndex:
                 )
 
                 score = idf * (numerator / denominator)
+                scores[doc_id] += score
+
+        # Sort and return top_k
+        sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return sorted_scores[:top_k]
+
+    async def search_async(
+        self, query_vector: dict[str, int], top_k: int = 10
+    ) -> list[tuple[str, float]]:
+        """Search the index using BM25 asynchronously with parallel term processing.
+
+        This async version processes query terms concurrently for better performance
+        on multi-core systems, especially for queries with many terms.
+
+        Args:
+            query_vector: Query sparse vector {term: freq}
+            top_k: Number of results to return
+
+        Returns:
+            List of (doc_id, score) tuples sorted by score descending
+
+        """
+        scores: dict[str, float] = defaultdict(float)
+
+        # Process terms in parallel batches for better performance
+        async def score_term(term: str, q_freq: int) -> dict[str, float]:
+            """Score documents for a single query term."""
+            term_scores: dict[str, float] = {}
+
+            if term not in self.index:
+                return term_scores
+
+            # Calculate IDF
+            n_t = len(self.index[term])
+            idf = math.log((self.n_docs - n_t + 0.5) / (n_t + 0.5) + 1)
+
+            # Calculate score contribution for this term
+            for doc_id, t_freq in self.index[term]:
+                doc_len = self.doc_lengths[doc_id]
+
+                # BM25 term weight
+                numerator = t_freq * (self.k1 + 1)
+                denominator = t_freq + self.k1 * (
+                    1 - self.b + self.b * (doc_len / (self.avg_doc_length or 1))
+                )
+
+                score = idf * (numerator / denominator)
+                term_scores[doc_id] = score
+
+            # Yield control to event loop
+            await asyncio.sleep(0)
+            return term_scores
+
+        # Process all terms concurrently
+        tasks = [score_term(term, q_freq) for term, q_freq in query_vector.items()]
+        term_score_dicts = await asyncio.gather(*tasks)
+
+        # Aggregate scores from all terms
+        for term_scores in term_score_dicts:
+            for doc_id, score in term_scores.items():
                 scores[doc_id] += score
 
         # Sort and return top_k

@@ -10,6 +10,16 @@ import mcp.types as types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
+from knowgraph.adapters.mcp.handlers import (
+    handle_analyze_impact,
+    handle_batch_query,
+    handle_discover_conversations,
+    handle_get_stats,
+    handle_index,
+    handle_query,
+    handle_tag_snippet,
+    handle_validate,
+)
 from knowgraph.adapters.mcp.methods import analyze_path_impact_report, index_graph
 from knowgraph.adapters.mcp.utils import get_llm_provider, resolve_graph_path
 from knowgraph.application.querying.query_engine import QueryEngine
@@ -17,9 +27,56 @@ from knowgraph.application.querying.query_expansion import QueryExpander
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.domain.algorithms.graph_validator import validate_graph_consistency
 from knowgraph.infrastructure.storage.manifest import Manifest
+from knowgraph.shared.versioning import (
+    Version,
+    VersionStatus,
+    register_version,
+    get_current_version,
+    negotiate_version,
+)
+from datetime import datetime, timedelta
 
 app = Server("knowgraph-mcp")
 logger = logging.getLogger(__name__)
+
+# Register API versions on module load
+def _register_api_versions():
+    """Register all KnowGraph API versions."""
+    now = datetime.now()
+    
+    # Version 1.0.0 - Initial stable release
+    register_version(
+        version="1.0.0",
+        status=VersionStatus.STABLE,
+        release_date=now - timedelta(days=180),
+        features=[
+            "Basic query support",
+            "Graph indexing",
+            "Impact analysis",
+            "Graph validation",
+        ],
+    )
+    
+    # Version 1.1.0 - Current stable with resilience patterns
+    register_version(
+        version="1.1.0",
+        status=VersionStatus.STABLE,
+        release_date=now,
+        features=[
+            "All 1.0.0 features",
+            "Circuit breaker pattern",
+            "Rate limiting",
+            "Request throttling",
+            "Retry logic with backoff",
+            "API versioning support",
+            "Batch query support",
+            "Conversation discovery",
+        ],
+    )
+    
+    logger.info(f"Registered API versions, current: {get_current_version()}")
+
+_register_api_versions()
 
 # Cache for detected project root
 _PROJECT_ROOT_CACHE: dict[str, Any] = {
@@ -93,381 +150,33 @@ PROJECT_ROOT = _get_project_root()
 
 @app.call_tool()  # type: ignore
 async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
+    """Route tool calls to appropriate handlers."""
+    provider = get_llm_provider(app)
+    
     if name == "knowgraph_query":
-        query = arguments.get("query")
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-
-        provider = get_llm_provider(app)
-
-        if not query:
-            return [types.TextContent(type="text", text="Error: Query is required.")]
-
-        try:
-            # Initialize engine (retrieval + generation)
-            engine = QueryEngine(graph_path)
-
-            # Execute retrieval
-            top_k = arguments.get("top_k", 20)
-            max_hops = arguments.get("max_hops", 4)
-            with_explanation = arguments.get("with_explanation", False)
-            expand_query = arguments.get("expand_query", False)
-            max_tokens = arguments.get("max_tokens", 3000)
-            enable_hierarchical_lifting = arguments.get("enable_hierarchical_lifting", True)
-            lift_levels = arguments.get("lift_levels", 2)
-            system_prompt = arguments.get("system_prompt", None)
-
-            # Query Expansion (now supports generic provider)
-            if expand_query:
-                try:
-                    if provider:
-                        # Use generic provider for expansion
-                        expander = QueryExpander(intelligence_provider=provider)
-                        expansion_terms = await expander.expand_query_async(query)
-                        if expansion_terms:
-                            query = f"{query} {' '.join(expansion_terms)}"
-                    else:
-                        # Fall back to OpenAI env vars
-                        import os
-
-                        if os.getenv("KNOWGRAPH_API_KEY"):
-                            llm_model = os.getenv(
-                                "KNOWGRAPH_LLM_MODEL", "amazon/nova-2-lite-v1:free"
-                            )
-                            expander = QueryExpander(provider="openai", model=llm_model)
-                            expansion_terms = expander.expand_query(query)
-                            if expansion_terms:
-                                query = f"{query} {' '.join(expansion_terms)}"
-                except Exception:
-                    pass
-
-            result = await engine.query_async(
-                query,
-                top_k=top_k,
-                max_hops=max_hops,
-                max_tokens=max_tokens,
-                with_explanation=with_explanation,
-                enable_hierarchical_lifting=enable_hierarchical_lifting,
-                lift_levels=lift_levels,
-            )
-
-            # Generate Answer using LLM Delegation
-            answer = result.context
-
-            if provider:
-                base_system_prompt = (
-                    system_prompt
-                    if system_prompt
-                    else "You are a helpful assistant. Use the following context to answer the user's question."
-                )
-
-                prompt = (
-                    f"{base_system_prompt}\n\n"
-                    f"Context:\n{result.context}\n\n"
-                    f"Question: {query}\n\n"
-                    f"Answer:"
-                )
-                if with_explanation and result.explanation:
-                    prompt += f"\n\nExplanation Data:\n{json.dumps(result.explanation.to_dict(), indent=2, default=str)}"
-
-                try:
-                    generated_answer = await provider.generate_text(prompt)
-                    if generated_answer:
-                        answer = generated_answer
-                except Exception as e:
-                    answer = f"{result.context}\n\n[Generation Error: {e!s}]"
-
-            return [types.TextContent(type="text", text=answer)]
-
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error executing query: {e!s}")]
-
+        return await handle_query(arguments, provider, PROJECT_ROOT)
+    
     elif name == "knowgraph_index":
-        input_path = arguments.get("input_path")
-        resume_mode = arguments.get("resume", False)
-        output_path = arguments.get("output_path", DEFAULT_GRAPH_STORE_PATH)
-        gc = arguments.get("gc", False)
-
-        if not input_path:
-            return [types.TextContent(type="text", text="Error: input_path is required.")]
-
-        # Resolve paths
-        graph_path = resolve_graph_path(output_path, PROJECT_ROOT)
-
-        # Determine provider
-        provider = get_llm_provider(app)
-
-        # Extract additional parameters for repository/code directory indexing
-        include_patterns = arguments.get("include_patterns")
-        exclude_patterns = arguments.get("exclude_patterns")
-        access_token = arguments.get("access_token")
-
-        return await index_graph(
-            input_path,
-            graph_path,
-            provider,
-            resume_mode,
-            gc,
-            include_patterns=include_patterns,
-            exclude_patterns=exclude_patterns,
-            access_token=access_token,
-        )
-
+        return await handle_index(arguments, provider, PROJECT_ROOT)
+    
     elif name == "knowgraph_analyze_impact":
-        element = arguments.get("element")
-        max_hops = arguments.get("max_hops", 4)
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        mode = arguments.get("mode", "semantic")
-
-        if not element:
-            return [types.TextContent(type="text", text="Error: element is required.")]
-
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-
-        try:
-            if mode == "path":
-                return analyze_path_impact_report(element, graph_path, max_hops)
-            else:
-                # Semantic impact analysis
-                engine = QueryEngine(graph_path)
-                result = await engine.analyze_impact_async(element, max_hops=max_hops)
-                return [types.TextContent(type="text", text=result.answer)]
-
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error executing impact analysis: {e!s}")]
-
+        return await handle_analyze_impact(arguments, PROJECT_ROOT)
+    
     elif name == "knowgraph_validate":
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-
-        try:
-            result = validate_graph_consistency(graph_path)
-            status = "VALID" if result.valid else "INVALID"
-            message = f"Graph Validation Status: {status}\n"
-            if not result.valid:
-                message += f"\nErrors:\n{result.get_error_summary()}"
-            else:
-                message += "\nGraph is consistent and ready for queries."
-
-            return [types.TextContent(type="text", text=message)]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Validation failed: {e!s}")]
-
+        return await handle_validate(arguments, PROJECT_ROOT)
+    
     elif name == "knowgraph_get_stats":
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-
-        manifest_path = graph_path / "metadata" / "manifest.json"
-
-        if not manifest_path.exists():
-            return [types.TextContent(type="text", text="No manifest found. Graph might be empty.")]
-
-        try:
-            with open(manifest_path, encoding="utf-8") as f:
-                data = json.load(f)
-
-            manifest = Manifest.from_dict(data)
-            stats = (
-                f"Graph Stats (v{manifest.version})\n"
-                f"Nodes: {manifest.node_count}\n"
-                f"Edges: {manifest.edge_count}\n"
-                f"Semantic Edges: {manifest.semantic_edge_count}\n"
-                f"Files Indexed: {len(manifest.file_hashes)}"
-            )
-            return [types.TextContent(type="text", text=stats)]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error reading stats: {e!s}")]
-
+        return await handle_get_stats(arguments, PROJECT_ROOT)
+    
     elif name == "knowgraph_discover_conversations":
-        from knowgraph.infrastructure.detection.conversation_discovery import (
-            discover_all_conversations,
-        )
-
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-        editor_filter = arguments.get("editor", "all")
-
-        try:
-            # Discover all conversations
-            discovered = discover_all_conversations()
-
-            if not discovered:
-                return [
-                    types.TextContent(
-                        type="text",
-                        text="No conversations found from any editor.\n\n"
-                        "Make sure you have one of these editors installed:\n"
-                        "  - Antigravity (Gemini)\n"
-                        "  - Cursor\n"
-                        "  - VSCode with GitHub Copilot",
-                    )
-                ]
-
-            # Filter by editor if specified
-            if editor_filter != "all":
-                discovered = {k: v for k, v in discovered.items() if k == editor_filter}
-
-            # Index all discovered conversations
-            provider = get_llm_provider(app)
-            indexed_count = 0
-            failed_count = 0
-            results_summary = []
-
-            for editor_name, files in discovered.items():
-                results_summary.append(f"\n📂 {editor_name.upper()}: {len(files)} conversations")
-
-                for file_path in files:
-                    try:
-                        await index_graph(
-                            str(file_path),
-                            graph_path,
-                            provider,
-                            resume_mode=False,
-                            gc=False,
-                        )
-                        indexed_count += 1
-                    except Exception:
-                        failed_count += 1
-
-            # Format response
-            total_files = sum(len(files) for files in discovered.items())
-            response = (
-                f"✅ Auto-discovered {total_files} conversations across {len(discovered)} editors:\n"
-                + "".join(results_summary)
-                + f"\n\n📥 Indexing complete:\n"
-                + f"  Indexed: {indexed_count} conversations\n"
-            )
-
-            if failed_count > 0:
-                response += f"  Failed: {failed_count} conversations\n"
-
-            response += f"\n📊 Graph stored in: {graph_path}"
-
-            return [types.TextContent(type="text", text=response)]
-
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error discovering conversations: {e!s}")]
-
+        return await handle_discover_conversations(arguments, provider, PROJECT_ROOT)
+    
     elif name == "knowgraph_tag_snippet":
-        from knowgraph.application.tagging.snippet_tagger import (
-            create_tagged_snippet,
-            index_tagged_snippet,
-        )
-
-        tag = arguments.get("tag")
-        snippet = arguments.get("snippet")
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-        conversation_id = arguments.get("conversation_id")
-        user_question = arguments.get("user_question")
-
-        if not tag or not snippet:
-            return [
-                types.TextContent(type="text", text="Error: Both 'tag' and 'snippet' are required.")
-            ]
-
-        try:
-            # Create tagged snippet node
-            tagged_node = create_tagged_snippet(
-                tag=tag,
-                content=snippet,
-                conversation_id=conversation_id,
-                user_question=user_question,
-            )
-
-            # Index the snippet
-            await index_tagged_snippet(tagged_node, graph_path)
-
-            response = (
-                f"✅ Snippet tagged successfully!\n\n"
-                f"**Tag**: `{tag}`\n"
-                f"**Content Preview**: {snippet[:100]}{'...' if len(snippet) > 100 else ''}\n\n"
-                f"You can retrieve this later by mentioning the tag in your queries."
-            )
-
-            return [types.TextContent(type="text", text=response)]
-
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error tagging snippet: {e!s}")]
-
+        return await handle_tag_snippet(arguments, PROJECT_ROOT)
+    
     elif name == "knowgraph_batch_query":
-        queries = arguments.get("queries", [])
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-
-        if not queries or not isinstance(queries, list):
-            return [types.TextContent(type="text", text="Error: queries must be a non-empty list.")]
-
-        provider = get_llm_provider(app)
-
-        try:
-            # Shared parameters for all queries
-            top_k = arguments.get("top_k", 20)
-            max_hops = arguments.get("max_hops", 4)
-            max_tokens = arguments.get("max_tokens", 3000)
-            enable_hierarchical_lifting = arguments.get("enable_hierarchical_lifting", True)
-            lift_levels = arguments.get("lift_levels", 2)
-
-            engine = QueryEngine(graph_path)
-
-            # Use async batch query for better performance
-            try:
-                results_list = await engine.batch_query_async(
-                    queries=queries,
-                    top_k=top_k,
-                    max_hops=max_hops,
-                    max_tokens=max_tokens,
-                    enable_hierarchical_lifting=enable_hierarchical_lifting,
-                    lift_levels=lift_levels,
-                )
-
-                # Format results with LLM generation if provider available
-                results = []
-                for query, result in zip(queries, results_list):
-                    # Generate answer with LLM if provider available
-                    answer = result.context
-                    if provider and result.answer:  # Only if we have context
-                        try:
-                            prompt = (
-                                f"You are a helpful assistant. Use the following context to answer the user's question.\n\n"
-                                f"Context:\n{result.context}\n\n"
-                                f"Question: {query}\n\n"
-                                f"Answer:"
-                            )
-                            generated_answer = await provider.generate_text(prompt)
-                            if generated_answer:
-                                answer = generated_answer
-                        except Exception:
-                            pass
-
-                    results.append(
-                        {
-                            "query": query,
-                            "answer": answer,
-                            "nodes_retrieved": len(result.seed_nodes),
-                            "execution_time": result.execution_time,
-                        }
-                    )
-
-            except Exception as e:
-                return [types.TextContent(type="text", text=f"Error executing batch query: {e!s}")]
-
-            # Format results as text
-            output = f"Batch Query Results ({len(queries)} queries)\n" + "=" * 50 + "\n\n"
-            for i, res in enumerate(results, 1):
-                output += f"Query {i}: {res.get('query', 'N/A')}\n"
-                if "error" in res:
-                    output += f"Error: {res['error']}\n"
-                else:
-                    output += f"Answer: {res.get('answer', 'N/A')}\n"
-                    output += f"Nodes: {res.get('nodes_retrieved', 0)}, Time: {res.get('execution_time', 0):.2f}s\n"
-                output += "\n"
-
-            return [types.TextContent(type="text", text=output)]
-
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error executing batch query: {e!s}")]
-
+        return await handle_batch_query(arguments, provider, PROJECT_ROOT)
+    
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
 

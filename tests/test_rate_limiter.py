@@ -1,14 +1,16 @@
+"""Tests for rate limiter (infrastructure/intelligence)."""
+
 import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from knowgraph.infrastructure.intelligence.rate_limiter import RateLimiter
+from knowgraph.infrastructure.intelligence.rate_limiter import RateLimiter as APIRateLimiter
 
 
 @pytest.mark.asyncio
 async def test_rate_limiter_initialization():
-    limiter = RateLimiter()
+    limiter = APIRateLimiter()
     # Check private attributes via name mangling or just assuming default
     assert limiter._remaining_requests == 1000
     assert limiter._remaining_tokens == 1000000
@@ -16,7 +18,7 @@ async def test_rate_limiter_initialization():
 
 @pytest.mark.asyncio
 async def test_acquire_no_wait():
-    limiter = RateLimiter()
+    limiter = APIRateLimiter()
     start = time.time()
     await limiter.acquire()
     duration = time.time() - start
@@ -25,7 +27,7 @@ async def test_acquire_no_wait():
 
 @pytest.mark.asyncio
 async def test_acquire_with_backoff():
-    limiter = RateLimiter()
+    limiter = APIRateLimiter()
 
     # Manually trigger backoff
     await limiter.trigger_backoff()
@@ -42,7 +44,7 @@ async def test_acquire_with_backoff():
 
 @pytest.mark.asyncio
 async def test_update_headers_standard():
-    limiter = RateLimiter()
+    limiter = APIRateLimiter()
     headers = {"x-ratelimit-remaining": "50", "x-ratelimit-reset": "10.0"}
     await limiter.update(headers)
     assert limiter._remaining_requests == 50.0

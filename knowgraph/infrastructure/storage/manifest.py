@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from knowgraph.shared.cache_versioning import invalidate_all_caches
 from knowgraph.shared.exceptions import StorageError
 
 
@@ -205,6 +206,9 @@ def write_manifest(manifest: Manifest, graph_store_path: Path) -> None:
             with open(temp_file, "w", encoding="utf-8") as file:
                 json.dump(manifest.to_dict(), file, indent=2, ensure_ascii=False)
             temp_file.rename(manifest_file)
+            
+            # Trigger cache invalidation after successful manifest update
+            invalidate_all_caches()
         except Exception as error:
             if temp_file.exists():
                 temp_file.unlink()
