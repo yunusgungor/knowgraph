@@ -531,11 +531,14 @@ async def run_index(
         raise
 
     finally:
-        # Cleanup temporary files
-        for temp_file in temp_files_to_cleanup:
+        # Cleanup temporary files and directories
+        for temp_item in temp_files_to_cleanup:
             try:
-                if temp_file.exists():
-                    temp_file.unlink()
+                if temp_item.exists():
+                    if temp_item.is_dir():
+                        shutil.rmtree(temp_item)
+                    else:
+                        temp_item.unlink()
             except Exception:
                 pass  # Ignore cleanup errors
 

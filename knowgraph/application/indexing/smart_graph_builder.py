@@ -102,7 +102,9 @@ class SmartGraphBuilder:
                     ) -> list[tuple[Node, list[Any]]]:
                         texts = [node.content for node in batch_nodes]
                         async with semaphore:
-                            for attempt in range(5):
+                            from knowgraph.config import LLM_RETRY_COUNT, LLM_RETRY_BASE_DELAY
+
+                            for attempt in range(LLM_RETRY_COUNT):
                                 try:
                                     batch_entities = await self.provider.extract_entities_batch(
                                         texts
@@ -111,14 +113,16 @@ class SmartGraphBuilder:
                                         self.metrics.record_llm_success()
                                     return list(zip(batch_nodes, batch_entities))
                                 except Exception as e:
-                                    if attempt == 4:
+                                    if attempt == LLM_RETRY_COUNT - 1:
                                         for node in batch_nodes:
                                             self.metrics.record_llm_failure(
                                                 str(e), f"node_{node.id}"
                                             )
-                                        logger.error(f"LLM batch failed after retries: {e}")
+                                        logger.error(
+                                            f"LLM batch failed after {LLM_RETRY_COUNT} retries: {e}"
+                                        )
                                         return [(n, []) for n in batch_nodes]
-                                    await asyncio.sleep(2**attempt)
+                                    await asyncio.sleep(LLM_RETRY_BASE_DELAY * (2**attempt))
                             return [(n, []) for n in batch_nodes]
 
                     tasks = []

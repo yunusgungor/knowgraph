@@ -54,6 +54,12 @@ DEFAULT_OPENAI_MODEL = os.getenv("KNOWGRAPH_LLM_MODEL", "gpt-5-nano")
 KNOWGRAPH_LLM_MODEL = DEFAULT_OPENAI_MODEL
 LLM_TEMPERATURE = 0.0
 MAX_EXPANSION_TERMS = 5  # Number of expansion terms
+LLM_RETRY_COUNT = int(
+    os.getenv("KNOWGRAPH_LLM_RETRY_COUNT", "5")
+)  # Number of retry attempts for API calls
+LLM_RETRY_BASE_DELAY = float(
+    os.getenv("KNOWGRAPH_LLM_RETRY_DELAY", "1.0")
+)  # Base delay for exponential backoff (seconds)
 
 # Graph Traversal Configuration
 MAX_HOPS = 4  # Maximum graph traversal depth
