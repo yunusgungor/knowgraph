@@ -196,7 +196,9 @@ class QueryEngine:
             )
             # Record successful query
             self.metrics.record_request("query", "success")
-            self.metrics.record_latency("query", time.time() - start_time)
+            self.metrics.request_duration.labels(operation="query").observe(
+                time.time() - start_time
+            )
             return result
         except Exception as error:
             # Record failed query
@@ -466,7 +468,9 @@ class QueryEngine:
 
                     # Record successful async query
                     self.metrics.record_request("query_async", "success")
-                    self.metrics.record_latency("query_async", time.time() - start_time_inner)
+                    self.metrics.request_duration.labels(operation="query_async").observe(
+                        time.time() - start_time_inner
+                    )
                     return result
 
                 except asyncio.TimeoutError:

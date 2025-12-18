@@ -38,7 +38,7 @@ from knowgraph.shared.versioning import (
     negotiate_version,
     register_version,
 )
-from knowgraph.shared.tracing import TracingContext
+from knowgraph.shared.tracing import trace_operation
 from datetime import datetime, timedelta
 
 # Global resilience patterns - shared across all handlers
@@ -79,8 +79,8 @@ async def handle_query(
         List of text content responses
     """
     # Tracing context for observability
-    with TracingContext(
-        operation="mcp_query", metadata={"query": arguments.get("query", "")[:100]}
+    with trace_operation(
+        "mcp_query", metadata={"query": arguments.get("query", "")[:100]}
     ) as trace:
         try:
             # Rate limiting - use unique identifier for tracking
@@ -234,8 +234,8 @@ async def handle_index(
     -------
         List of text content responses
     """
-    with TracingContext(
-        operation="mcp_index", metadata={"input_path": arguments.get("input_path", "")[:100]}
+    with trace_operation(
+        "mcp_index", metadata={"input_path": arguments.get("input_path", "")[:100]}
     ) as trace:
         try:
             if error := validate_required_argument(arguments, "input_path"):
@@ -300,8 +300,8 @@ async def handle_analyze_impact(
     -------
         List of text content responses
     """
-    with TracingContext(
-        operation="mcp_analyze_impact", metadata={"element": arguments.get("element", "")[:100]}
+    with trace_operation(
+        "mcp_analyze_impact", metadata={"element": arguments.get("element", "")[:100]}
     ) as trace:
         # Apply circuit breaker protection
         async def execute_analysis():
