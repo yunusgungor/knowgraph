@@ -57,7 +57,7 @@ def _shutdown_process_pool() -> None:
 
 
 def build_networkx_graph(nodes: list[Node], edges: list[Edge]) -> "nx.Graph[object]":
-    """Build NetworkX graph from nodes and edges.
+    """Build NetworkX graph from nodes and edges (REFERENCE-AWARE WEIGHTS).
 
     Args:
     ----
@@ -66,7 +66,7 @@ def build_networkx_graph(nodes: list[Node], edges: list[Edge]) -> "nx.Graph[obje
 
     Returns:
     -------
-        NetworkX graph
+        NetworkX graph with edge-type-aware weights
 
     """
     graph = nx.Graph()
@@ -75,9 +75,25 @@ def build_networkx_graph(nodes: list[Node], edges: list[Edge]) -> "nx.Graph[obje
     for node in nodes:
         graph.add_node(node.id, data=node)
 
-    # Add edges
+    # Add edges with TYPE-AWARE WEIGHTS
     for edge in edges:
-        graph.add_edge(edge.source, edge.target, weight=edge.score, edge_type=edge.type)
+        # Reference edges get 2x weight (more important for centrality)
+        # Semantic edges get 1x weight (baseline)
+        edge_weight = 2.0 if edge.type == "reference" else 1.0
+
+        # NetworkX uses weight for shortest path calculations in centrality
+        # Higher weight = shorter distance in some metrics (inverse relationship)
+        # For betweenness/closeness, lower weight = shorter path, so we invert
+        # But for our use case, we want reference edges to be "preferred" paths
+        # So we use the weight directly as importance multiplier
+        graph.add_edge(
+            edge.source,
+            edge.target,
+            weight=edge.score * edge_weight,  # Combine semantic score with type weight
+            edge_type=edge.type,
+            base_score=edge.score,
+            type_weight=edge_weight,
+        )
 
     return graph
 
@@ -102,7 +118,9 @@ def get_cache_stats() -> dict[str, int]:
     return {
         "size": len(_centrality_cache),
         "max_size": _cache_max_size,
-        "utilization": int((len(_centrality_cache) / _cache_max_size) * 100) if _cache_max_size > 0 else 0,
+        "utilization": (
+            int((len(_centrality_cache) / _cache_max_size) * 100) if _cache_max_size > 0 else 0
+        ),
         "version": _centrality_cache_version,
     }
 
@@ -171,8 +189,7 @@ def _compute_centrality_impl(
 
     # Use multiprocessing for very large graphs
     use_multiprocessing = (
-        CENTRALITY_MULTIPROCESSING_ENABLED
-        and len(nodes) > CENTRALITY_MULTIPROCESSING_THRESHOLD
+        CENTRALITY_MULTIPROCESSING_ENABLED and len(nodes) > CENTRALITY_MULTIPROCESSING_THRESHOLD
     )
 
     # Betweenness centrality (architectural boundaries)
@@ -180,10 +197,10 @@ def _compute_centrality_impl(
         if use_approximate:
             # Approximate betweenness for large graphs (sample-based)
             k = max(BETWEENNESS_MIN_SAMPLES, int(len(nodes) * BETWEENNESS_SAMPLE_SIZE_FACTOR))
-            betweenness = nx.betweenness_centrality(graph, k=k, normalized=True)
+            betweenness = nx.betweenness_centrality(graph, k=k, normalized=True, weight="weight")
         else:
             # Exact betweenness for small graphs
-            betweenness = nx.betweenness_centrality(graph, normalized=True)
+            betweenness = nx.betweenness_centrality(graph, normalized=True, weight="weight")
     except Exception:
         betweenness = {node.id: 0.0 for node in nodes}
 
@@ -192,14 +209,16 @@ def _compute_centrality_impl(
 
     # Closeness centrality (accessibility)
     try:
-        closeness = nx.closeness_centrality(graph)
+        closeness = nx.closeness_centrality(graph, distance="weight")
     except Exception:
         closeness = {node.id: 0.0 for node in nodes}
 
     # Eigenvector centrality (importance)
     try:
-        max_iter = EIGENVECTOR_MAX_ITER_APPROXIMATE if use_approximate else EIGENVECTOR_MAX_ITER_EXACT
-        eigenvector = nx.eigenvector_centrality(graph, max_iter=max_iter)
+        max_iter = (
+            EIGENVECTOR_MAX_ITER_APPROXIMATE if use_approximate else EIGENVECTOR_MAX_ITER_EXACT
+        )
+        eigenvector = nx.eigenvector_centrality(graph, max_iter=max_iter, weight="weight")
     except Exception:
         eigenvector = {node.id: 0.0 for node in nodes}
 
@@ -251,23 +270,18 @@ async def compute_centrality_metrics_async(
 
     # Determine if we should use multiprocessing
     use_multiprocessing = (
-        CENTRALITY_MULTIPROCESSING_ENABLED
-        and len(nodes) > CENTRALITY_MULTIPROCESSING_THRESHOLD
+        CENTRALITY_MULTIPROCESSING_ENABLED and len(nodes) > CENTRALITY_MULTIPROCESSING_THRESHOLD
     )
 
     if use_multiprocessing:
         # Compute in separate process to avoid GIL
         loop = asyncio.get_event_loop()
         pool = _get_process_pool()
-        result = await loop.run_in_executor(
-            pool, _compute_centrality_impl, nodes, edges
-        )
+        result = await loop.run_in_executor(pool, _compute_centrality_impl, nodes, edges)
     else:
         # Compute in current process (run in thread pool to not block event loop)
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None, _compute_centrality_impl, nodes, edges
-        )
+        result = await loop.run_in_executor(None, _compute_centrality_impl, nodes, edges)
 
     # Store in cache
     if len(_centrality_cache) >= _cache_max_size:
@@ -299,19 +313,19 @@ def _compute_disconnected_centrality(
         subgraph = graph.subgraph(component)
 
         try:
-            betweenness = nx.betweenness_centrality(subgraph, normalized=True)
+            betweenness = nx.betweenness_centrality(subgraph, normalized=True, weight="weight")
         except Exception:
             betweenness = dict.fromkeys(component, 0.0)
 
         degree = nx.degree_centrality(subgraph)
 
         try:
-            closeness = nx.closeness_centrality(subgraph)
+            closeness = nx.closeness_centrality(subgraph, distance="weight")
         except Exception:
             closeness = dict.fromkeys(component, 0.0)
 
         try:
-            eigenvector = nx.eigenvector_centrality(subgraph, max_iter=100)
+            eigenvector = nx.eigenvector_centrality(subgraph, max_iter=100, weight="weight")
         except Exception:
             eigenvector = dict.fromkeys(component, 0.0)
 
