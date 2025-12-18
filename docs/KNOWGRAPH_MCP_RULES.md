@@ -216,6 +216,29 @@ knowgraph_get_stats(
 - `semantic_edges`: Semantic relationship count
 - `files_indexed`: Number of source files
 
+### 2.7 `knowgraph_tag_snippet` - Semantic Bookmarking
+
+**Purpose**: Tag and index important code snippets, solutions, or architectural decisions for later retrieval.
+
+**Parameters**:
+```python
+knowgraph_tag_snippet(
+    tag: str,                                # Required: Descriptive title/tag
+    snippet: str,                            # Required: Content to store
+    user_question: str = None,               # Optional: Context question
+    conversation_id: str = None,             # Optional: Conversation context
+    graph_path: str = "./graphstore"         # Optional: Graph location
+)
+```
+
+**Implementation**: Creates a specialized node in the graph with strong semantic weight for specific query matching.
+
+**Use Case**:
+- Saving a working configuration
+- Bookmarking a complex solution
+- Recording an architectural decision record (ADR)
+- "Remember this" functionality
+
 ---
 
 ## 🎯 3. Parameter Mastery & Optimization
@@ -959,6 +982,62 @@ knowgraph index ./large-project --resume
 #### Clean Up Deleted Files
 ```bash
 knowgraph index ./project --gc
+```
+
+
+### 10.6 Semantic Bookmarking Scenarios
+
+This feature allows users to save important context. Here are the comprehensive prompt patterns for the `knowgraph_tag_snippet` tool.
+
+#### 1. Explicit Tagging
+**User**: "Save this JWT validation code with the tag 'FastAPI JWT Auth Config'."
+```python
+knowgraph_tag_snippet(
+    tag="FastAPI JWT Auth Config",
+    snippet="...", # The code block
+    user_question=None
+)
+```
+
+#### 2. Implicit Tagging
+**User**: "This solution is great, don't forget it and save it to your memory."
+```python
+# AI infers tag from context
+knowgraph_tag_snippet(
+    tag="React.js State Management Best Practices",
+    snippet="...", # The solution
+    user_question="What do you recommend for React state management?"
+)
+```
+
+#### 3. Context-Aware Tagging
+**User**: "Save the solution to this 'Memory Leak' error and include my question so we can remember it later."
+```python
+knowgraph_tag_snippet(
+    tag="Node.js Heap Out of Memory Solution",
+    snippet="node --max-old-space-size=4096 index.js...",
+    user_question="Why does my application constantly give 'Heap out of memory' error?"
+)
+```
+
+#### 4. Future-Oriented Tagging
+**User**: "If I ask about 'Authentication implementation' again in the future, save this so it reminds me directly of this Auth0 integration code."
+```python
+knowgraph_tag_snippet(
+    tag="Auth0 Authentication Ref",
+    snippet="...",
+    user_question="How to implement authentication?"
+)
+```
+
+#### 5. Complex/Batch Tagging
+**User**: "Save the Nginx configuration as 'Reverse Proxy Settings' and the SSL explanation as 'SSL Notes' separately."
+```python
+# Call 1
+knowgraph_tag_snippet(tag="Reverse Proxy Settings", snippet="server { ... }")
+
+# Call 2
+knowgraph_tag_snippet(tag="SSL Notes", snippet="SSL ensures encrypted...")
 ```
 
 ---

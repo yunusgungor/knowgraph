@@ -103,8 +103,38 @@ Test: knowgraph_query (Varlık kontrolü).
 Soyut Mimari Çıkarımı
 "Bu kod tabanına (codebase) bakan yeni bir yazılımcı olduğumu varsay. Bana main.cpp'den başlayarak bir isteğin (request) karşılanıp video işlenene kadar geçtiği yolu bir 'Sequence Diagram' gibi metin tabanlı olarak çiz. Her adımı kanıtlarıyla (dosya referanslarıyla) destekle."
 
-Test: Tüm motorun (Query + Retrieval + LLM Synthesis) sınırlarını zorlar.
-Bu istemleri kopyalayıp doğrudan sorabilirsiniz. Hepsi çalışıyorsa sisteminiz mükemmel durumdadır!
+---
 
+KnowGraph MCP sunucusunun Semantic Bookmarking yapısı (knowgraph_tag_snippet aracı) için tüm olası kombinasyonları ve kullanım senaryolarını kapsayan eksiksiz bir rehber hazırladım.
+
+Bu örnekleri detaylı bir şekilde inceleyebilmeniz için bir doküman olarak kaydettim: 
+knowgraph_semantic_bookmarking_prompts.md
+
+İşte bu dokümandan öne çıkan temel Prompt Kategorileri ve Örnekleri:
+
+1. Açık İşaretleme (Explicit Tagging)
+Kullanıcının etiketi doğrudan belirttiği en temel kullanımdır.
+
+Prompt: "Bu JWT doğrulama kodunu 'FastAPI JWT Auth Config' etiketiyle kaydet." İşlev: Belirtilen kod bloğunu, belirtilen etiketle sisteme işler.
+
+2. İma Yoluyla İşaretleme (Implicit Tagging)
+Etiketin AI tarafından içeriğe göre belirlendiği durumdur.
+
+Prompt: "Bu çözüm çok iyi, bunu unutma ve hafızana kaydet." İşlev: AI, son konuşulan konudan (örn. "React State Yönetimi") uygun bir etiket türetir ve kaydeder.
+
+3. Soru Bağlamlı İşaretleme (Context-Aware Tagging)
+Çözümün hangi soruya istinaden verildiğini de saklar. Gelecekte "bunu neden kaydetmiştik?" sorusuna yanıt olur.
+
+Prompt: "Bu 'Memory Leak' hatasının çözümünü ve benim sorduğum soruyu da ekleyerek kaydet ki sonra hatırlayalım." İşlev: user_question parametresini doldurarak sorun-çözüm ilişkisini kurar.
+
+4. Şartlı ve Geleceğe Dönük İşaretleme
+Belirli bir durumda hatırlatılması için yapılan işaretleme.
+
+Prompt: "Eğer ileride tekrar 'Authentication implementasyonu' sorarsam, bana doğrudan bu Auth0 entegrasyon kodunu hatırlatacak şekilde kaydet." İşlev: Gelecekteki sorgularla eşleşmesi (retrieval) kolay olacak anahtar kelimelerle kaydeder.
+
+5. Çoklu Parça Kaydetme (Batch Tagging)
+Birden fazla kavramın tek seferde ayrıştırılarak kaydedilmesi.
+
+Prompt: "Nginx konfigürasyonunu 'Reverse Proxy Ayarları' olarak, SSL açıklamasını da 'SSL Notları' olarak ayrı ayrı kaydet." İşlev: AI, bu isteği birden fazla tag_snippet çağrısına böler.
 ----
 

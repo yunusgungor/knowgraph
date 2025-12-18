@@ -118,7 +118,7 @@ class QueryEngine:
                 failure_threshold=5,
                 timeout=30.0,  # Use 'timeout' not 'recovery_timeout'
                 success_threshold=3,  # Use 'success_threshold' not 'half_open_max_calls'
-            )
+            ),
         )
         self._retry_config = RetryConfig(
             max_attempts=3,
@@ -138,6 +138,7 @@ class QueryEngine:
         """Cleanup resources on deletion."""
         # Import here to avoid circular dependency issues
         from knowgraph.domain.algorithms.centrality import _shutdown_process_pool
+
         try:
             _shutdown_process_pool()
         except Exception:
@@ -175,21 +176,19 @@ class QueryEngine:
             QueryError: If query fails
 
         """
-        # Execute with retry logic for resilience
-        from knowgraph.shared.retry import RetryContext
-        
-        with RetryContext(self._retry_config) as retry_ctx:
-            return self._execute_query_with_retry(
-                retry_ctx,
-                query_text,
-                top_k,
-                max_hops,
-                max_tokens,
-                with_explanation,
-                enable_hierarchical_lifting,
-                lift_levels,
-            )
-    
+        # Note: Retry logic only available in query_async()
+        # This sync version calls implementation directly
+        return self._execute_query_with_retry(
+            None,  # No retry context for sync version
+            query_text,
+            top_k,
+            max_hops,
+            max_tokens,
+            with_explanation,
+            enable_hierarchical_lifting,
+            lift_levels,
+        )
+
     def _execute_query_with_retry(
         self: "QueryEngine",
         retry_ctx: "RetryContext",
@@ -443,7 +442,7 @@ class QueryEngine:
                             enable_hierarchical_lifting=enable_hierarchical_lifting,
                             lift_levels=lift_levels,
                         )
-                    
+
                     return await asyncio.wait_for(
                         self._circuit_breaker.call(_execute),
                         timeout=timeout,
@@ -808,12 +807,12 @@ class QueryEngine:
         lift_levels: int = 2,
     ) -> AsyncIterator[tuple[str, dict]]:
         """Execute query with streaming results for memory efficiency.
-        
+
         Yields context chunks as nodes are processed, allowing for:
         - Lower memory usage on large result sets
         - Progressive UI updates
         - Early termination if needed
-        
+
         Args:
         ----
             query_text: Natural language query
@@ -823,11 +822,11 @@ class QueryEngine:
             chunk_size: Nodes per chunk (default: 50)
             enable_hierarchical_lifting: Apply hierarchical context lifting
             lift_levels: Directory levels to traverse upward
-            
+
         Yields:
         ------
             Tuple of (context_chunk, metadata_dict)
-            
+
         Example:
         -------
             >>> async for context, meta in engine.query_streaming_async(query):
@@ -837,18 +836,18 @@ class QueryEngine:
             ...         print(f"Total nodes: {meta['total_nodes']}")
         """
         start_time = time.time()
-        
+
         try:
             all_nodes = []
             seed_node_ids = []
-            
+
             # Stream retrieve nodes in chunks
             chunk_index = 0
             async for nodes_chunk, is_last in self.retriever.retrieve_streaming_async(
                 query_text, self.edges, top_k, max_hops, chunk_size
             ):
                 all_nodes.extend(nodes_chunk)
-                
+
                 # Build partial context from accumulated nodes
                 if all_nodes:
                     # Get similarity scores (only need to do once)
@@ -858,18 +857,19 @@ class QueryEngine:
                         )
                         similarity_scores = {node.id: score for node, score in retrieval_results}
                         seed_node_ids = [node.id for node, _ in retrieval_results[:top_k]]
-                    
+
                     # Compute centrality on accumulated nodes
                     active_node_ids = {node.id for node in all_nodes}
                     active_edges = [
-                        edge for edge in self.edges
+                        edge
+                        for edge in self.edges
                         if edge.source in active_node_ids and edge.target in active_node_ids
                     ]
-                    
+
                     centrality_scores = await compute_centrality_metrics_async(
                         all_nodes, active_edges
                     )
-                    
+
                     # Assemble context from accumulated nodes
                     context, _ = assemble_context(
                         all_nodes,
@@ -878,7 +878,7 @@ class QueryEngine:
                         centrality_scores,
                         max_tokens,
                     )
-                    
+
                     # Yield chunk with metadata
                     metadata = {
                         "chunk_index": chunk_index,
@@ -887,11 +887,11 @@ class QueryEngine:
                         "is_last": is_last,
                         "elapsed_time": time.time() - start_time,
                     }
-                    
+
                     yield (context, metadata)
-                
+
                 chunk_index += 1
-                
+
         except QueryError:
             raise
         except Exception as error:

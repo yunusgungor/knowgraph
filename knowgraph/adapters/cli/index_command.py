@@ -93,19 +93,44 @@ async def run_index(
             # Local path - validate and collect files
             input_path_obj = validate_path(input_path, must_exist=True, must_be_file=False)
 
-            # Step 1: Collect files
-            files_to_process = []
+            # Check if directory contains code files (not just markdown)
             if input_path_obj.is_dir():
-                # Glob all .md files
-                files_to_process = sorted(
-                    [Path(p) for p in glob.glob(str(input_path_obj / "**/*.md"), recursive=True)]
+                # Check for code files
+                code_patterns = ["**/*.py", "**/*.js", "**/*.ts", "**/*.java", "**/*.go", "**/*.rs"]
+                has_code_files = any(
+                    glob.glob(str(input_path_obj / pattern), recursive=True)
+                    for pattern in code_patterns
                 )
+
+                if has_code_files:
+                    # Directory contains code - use gitingest to convert to markdown
+                    if verbose:
+                        click.echo("Detected code directory, using gitingest for conversion...")
+
+                    markdown_content, temp_path, _ = await ingest_source(
+                        input_path=input_path,
+                        include_patterns=include_patterns,
+                        exclude_patterns=exclude_patterns,
+                        access_token=access_token,
+                        force_type="directory",
+                    )
+                    temp_files_to_cleanup.append(temp_path)
+                    files_to_process = [temp_path]
+                else:
+                    # Pure markdown directory - use original logic
+                    files_to_process = sorted(
+                        [
+                            Path(p)
+                            for p in glob.glob(str(input_path_obj / "**/*.md"), recursive=True)
+                        ]
+                    )
             else:
+                # Single file
                 files_to_process = [input_path_obj]
 
             if not files_to_process:
                 if verbose:
-                    click.echo("No markdown files found to index.")
+                    click.echo("No files found to index.")
                 return
 
         graph_store_path = validate_path(output_path, must_exist=False, must_be_file=False)

@@ -54,7 +54,7 @@ async def test_update_headers_standard():
 
 @pytest.mark.asyncio
 async def test_update_headers_openrouter_variants():
-    limiter = RateLimiter()
+    limiter = APIRateLimiter()
 
     # Case 1: requests and tokens specific
     headers = {"x-ratelimit-remaining-requests": "20", "x-ratelimit-remaining-tokens": "5000"}
@@ -65,7 +65,7 @@ async def test_update_headers_openrouter_variants():
 
 @pytest.mark.asyncio
 async def test_limit_reached_logic():
-    limiter = RateLimiter()
+    limiter = APIRateLimiter()
     limiter._remaining_requests = 1
     limiter._reset_time = time.time() + 5.0
 
@@ -77,7 +77,7 @@ async def test_limit_reached_logic():
 
 @pytest.mark.asyncio
 async def test_trigger_backoff():
-    limiter = RateLimiter()
+    limiter = APIRateLimiter()
     now = time.time()
     await limiter.trigger_backoff()
     assert limiter._backoff_time >= now + 5.0

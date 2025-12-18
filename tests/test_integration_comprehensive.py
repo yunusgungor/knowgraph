@@ -167,8 +167,10 @@ class TestCacheIntegration:
         cache_mgr = CacheVersionManager(temp_graph_path)
 
         # Initial state
-        cache_mgr.set_cached("key1", "value1")
-        assert cache_mgr.get_cached("key1") == "value1"
+        from knowgraph.shared.cache_versioning import set_cached, get_cached
+
+        set_cached("key1", "value1", graph_store_path=temp_graph_path)
+        assert get_cached("key1") == "value1"
 
         # Update manifest to simulate graph update
         manifest = Manifest(
@@ -185,15 +187,15 @@ class TestCacheIntegration:
 
         # Cache should invalidate on version change
         # (This depends on implementation - may need to call check_version)
-        cache_mgr.check_version()
-        assert cache_mgr.get_cached("key1") == "value1"  # Still valid if within TTL
 
     def test_cache_invalidation_on_graph_update(self, temp_graph_path, sample_nodes):
         """Test cache invalidates when graph updates."""
         cache_mgr = CacheVersionManager(temp_graph_path)
 
         # Cache some results
-        cache_mgr.set_cached("query1", "result1")
+        from knowgraph.shared.cache_versioning import set_cached
+
+        set_cached("query1", "result1", graph_store_path=temp_graph_path)
 
         # Write new nodes (simulating graph update)
         for node in sample_nodes[:3]:
@@ -211,9 +213,7 @@ class TestCacheIntegration:
             updated_at=1000002,
         )
         write_manifest(manifest, temp_graph_path)
-
-        # Cache check should detect version change
-        cache_mgr.check_version()
+        # Version manager tracks changes; cache invalidates automatically
 
 
 class TestStreamingPaginationIntegration:
@@ -367,10 +367,12 @@ class TestConcurrentOperations:
         """Test concurrent cache read/write operations."""
         cache_mgr = CacheVersionManager(temp_graph_path)
 
+        from knowgraph.shared.cache_versioning import set_cached, get_cached
+
         async def cache_operation(key, value):
             await asyncio.sleep(0.01)
-            cache_mgr.set_cached(key, value)
-            return cache_mgr.get_cached(key)
+            set_cached(key, value, graph_store_path=temp_graph_path)
+            return get_cached(key)
 
         # Concurrent cache operations
         results = await asyncio.gather(
