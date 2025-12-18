@@ -229,6 +229,18 @@ class QueryEngine:
             QueryError: If query fails
 
         """
+        # Validate parameters explicitly
+        if not query_text or not query_text.strip():
+            raise QueryError("Query text cannot be empty")
+        if top_k <= 0:
+            raise QueryError(f"top_k must be positive, got {top_k}")
+        if max_hops < 0:
+            raise QueryError(f"max_hops cannot be negative, got {max_hops}")
+        if max_tokens <= 0:
+            raise QueryError(f"max_tokens must be positive, got {max_tokens}")
+        if lift_levels < 0:
+            raise QueryError(f"lift_levels cannot be negative, got {lift_levels}")
+
         # Check cache first (for identical queries)
         cache_key = _get_query_cache_key(
             query_text, top_k, max_hops, max_tokens, enable_hierarchical_lifting, lift_levels
@@ -521,6 +533,32 @@ class QueryEngine:
             asyncio.TimeoutError: If query exceeds timeout
 
         """
+        # Validate parameters explicitly
+        if not query_text or not query_text.strip():
+            raise QueryError("Query text cannot be empty")
+        if top_k <= 0:
+            raise QueryError(f"top_k must be positive, got {top_k}")
+        if max_hops < 0:
+            raise QueryError(f"max_hops cannot be negative, got {max_hops}")
+        if max_tokens <= 0:
+            raise QueryError(f"max_tokens must be positive, got {max_tokens}")
+        if lift_levels < 0:
+            raise QueryError(f"lift_levels cannot be negative, got {lift_levels}")
+
+        # Check cache first (for identical queries) - ASYNC CACHE SUPPORT
+        cache_key = _get_query_cache_key(
+            query_text, top_k, max_hops, max_tokens, enable_hierarchical_lifting, lift_levels
+        )
+
+        if cache_key in _query_result_cache:
+            cached = _query_result_cache[cache_key]
+            # Check if cache is still valid (TTL)
+            if time.time() - cached.timestamp < _query_cache_ttl:
+                return cached.result
+            else:
+                # Expired, remove from cache
+                del _query_result_cache[cache_key]
+
         # Set request ID for tracking
         request_id = str(uuid4())
         request_id_var.set(request_id)
@@ -557,6 +595,16 @@ class QueryEngine:
                         self._circuit_breaker.call(_execute),
                         timeout=timeout,
                     )
+
+                    # Store in cache (ASYNC CACHE SUPPORT)
+                    _query_result_cache[cache_key] = CachedQueryResult(
+                        result=result, timestamp=time.time()
+                    )
+
+                    # Prune cache if needed (simple FIFO)
+                    if len(_query_result_cache) > _query_cache_max_size:
+                        oldest_key = next(iter(_query_result_cache))
+                        del _query_result_cache[oldest_key]
 
                     # Record successful async query
                     self.metrics.record_request("query_async", "success")
@@ -957,6 +1005,22 @@ class QueryEngine:
             ...     if meta['is_last']:
             ...         print(f"Total nodes: {meta['total_nodes']}")
         """
+        # Validate parameters explicitly
+        if not query_text or not query_text.strip():
+            raise QueryError("Query text cannot be empty")
+        if top_k <= 0:
+            raise QueryError(f"top_k must be positive, got {top_k}")
+        if max_hops < 0:
+            raise QueryError(f"max_hops cannot be negative, got {max_hops}")
+        if max_tokens <= 0:
+            raise QueryError(f"max_tokens must be positive, got {max_tokens}")
+        if chunk_size <= 0:
+            raise QueryError(f"chunk_size must be positive, got {chunk_size}")
+        if lift_levels < 0:
+            raise QueryError(f"lift_levels cannot be negative, got {lift_levels}")
+
+        # Note: Streaming queries don't use cache (results are streamed, not stored)
+
         start_time = time.time()
 
         try:
