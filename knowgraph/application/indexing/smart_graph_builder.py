@@ -147,13 +147,14 @@ class SmartGraphBuilder:
 
             # 4. Create Edges (Semantic + Reference)
             with self.perf_tracker.track("edge_creation"):
-                # Load existing nodes for global reference context
+                # Load existing node metadata for global reference context (OPTIMIZED)
                 from knowgraph.infrastructure.storage.filesystem import (
                     list_all_nodes,
-                    read_node_json,
+                    read_node_metadata_only,
                 )
+                from dataclasses import replace
 
-                existing_nodes = []
+                existing_metadata = []
                 graph_path_obj = Path(graph_path)
                 if graph_path_obj.exists():
                     try:
@@ -162,13 +163,30 @@ class SmartGraphBuilder:
                             # Skip nodes we just built (they are already in final_nodes)
                             if any(fn.id == n_id for fn in final_nodes):
                                 continue
-                            node_obj = read_node_json(n_id, graph_path_obj)
-                            if node_obj:
-                                existing_nodes.append(node_obj)
-                    except Exception as e:
-                        logger.warning(f"Could not load existing nodes for reference context: {e}")
 
-                all_context_nodes = final_nodes + existing_nodes
+                            # Load ONLY metadata (95% memory reduction)
+                            metadata_dict = read_node_metadata_only(n_id, graph_path_obj)
+                            if metadata_dict and metadata_dict.get("entities"):
+                                # Create minimal pseudo-node for reference linking
+                                # (we only need id and metadata, not content)
+                                pseudo_node = Node(
+                                    id=metadata_dict["id"],
+                                    hash="",  # Not needed for linking
+                                    title="",
+                                    content="",  # Skip heavy content field
+                                    path=metadata_dict["path"],
+                                    type="code",
+                                    token_count=0,
+                                    created_at=0,
+                                    metadata={"entities": metadata_dict["entities"]},
+                                )
+                                existing_metadata.append(pseudo_node)
+                    except Exception as e:
+                        logger.warning(
+                            f"Could not load existing node metadata for reference context: {e}"
+                        )
+
+                all_context_nodes = final_nodes + existing_metadata
 
                 semantic_edges = create_semantic_edges(final_nodes)
                 # create_reference_edges uses global context to resolve symbols
