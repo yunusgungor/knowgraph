@@ -188,3 +188,82 @@ def traverse_reverse_references(
                     queue.append((referencing_node, depth + 1))
 
     return visited
+
+
+def traverse_graph_reference_aware(
+    seed_nodes: list[UUID],
+    edges: list[Edge],
+    max_hops: int = MAX_HOPS,
+    reference_weight: float = 2.0,
+) -> set[UUID]:
+    """Traverse graph with reference-aware BFS (OPTIMIZED FOR CODE DEPENDENCIES).
+
+    This traversal intelligently prioritizes reference edges (precise code dependencies)
+    over semantic edges (vague similarity), making queries code-structure-aware.
+
+    Strategy:
+        - Reference edges (caller->callee): DIRECTED, prioritized (2x weight)
+        - Semantic edges: UNDIRECTED, lower priority (1x weight)
+
+    Args:
+    ----
+        seed_nodes: Starting nodes
+        edges: List of all edges
+        max_hops: Maximum traversal depth
+        reference_weight: Multiplier for reference edge priority (default: 2.0)
+
+    Returns:
+    -------
+        Set of reachable node UUIDs
+
+    """
+    import heapq
+
+    # Build TWO adjacency lists: one for reference (directed), one for semantic (undirected)
+    reference_adj: dict[UUID, list[UUID]] = {}
+    semantic_adj: dict[UUID, list[UUID]] = {}
+
+    for edge in edges:
+        if edge.type == "reference":
+            # Reference edges are DIRECTED (follow code dependencies precisely)
+            if edge.source not in reference_adj:
+                reference_adj[edge.source] = []
+            reference_adj[edge.source].append(edge.target)
+        else:
+            # Semantic edges are UNDIRECTED (similarity is bidirectional)
+            if edge.source not in semantic_adj:
+                semantic_adj[edge.source] = []
+            if edge.target not in semantic_adj:
+                semantic_adj[edge.target] = []
+            semantic_adj[edge.source].append(edge.target)
+            semantic_adj[edge.target].append(edge.source)
+
+    visited: set[UUID] = set()
+    # OPTIMIZED: Use heap for priority queue (O(log n) vs O(n log n) per iteration)
+    # Heap stores: (-priority, node_id, depth)  # Negative for max-heap
+    heap: list[tuple[float, UUID, int]] = [(-1.0, node_id, 0) for node_id in seed_nodes]
+    heapq.heapify(heap)
+
+    while heap:
+        neg_priority, current_node, depth = heapq.heappop(heap)
+        priority = -neg_priority
+
+        if current_node in visited or depth > max_hops:
+            continue
+
+        visited.add(current_node)
+
+        if depth < max_hops:
+            # First, add REFERENCE neighbors (high priority)
+            if current_node in reference_adj:
+                for neighbor in reference_adj[current_node]:
+                    if neighbor not in visited:
+                        heapq.heappush(heap, (-(priority * reference_weight), neighbor, depth + 1))
+
+            # Then, add SEMANTIC neighbors (normal priority)
+            if current_node in semantic_adj:
+                for neighbor in semantic_adj[current_node]:
+                    if neighbor not in visited:
+                        heapq.heappush(heap, (-priority, neighbor, depth + 1))
+
+    return visited

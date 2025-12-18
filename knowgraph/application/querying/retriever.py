@@ -20,7 +20,7 @@ from knowgraph.config import (
     MAX_QUERY_PREVIEW_LENGTH,
     TOP_K,
 )
-from knowgraph.domain.algorithms.traversal import traverse_graph_bfs
+from knowgraph.domain.algorithms.traversal import traverse_graph_reference_aware
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
 from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
@@ -35,7 +35,7 @@ class QueryRetriever:
     Workflow:
         1. Generate query embedding (sparse)
         2. Search Sparse index for top-k similar nodes (seeds)
-        3. Expand seeds via graph traversal
+        3. Expand seeds via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
         4. Return active subgraph nodes
 
     Attributes
@@ -80,7 +80,7 @@ class QueryRetriever:
         max_hops: int = MAX_HOPS,
         use_code_search: bool = False,
     ) -> tuple[list[Node], list[UUID]]:
-        """Retrieve relevant nodes for query.
+        """Retrieve relevant nodes for query (REFERENCE-AWARE!).
 
         Args:
         ----
@@ -119,8 +119,8 @@ class QueryRetriever:
             # results is list of (doc_id, score) where doc_id is str
             seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
-            # Step 2: Expand via graph traversal
-            expanded_node_ids = traverse_graph_bfs(seed_node_ids, edges, max_hops)
+            # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
+            expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
 
             # Step 3: Load nodes
             nodes = []
@@ -239,8 +239,8 @@ class QueryRetriever:
             results = await self.sparse_index.search_async(query_tokens, top_k)
             seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
-            # Step 2: Expand via graph traversal (sync - fast enough)
-            expanded_node_ids = traverse_graph_bfs(seed_node_ids, edges, max_hops)
+            # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
+            expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
 
             # Step 3: Load nodes CONCURRENTLY
             nodes = await self._load_nodes_async(expanded_node_ids)
@@ -384,8 +384,8 @@ class QueryRetriever:
             results = await self.sparse_index.search_async(query_tokens, top_k)
             seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
-            # Step 2: Graph expansion
-            expanded_node_ids = traverse_graph_bfs(seed_node_ids, edges, max_hops)
+            # Step 2: Graph expansion with REFERENCE-AWARE traversal
+            expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
 
             # Step 3: Stream load nodes in chunks
             async for chunk in stream_load_nodes_async(

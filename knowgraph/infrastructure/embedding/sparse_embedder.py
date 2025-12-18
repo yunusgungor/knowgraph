@@ -172,16 +172,15 @@ class SparseEmbedder:
             ) from error
 
     def embed_code(self, code: str) -> dict[str, int]:
-        """Generate sparse embedding for code.
+        """Generate sparse embedding for code (CODE-AWARE TOKENIZATION).
 
-        For code, we might want to keep camelCase or snake_case parts.
-        For now, treating same as text but could be specialized.
+        Specialized for code:
+        - Splits camelCase: getUserById → ['get', 'user', 'by', 'id', 'getUserById']
+        - Splits snake_case: user_profile → ['user', 'profile', 'user_profile']
+        - Preserves keywords and operators
         """
         try:
-            # For code, often splitting by non-alphanumeric is good
-            # to catch "my_var" as "my", "var", "my_var" etc.
-            # Here we stick to simple tokenization for consistency.
-            tokens = self._tokenize(code)
+            tokens = self._tokenize_code(code)
             return dict(Counter(tokens))
         except Exception as error:
             raise EmbeddingError(
@@ -194,3 +193,111 @@ class SparseEmbedder:
         text = text.lower()
         tokens = self.token_pattern.findall(text)
         return [t for t in tokens if t not in self.stop_words]
+
+    def _tokenize_code(self, code: str) -> list[str]:
+        """Code-aware tokenization with camelCase/snake_case splitting.
+
+        Returns both split tokens AND original identifiers for maximum recall.
+        Example: 'getUserById' → ['get', 'user', 'by', 'id', 'getuserbyid']
+        """
+        code_lower = code.lower()
+
+        # First, extract all identifiers (alphanumeric sequences)
+        raw_tokens = self.token_pattern.findall(code_lower)
+
+        expanded_tokens = []
+
+        for token in raw_tokens:
+            # Skip stop words but NOT code keywords
+            if token in self.stop_words and not self._is_code_keyword(token):
+                continue
+
+            # Always include the original token
+            expanded_tokens.append(token)
+
+            # Split camelCase: getUserById → ['get', 'user', 'by', 'id']
+            camel_parts = re.findall(r"[a-z]+|[A-Z][a-z]*", token)
+            if len(camel_parts) > 1:
+                expanded_tokens.extend(camel_parts)
+
+            # Split snake_case: user_profile → ['user', 'profile']
+            if "_" in token:
+                snake_parts = token.split("_")
+                expanded_tokens.extend([p for p in snake_parts if p and p not in self.stop_words])
+
+        # Deduplicate while preserving some order
+        seen = set()
+        unique_tokens = []
+        for t in expanded_tokens:
+            if t and t not in seen:
+                seen.add(t)
+                unique_tokens.append(t)
+
+        return unique_tokens
+
+    def _is_code_keyword(self, token: str) -> bool:
+        """Check if token is a programming keyword (should NOT be filtered)."""
+        code_keywords = {
+            "def",
+            "class",
+            "import",
+            "from",
+            "return",
+            "if",
+            "else",
+            "elif",
+            "for",
+            "while",
+            "try",
+            "except",
+            "finally",
+            "with",
+            "as",
+            "async",
+            "await",
+            "yield",
+            "lambda",
+            "pass",
+            "break",
+            "continue",
+            "raise",
+            "assert",
+            "global",
+            "nonlocal",
+            "del",
+            "in",
+            "is",
+            "not",
+            "and",
+            "or",
+            "true",
+            "false",
+            "none",
+            "self",
+            "super",
+            "init",
+            "main",
+            "function",
+            "var",
+            "let",
+            "const",
+            "new",
+            "this",
+            "null",
+            "undefined",
+            "public",
+            "private",
+            "protected",
+            "static",
+            "void",
+            "int",
+            "string",
+            "bool",
+            "float",
+            "double",
+            "char",
+            "interface",
+            "extends",
+            "implements",
+        }
+        return token in code_keywords

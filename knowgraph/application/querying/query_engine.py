@@ -241,9 +241,14 @@ class QueryEngine:
             retrieval_results = self.retriever.retrieve_by_similarity(query_text, top_k)
             similarity_scores = {node.id: score for node, score in retrieval_results}
 
-            # Step 4: Assemble context
+            # Step 4: Assemble context (REFERENCE-AWARE IMPORTANCE!)
             context, _context_blocks = assemble_context(
-                nodes, seed_node_ids, similarity_scores, centrality_scores, max_tokens
+                nodes,
+                seed_node_ids,
+                similarity_scores,
+                centrality_scores,
+                max_tokens,
+                edges=active_edges,
             )
 
             # Step 5: Return context
