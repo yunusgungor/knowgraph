@@ -3,6 +3,7 @@
 Implements smart chunking that respects markdown structure and token limits.
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,6 +19,12 @@ from knowgraph.config import (
     MIN_CHUNK_SIZE,
 )
 from knowgraph.infrastructure.parsing.markdown_parser import MarkdownSection, parse_markdown
+
+logger = logging.getLogger(__name__)
+
+# Memory protection thresholds
+MAX_FILE_SIZE_MB = 100  # Maximum file size before warning
+EXTREME_FILE_SIZE_MB = 500  # Extreme size - reject processing
 
 
 @dataclass
@@ -90,6 +97,27 @@ def chunk_markdown(
     if not markdown_text or markdown_text.isspace():
         # Return empty list for empty/whitespace content
         return []
+
+    # Memory protection: Check file size
+    file_size_bytes = len(markdown_text.encode("utf-8"))
+    file_size_mb = file_size_bytes / (1024 * 1024)
+
+    if file_size_mb > EXTREME_FILE_SIZE_MB:
+        logger.error(
+            f"File too large ({file_size_mb:.1f}MB > {EXTREME_FILE_SIZE_MB}MB limit) at "
+            f"{source_path}. Skipping to prevent memory issues."
+        )
+        raise ValueError(
+            f"File size {file_size_mb:.1f}MB exceeds maximum {EXTREME_FILE_SIZE_MB}MB. "
+            "Consider splitting the file or reducing content."
+        )
+
+    if file_size_mb > MAX_FILE_SIZE_MB:
+        logger.warning(
+            f"Large file detected ({file_size_mb:.1f}MB) at {source_path}. "
+            "Processing may be slow. Consider splitting for better performance."
+        )
+
     # Parse into sections first
     sections = parse_markdown(markdown_text, source_path)
 

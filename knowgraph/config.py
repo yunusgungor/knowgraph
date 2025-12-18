@@ -17,7 +17,28 @@ MIN_CHUNK_SIZE = 150  # Minimum chunk size to avoid noise (increased from 100)
 TOP_K = 20  # Number of seed nodes from vector search
 MAX_NODES = 250  # Maximum nodes in active subgraph (increased from 200)
 ENABLE_QUERY_EXPANSION = True  # Enable LLM-based query expansion
-MAX_CONCURRENT_REQUESTS = 30  # Maximum concurrent API requests (increased from 20)
+
+
+def get_optimal_workers() -> int:
+    """Get optimal worker count based on available system resources.
+
+    Falls back to DEFAULT_MAX_CONCURRENT_REQUESTS if resource detection fails.
+
+    Returns:
+        Optimal number of concurrent workers.
+    """
+    try:
+        from knowgraph.shared.resource_detector import ResourceDetector
+
+        return ResourceDetector.recommend_workers(max_workers=30)
+    except Exception:
+        return 30  # Fallback to default
+
+
+# Maximum concurrent API requests (can be overridden by environment or auto-detection)
+DEFAULT_MAX_CONCURRENT_REQUESTS = 30
+MAX_CONCURRENT_REQUESTS = int(os.getenv("KNOWGRAPH_WORKERS", get_optimal_workers()))
+
 BATCH_SIZE = 15  # Number of chunks to process in a single LLM call (increased from 10)
 
 # Async Configuration
