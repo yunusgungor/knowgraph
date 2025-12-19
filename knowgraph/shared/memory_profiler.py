@@ -11,14 +11,21 @@ import os
 from contextlib import contextmanager
 from typing import Callable, TypeVar
 
+from knowgraph.config import get_settings
+
 logger = logging.getLogger(__name__)
 
 # Type variable for generic function decoration
 F = TypeVar("F", bound=Callable)
 
-# Memory thresholds (in MB)
-WARNING_THRESHOLD_MB = 500  # Warn if operation uses >500MB
-CRITICAL_THRESHOLD_MB = 1000  # Error if operation uses >1GB
+# Load thresholds from configuration
+_settings = get_settings()
+WARNING_THRESHOLD_MB = (
+    _settings.memory.warning_threshold_mb
+)  # Warn if operation uses >500MB (default)
+CRITICAL_THRESHOLD_MB = (
+    _settings.memory.critical_threshold_mb
+)  # Error if operation uses >1GB (default)
 
 
 def get_memory_usage_mb() -> float:

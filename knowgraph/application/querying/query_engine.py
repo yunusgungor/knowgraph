@@ -31,6 +31,7 @@ from knowgraph.domain.algorithms.centrality import (
     compute_centrality_metrics,
     compute_centrality_metrics_async,
 )
+from knowgraph.config import get_settings
 from knowgraph.domain.models.edge import Edge
 from knowgraph.infrastructure.storage.filesystem import (
     read_all_edges,
@@ -226,6 +227,11 @@ class QueryEngine:
         # Validate parameters explicitly
         if not query_text or not query_text.strip():
             raise QueryError("Query text cannot be empty")
+        # Use config defaults if not specified
+        settings = get_settings()
+        top_k = top_k if top_k is not None else settings.query.top_k
+        max_hops = max_hops if max_hops is not None else settings.query.max_hops
+
         if top_k <= 0:
             raise QueryError(f"top_k must be positive, got {top_k}")
         if max_hops < 0:
@@ -398,8 +404,8 @@ class QueryEngine:
     async def query_async(
         self: "QueryEngine",
         query_text: str,
-        top_k: int = 20,
-        max_hops: int = 4,
+        top_k: int | None = None,
+        max_hops: int | None = None,
         max_tokens: int = 3000,
         timeout: float | None = None,
         with_explanation: bool = False,

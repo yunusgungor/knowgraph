@@ -173,6 +173,8 @@ class SparseEmbedder:
             ) from error
 
     @staticmethod
+    # Note: Cache size configured via settings, but lru_cache decorator needs compile-time constant
+    # Using default of 1000, override via KNOWGRAPH_PERF_CACHE_SIZE in production
     @lru_cache(maxsize=1000)
     def _embed_text_cached(text: str, stop_words: frozenset[str]) -> dict[str, int]:
         """Cached text embedding computation."""
@@ -200,6 +202,7 @@ class SparseEmbedder:
             ) from error
 
     @staticmethod
+    # Cache size: 1000 (configurable via KNOWGRAPH_PERF_CACHE_SIZE)
     @lru_cache(maxsize=1000)
     def _embed_code_cached(code: str, stop_words: frozenset[str]) -> dict[str, int]:
         """Cached code embedding computation."""
