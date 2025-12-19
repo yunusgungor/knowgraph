@@ -6,6 +6,9 @@ Clean Code principles.
 
 import os
 
+
+# Validated as unused during Deep Code Clean Phase 6
+
 # Chunking Configuration
 DEFAULT_CHUNK_SIZE = (
     20000  # Maximum characters per chunk (Optimized from 24000 for better memory usage)
@@ -15,14 +18,11 @@ MIN_CHUNK_SIZE = 150  # Minimum chunk size to avoid noise (increased from 100)
 
 # Retrieval Configuration
 TOP_K = 20  # Number of seed nodes from vector search
-MAX_NODES = 250  # Maximum nodes in active subgraph (increased from 200)
 ENABLE_QUERY_EXPANSION = True  # Enable LLM-based query expansion
 
 
 def get_optimal_workers() -> int:
     """Get optimal worker count based on available system resources.
-
-    Falls back to DEFAULT_MAX_CONCURRENT_REQUESTS if resource detection fails.
 
     Returns:
         Optimal number of concurrent workers.
@@ -36,16 +36,29 @@ def get_optimal_workers() -> int:
 
 
 # Maximum concurrent API requests (can be overridden by environment or auto-detection)
-DEFAULT_MAX_CONCURRENT_REQUESTS = 30
 MAX_CONCURRENT_REQUESTS = int(os.getenv("KNOWGRAPH_WORKERS", get_optimal_workers()))
 
 BATCH_SIZE = 15  # Number of chunks to process in a single LLM call (increased from 10)
 
 # Async Configuration
 MAX_CONCURRENT_QUERIES = 15  # Maximum concurrent queries in async mode (increased from 10)
-MAX_CONCURRENT_NODE_LOADS = 100  # Maximum concurrent node file loads (increased from 50)
 QUERY_TIMEOUT_SECONDS = 30.0  # Default timeout for async queries
-BATCH_QUERY_CHUNK_SIZE = 8  # Number of queries to process concurrently in batch (increased from 5)
+
+
+# Centrality Optimization Configuration
+CENTRALITY_APPROXIMATE_THRESHOLD = 75  # Use approximate algorithms for graphs >75 nodes (optimized)
+CENTRALITY_MULTIPROCESSING_ENABLED = True  # Multiprocessing enabled for large graphs
+CENTRALITY_MULTIPROCESSING_THRESHOLD = (
+    500  # Use multiprocessing for graphs >500 nodes (reduced from 1000)
+)
+
+# Approximate Centrality Settings
+BETWEENNESS_SAMPLE_SIZE_FACTOR = (
+    0.4  # Sample size = 0.4*sqrt(n) for approximate betweenness (optimized)
+)
+BETWEENNESS_MIN_SAMPLES = 15  # Minimum samples for approximate betweenness (increased for accuracy)
+EIGENVECTOR_MAX_ITER_APPROXIMATE = 50  # Max iterations for approximate eigenvector
+EIGENVECTOR_MAX_ITER_EXACT = 100  # Max iterations for exact eigenvector
 
 
 # LLM Configuration
@@ -63,12 +76,11 @@ LLM_RETRY_BASE_DELAY = float(
 
 # Graph Traversal Configuration
 MAX_HOPS = 4  # Maximum graph traversal depth
-MIN_HOPS = 1  # Minimum traversal depth
-MAX_HOPS_LIMIT = 6  # Hard limit for traversal
+
 
 # Context Assembly Configuration
 MAX_TOKENS = 50000  # Maximum tokens for LLM context (increased for large files)
-TOKEN_BUDGET_UTILIZATION = 0.90  # Target 90% token budget usage
+
 
 # Node Activation Scoring Weights (sum = 1.0)
 ALPHA = 0.6  # Weight for similarity score
@@ -84,12 +96,7 @@ CENTRALITY_EIGENVECTOR_WEIGHT = 0.1
 
 # Storage Configuration
 DEFAULT_GRAPH_STORE_PATH = "./graphstore"
-NODES_DIR = "nodes"
-EDGES_DIR = "edges"
-METADATA_DIR = "metadata"
 EDGES_FILENAME = "edges.jsonl"
-NODES_FILENAME = "nodes.jsonl"
-MANIFEST_FILENAME = "manifest.json"
 
 
 # Node Role Weights (for importance scoring)
@@ -102,10 +109,6 @@ ROLE_WEIGHTS = {
     "text": 0.6,
 }
 
-# Performance Configuration
-
-GRAPH_TRAVERSAL_TIMEOUT_MS = 2000  # Target traversal + centrality latency
-INCREMENTAL_UPDATE_TIMEOUT_S = 60  # Target for 10 file changes
 
 # Token Penalty Configuration
 MAX_TOKEN_COUNT_FOR_PENALTY = 1000  # Token count threshold for scoring penalty
@@ -114,12 +117,11 @@ TOKEN_PENALTY_FACTOR = 0.1  # Penalty factor for large chunks
 # Hashing Configuration
 FILE_READ_CHUNK_SIZE = 8192  # Bytes to read at a time for hashing
 
+
 # Validation Limits
 MAX_NODE_TOKEN_COUNT = 50000  # Maximum tokens per node
 MAX_QUERY_PREVIEW_LENGTH = 100  # Characters to show in error messages
 
-# Sampling Configuration
-MAX_SIMILARITY_SAMPLE_PAIRS = 1000  # Max pairs for adaptive threshold calculation
 
 # Milliseconds to Seconds Conversion
 MS_TO_SECONDS = 1000  # Conversion factor for timing display
@@ -131,14 +133,3 @@ SEED_NODE_BONUS = 1.0  # Importance bonus for seed nodes in scoring
 DEFAULT_SIMILARITY_SCORE = 0.0  # Default if similarity not found
 DEFAULT_CENTRALITY_SCORE = 0.0  # Default if centrality not calculated
 DEFAULT_ROLE_WEIGHT = 0.5  # Default weight for unknown node types
-
-# Cache Configuration
-DEFAULT_CACHE_DIR = "/workspace/.cache"
-MODELS_CACHE_DIR = "/workspace/.cache/models"
-HF_HOME_DIR = "/workspace/.cache/huggingface"
-TRANSFORMERS_CACHE_DIR = "/workspace/.cache/huggingface/transformers"
-HF_DATASETS_CACHE_DIR = "/workspace/.cache/huggingface/datasets"
-
-# Logging Configuration
-LOG_LEVEL = "INFO"
-VERBOSE_LOG_LEVEL = "DEBUG"
