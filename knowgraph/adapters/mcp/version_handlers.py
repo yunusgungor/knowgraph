@@ -3,9 +3,16 @@ from pathlib import Path
 
 import mcp.types as types
 
+from knowgraph.shared.refactoring import validate_required_argument
+from knowgraph.adapters.mcp.utils import resolve_graph_path
+from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+
 
 # Version management handlers
-async def handle_list_versions() -> list[types.TextContent]:
+async def handle_list_versions(
+    arguments: dict[str, Any],
+    project_root: Path,
+) -> list[types.TextContent]:
     """Handle knowgraph_list_versions tool."""
     from knowgraph.adapters.mcp.version_methods import list_graph_versions
 
@@ -59,11 +66,7 @@ async def handle_rollback(
     project_root: Path,
 ) -> list[types.TextContent]:
     """Handle knowgraph_rollback tool."""
-    from knowgraph.adapters.mcp.handlers import validate_required_argument
-    from knowgraph.adapters.mcp.utils import resolve_graph_path
     from knowgraph.infrastructure.storage.version_rollback import RollbackManager
-    from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
-    import mcp.types as types
 
     if error := validate_required_argument(arguments, "version_id"):
         return [types.TextContent(type="text", text=error)]

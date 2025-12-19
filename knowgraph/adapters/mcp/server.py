@@ -155,10 +155,10 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
     provider = get_llm_provider(app)
 
     if name == "knowgraph_query":
-        return await handle_query(arguments, provider, PROJECT_ROOT)
+        return await handle_query(arguments, provider, PROJECT_ROOT, server=app)
 
     elif name == "knowgraph_index":
-        return await handle_index(arguments, provider, PROJECT_ROOT)
+        return await handle_index(arguments, provider, PROJECT_ROOT, server=app)
 
     elif name == "knowgraph_analyze_impact":
         return await handle_analyze_impact(arguments, PROJECT_ROOT)

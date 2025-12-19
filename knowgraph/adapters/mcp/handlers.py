@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import mcp.types as types
+from mcp.server import Server
 
 from knowgraph.adapters.mcp.methods import analyze_path_impact_report, index_graph
 from knowgraph.adapters.mcp.utils import resolve_graph_path
@@ -19,6 +20,7 @@ from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.domain.algorithms.graph_validator import validate_graph_consistency
 from knowgraph.infrastructure.storage.manifest import Manifest
 from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from knowgraph.shared.progress import ProgressNotifier
 from knowgraph.shared.rate_limiter import (
     RateLimiter as SharedRateLimiter,
 )
@@ -59,6 +61,7 @@ async def handle_query(
     arguments: dict[str, Any],
     provider: Any,
     project_root: Path,
+    server: Server | None = None,
 ) -> list[types.TextContent]:
     """Handle knowgraph_query tool with resilience patterns.
 
@@ -69,6 +72,7 @@ async def handle_query(
         arguments: Tool arguments
         provider: Intelligence provider for LLM
         project_root: Project root path
+        server: MCP server instance for progress notifications
 
     Returns:
     -------
@@ -78,7 +82,14 @@ async def handle_query(
     with trace_operation(
         "mcp_query", metadata={"query": arguments.get("query", "")[:100]}
     ) as trace:
+        # Create progress notifier for real-time updates
+        progress = ProgressNotifier(server, "Query Search") if server else None
+        
         try:
+            if progress:
+                await progress.start(5, "Initializing semantic search...")
+                await progress.update(1, "🔍 Starting semantic search...")
+            
             # Rate limiting - use unique identifier for tracking
             identifier = arguments.get("user_id", "default")
             await _global_rate_limiter.allow(identifier)
@@ -102,24 +113,37 @@ async def handle_query(
             query = arguments.get("query")
             if error := validate_required_argument(arguments, "query"):
                 trace.add_event("validation_error", {"error": error})
+                if progress:
+                    await progress.error(f"Validation error: {error}")
                 return [types.TextContent(type="text", text=error)]
 
             graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
             graph_path = resolve_graph_path(graph_path_arg, project_root)
 
+            if progress:
+                await progress.update(1, f"📝 Query: \"{query[:50]}...\"")
+
             # Wrap query execution with circuit breaker
             async def execute_query():
+                if progress:
+                    await progress.update(2, "🔧 Initializing query engine...")
+                
                 engine = QueryEngine(graph_path)
                 params = extract_query_parameters(arguments)
 
                 # Query Expansion (now supports generic provider)
                 if params["expand_query"]:
+                    if progress:
+                        await progress.update(2, "🧮 Expanding query with AI...")
                     query_expanded = await _expand_query_if_available(query, provider)
                     trace.add_event(
                         "query_expanded", {"original": query[:50], "expanded": query_expanded[:50]}
                     )
                 else:
                     query_expanded = query
+
+                if progress:
+                    await progress.update(3, f"🔎 Searching graph (top_k={params['top_k']}, max_hops={params['max_hops']})...")
 
                 result = await engine.query_async(
                     query_expanded,
@@ -130,6 +154,10 @@ async def handle_query(
                     enable_hierarchical_lifting=params["enable_hierarchical_lifting"],
                     lift_levels=params["lift_levels"],
                 )
+                
+                if progress:
+                    await progress.update(4, f"✅ Found {result.active_subgraph_size} relevant nodes")
+                
                 return result, params
 
             # Execute with circuit breaker protection
@@ -146,16 +174,23 @@ async def handle_query(
             answer = result.context
 
             if provider:
+                if progress:
+                    await progress.update(4, "🤖 Generating AI answer from context...")
                 answer = await _generate_llm_answer(
                     query, result, params["system_prompt"], params["with_explanation"], provider
                 )
                 trace.add_event("llm_answer_generated", {"length": len(answer)})
 
+            if progress:
+                await progress.complete("✅ Search completed successfully!")
+            
             trace.add_event("query_completed", {"success": True})
             return [types.TextContent(type="text", text=answer)]
 
         except Exception as e:
             trace.record_exception(e)
+            if progress:
+                await progress.error(f"Query failed: {str(e)}")
             return [
                 types.TextContent(
                     type="text", text=build_error_response(e, "Error executing query")
@@ -215,6 +250,7 @@ async def handle_index(
     arguments: dict[str, Any],
     provider: Any,
     project_root: Path,
+    server: Server | None = None,
 ) -> list[types.TextContent]:
     """Handle knowgraph_index tool with circuit breaker protection and tracing.
 
@@ -225,6 +261,7 @@ async def handle_index(
         arguments: Tool arguments
         provider: Intelligence provider for LLM
         project_root: Project root path
+        server: MCP server instance for progress notifications
 
     Returns:
     -------
@@ -260,6 +297,19 @@ async def handle_index(
                 },
             )
 
+            # Create progress notifier for real-time updates
+            progress = ProgressNotifier(server, "Indexing") if server else None
+            
+            if progress:
+                await progress.start(90, f"Starting indexing for {input_path[:50]}...")
+            
+            async def progress_callback(stage: str, current: int, total: int, message: str) -> None:
+                """Callback for progress updates from run_index."""
+                if progress:
+                    # Map 9 steps to 90 units (10 per step) for smoother progress
+                    progress_value = current * 10
+                    await progress.update(progress_value, f"[{stage}] {message}")
+            
             result = await index_graph(
                 input_path,
                 graph_path,
@@ -269,6 +319,7 @@ async def handle_index(
                 include_patterns=include_patterns,
                 exclude_patterns=exclude_patterns,
                 access_token=access_token,
+                progress_callback=progress_callback if progress else None,
             )
 
             trace.add_event("indexing_completed", {"success": True})
@@ -277,7 +328,6 @@ async def handle_index(
         except Exception as e:
             trace.record_exception(e)
             return [types.TextContent(type="text", text=build_error_response(e, "Indexing failed"))]
-
 
 async def handle_search_bookmarks(
     arguments: dict[str, Any],

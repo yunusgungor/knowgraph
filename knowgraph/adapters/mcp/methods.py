@@ -3,6 +3,7 @@ import contextlib
 import sys
 from dataclasses import replace
 from pathlib import Path
+from typing import Awaitable, Callable
 
 import mcp.types as types
 
@@ -33,6 +34,7 @@ async def index_graph(
     include_patterns: list[str] | None = None,
     exclude_patterns: list[str] | None = None,
     access_token: str | None = None,
+    progress_callback: Callable[[str, int, int, str], Awaitable[None]] | None = None,
 ) -> list[types.TextContent]:
     """Handles the indexing process for markdown files, repositories, and code directories.
 
@@ -41,6 +43,9 @@ async def index_graph(
     - Git repository URLs (GitHub, GitLab, Bitbucket)
     - Code directories (with automatic conversion to markdown)
     - Resume mode and incremental updates
+    
+    Args:
+        progress_callback: Optional callback for progress updates (stage, current, total, message)
     """
     from knowgraph.infrastructure.parsing.repo_ingestor import detect_source_type
 
@@ -117,6 +122,7 @@ async def index_graph(
             await run_index(
                 input_path=input_path,
                 output_path=str(graph_path),
+                progress_callback=progress_callback,
                 provider=provider,
                 include_patterns=include_patterns,
                 exclude_patterns=exclude_patterns,
