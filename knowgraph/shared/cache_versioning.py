@@ -273,7 +273,7 @@ def get_cache_stats() -> dict[str, Any]:
     valid_count = 0
     invalid_count = 0
 
-    for key, (value, cache_version) in _versioned_cache.items():
+    for _, (_, cache_version) in _versioned_cache.items():
         if _cache_manager is not None:
             if _cache_manager.is_cache_valid(cache_version):
                 valid_count += 1

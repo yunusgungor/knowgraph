@@ -185,11 +185,6 @@ def _compute_centrality_impl(
     # Use approximate algorithms for medium-sized graphs
     use_approximate = len(nodes) > CENTRALITY_APPROXIMATE_THRESHOLD
 
-    # Use multiprocessing for very large graphs
-    use_multiprocessing = (
-        CENTRALITY_MULTIPROCESSING_ENABLED and len(nodes) > CENTRALITY_MULTIPROCESSING_THRESHOLD
-    )
-
     # Betweenness centrality (architectural boundaries)
     try:
         if use_approximate:

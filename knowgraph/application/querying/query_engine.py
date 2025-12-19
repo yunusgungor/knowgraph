@@ -580,8 +580,6 @@ class QueryEngine:
                             max_hops=max_hops,
                             max_tokens=max_tokens,
                             with_explanation=with_explanation,
-                            enable_hierarchical_lifting=enable_hierarchical_lifting,
-                            lift_levels=lift_levels,
                         )
 
                     result = await asyncio.wait_for(
@@ -627,8 +625,6 @@ class QueryEngine:
         max_hops: int,
         max_tokens: int,
         with_explanation: bool,
-        enable_hierarchical_lifting: bool,
-        lift_levels: int,
     ) -> QueryResult:
         """Internal async implementation without timeout wrapper."""
         start_time = time.time()
@@ -839,8 +835,6 @@ class QueryEngine:
         max_tokens: int = 3000,
         batch_size: int = 5,
         timeout: float | None = None,
-        enable_hierarchical_lifting: bool = True,
-        lift_levels: int = 2,
         progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> list[QueryResult]:
         """Execute multiple queries concurrently with advanced features.
@@ -905,8 +899,6 @@ class QueryEngine:
                         max_hops=max_hops,
                         max_tokens=max_tokens,
                         with_explanation=False,  # Disable for batch performance
-                        enable_hierarchical_lifting=enable_hierarchical_lifting,
-                        lift_levels=lift_levels,
                     ),
                     timeout=timeout,
                 )

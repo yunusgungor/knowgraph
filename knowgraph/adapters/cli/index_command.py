@@ -250,7 +250,7 @@ async def run_index(
 
             from knowgraph.infrastructure.parsing.conversation_ingestor import ingest_conversation
 
-            markdown_content, temp_path = await ingest_conversation(Path(input_path))
+            _, temp_path = await ingest_conversation(Path(input_path))
             temp_files_to_cleanup.append(temp_path)
 
             # Treat the generated markdown as a single file
