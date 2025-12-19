@@ -6,6 +6,7 @@ Allows users to tag important conversation snippets for later retrieval.
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from knowgraph.domain.models.node import Node
@@ -48,10 +49,18 @@ def create_tagged_snippet(
     node_id = str(uuid4())
     timestamp = datetime.now()
 
+    # ENHANCEMENT: Process tag with code-aware tokenization
+    from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
+
+    embedder = SparseEmbedder()
+    tag_tokens = embedder.embed_code(tag)  # camelCase/snake_case splitting
+    tokenized_tags = list(tag_tokens.keys())  # Expanded tokens
+
     # Build metadata
     metadata = {
         "type": "tagged_snippet",
         "tag": tag,
+        "tag_tokens": tokenized_tags,  # NEW: For better search
         "timestamp": timestamp.isoformat(),
         "conversation_id": conversation_id,
         "user_question": user_question,
@@ -123,6 +132,7 @@ def format_tagged_snippet_markdown(snippet: TaggedSnippet) -> str:
 async def index_tagged_snippet(
     snippet: Node,
     graph_path: Path,
+    provider: Any | None = None,
 ) -> None:
     """Index a tagged snippet into the graph.
 
@@ -130,10 +140,12 @@ async def index_tagged_snippet(
     ----
         snippet: Tagged snippet node
         graph_path: Path to graph storage
+        provider: Optional IntelligenceProvider (defaults to OpenAIProvider)
 
     """
     # Create temporary markdown file
     import tempfile
+    from typing import Any
 
     from knowgraph.adapters.cli.index_command import run_index
     from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
@@ -153,7 +165,7 @@ async def index_tagged_snippet(
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".md",
-        prefix=f"tagged_{snippet_data.tag.replace(' ', '_')}_",
+        prefix=f"tagged_{str(snippet_data.tag).replace(' ', '_')}_",
         delete=False,
         encoding="utf-8",
     ) as temp_file:
@@ -162,7 +174,9 @@ async def index_tagged_snippet(
 
     try:
         # Index the snippet
-        provider = OpenAIProvider()
+        if provider is None:
+            provider = OpenAIProvider()
+
         await run_index(
             input_path=str(temp_path),
             output_path=str(graph_path),

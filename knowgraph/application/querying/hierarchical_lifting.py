@@ -140,3 +140,69 @@ def explain_lifted_context(
         f"Added {added_count} parent directory documentation file(s) "
         f"for architectural context: {', '.join(lifted_paths)}"
     )
+
+
+def lift_conversation_artifacts(
+    conversation_nodes: list[Node],
+    graph_store_path: Path,
+    max_related: int = 3,
+) -> list[Node]:
+    """Lift related conversation artifacts for richer context.
+
+    For conversation nodes (e.g., task.md), automatically include
+    related artifacts (walkthrough.md, implementation_plan.md) from
+    the same conversation directory.
+
+    Args:
+    ----
+        conversation_nodes: Initial conversation nodes
+        graph_store_path: Path to graph storage
+        max_related: Maximum related artifacts to include
+
+    Returns:
+    -------
+        Original nodes + related conversation artifacts
+
+    """
+    from knowgraph.infrastructure.storage.graph_store import GraphStore
+
+    store = GraphStore(graph_store_path)
+    all_nodes = list(store.list_nodes())
+
+    # Group nodes by conversation directory
+    conversation_dirs = {}
+    for node in conversation_nodes:
+        if node.path and ("brain/" in node.path or "conversation" in node.path.lower()):
+            # Extract conversation directory
+            # e.g., "brain/conv-id/task.md" → "brain/conv-id"
+            parts = Path(node.path).parts
+            if len(parts) >= 2:
+                conv_dir = "/".join(parts[:-1])
+                if conv_dir not in conversation_dirs:
+                    conversation_dirs[conv_dir] = []
+                conversation_dirs[conv_dir].append(node)
+
+    # Find related artifacts in same conversation directory
+    related_nodes = []
+    artifact_patterns = ["task.md", "walkthrough.md", "implementation_plan.md"]
+
+    for conv_dir, nodes in conversation_dirs.items():
+        # Find all nodes in same conversation directory
+        for other_node in all_nodes:
+            if other_node in nodes:
+                continue  # Skip nodes we already have
+
+            if other_node.path and conv_dir in other_node.path:
+                # Check if it's an artifact
+                filename = Path(other_node.path).name.lower()
+                if any(pattern in filename for pattern in artifact_patterns):
+                    related_nodes.append(other_node)
+
+                    if len(related_nodes) >= max_related:
+                        break
+
+    # Combine original + related (unique)
+    all_node_ids = {node.id for node in conversation_nodes}
+    unique_related = [n for n in related_nodes if n.id not in all_node_ids]
+
+    return conversation_nodes + unique_related[:max_related]

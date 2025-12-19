@@ -156,7 +156,6 @@ class SmartGraphBuilder:
                     list_all_nodes,
                     read_node_metadata_only,
                 )
-                from dataclasses import replace
 
                 existing_metadata = []
                 graph_path_obj = Path(graph_path)

@@ -10,12 +10,14 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
 from knowgraph.adapters.mcp.handlers import (
+    handle_analyze_conversations,
     handle_analyze_impact,
     handle_batch_query,
     handle_discover_conversations,
     handle_get_stats,
     handle_index,
     handle_query,
+    handle_search_bookmarks,
     handle_tag_snippet,
     handle_validate,
 )
@@ -29,6 +31,7 @@ from knowgraph.shared.versioning import (
 
 app = Server("knowgraph-mcp")
 logger = logging.getLogger(__name__)
+
 
 # Register API versions on module load
 def _register_api_versions():
@@ -66,6 +69,7 @@ def _register_api_versions():
     )
 
     logger.info(f"Registered API versions, current: {get_current_version()}")
+
 
 _register_api_versions()
 
@@ -167,6 +171,12 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
 
     elif name == "knowgraph_batch_query":
         return await handle_batch_query(arguments, provider, PROJECT_ROOT)
+
+    elif name == "knowgraph_search_bookmarks":
+        return await handle_search_bookmarks(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_analyze_conversations":
+        return await handle_analyze_conversations(arguments, PROJECT_ROOT)
 
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -428,6 +438,49 @@ async def list_tools() -> list[types.Tool]:
                     },
                 },
                 "required": ["tag", "snippet"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_search_bookmarks",
+            description="Search tagged bookmarks/snippets with semantic matching. Find previously saved code snippets, examples, and important notes.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query for finding bookmarks",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of bookmarks to return (default: 10)",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_analyze_conversations",
+            description="Analyze conversation patterns for topics and trends. Discover what topics are trending, when they were discussed, and knowledge evolution over time.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Optional specific topic to analyze (omit for trending topics)",
+                    },
+                    "time_window_days": {
+                        "type": "integer",
+                        "description": "Number of days to analyze (default: 7)",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
             },
         ),
     ]

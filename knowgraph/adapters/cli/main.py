@@ -15,6 +15,7 @@ from knowgraph.adapters.cli.discover_conversations_command import (  # noqa: E40
 from knowgraph.adapters.cli.index_command import index_command  # noqa: E402
 from knowgraph.adapters.cli.query_command import query_command  # noqa: E402
 from knowgraph.adapters.cli.update_command import update_command  # noqa: E402
+from knowgraph.adapters.cli.auto_tag_command import auto_tag_bookmarks  # noqa: E402
 
 # Load environment variables
 load_dotenv()
@@ -35,6 +36,7 @@ cli.add_command(index_command, name="index")
 cli.add_command(query_command, name="query")
 cli.add_command(update_command, name="update")
 cli.add_command(discover_and_index_conversations, name="discover-conversations")
+cli.add_command(auto_tag_bookmarks, name="auto-tag-bookmarks")
 
 
 @cli.command(name="serve")

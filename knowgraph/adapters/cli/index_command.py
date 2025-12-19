@@ -95,10 +95,25 @@ async def run_index(
     include_patterns: list[str] | None = None,
     exclude_patterns: list[str] | None = None,
     access_token: str | None = None,
+    link_conversations: bool = False,
+    incremental: bool = False,
 ) -> None:
     """Execute indexing process (AI-Driven).
 
     Supports markdown files, directories, Git repositories, and code directories.
+
+    Args:
+    ----
+        input_path: Path to input (markdown, code, or repo URL)
+        output_path: Path for graph storage
+        verbose: Enable verbose logging
+        provider: Intelligence provider (defaults to OpenAI)
+        include_patterns: File patterns to include
+        exclude_patterns: File patterns to exclude
+        access_token: GitHub token for private repos
+        link_conversations: Auto-discover and link conversations
+        incremental: Only index new/modified files
+
     """
     start_time = time.time()
 
@@ -521,10 +536,62 @@ async def run_index(
         if verbose:
             click.echo(f"✓ Saved manifest (v{manifest.version})")
 
+        # POST-INDEX HOOKS
+        if link_conversations or incremental:
+            if verbose:
+                click.echo("\n" + "=" * 60)
+                click.echo("POST-INDEX PROCESSING")
+                click.echo("=" * 60)
+
+        # Auto-link conversations
+        if link_conversations:
+            if verbose:
+                click.echo("\n🔗 Auto-linking conversations...")
+            try:
+                from knowgraph.application.indexing.post_index_hooks import auto_link_conversations
+
+                conv_stats = await auto_link_conversations(
+                    Path(graph_store_path),
+                    workspace_path=Path(input_path) if not source_type == "repository" else None,
+                )
+
+                if verbose:
+                    click.echo(f"  Conversations found: {conv_stats['conversations_found']}")
+                    click.echo(f"  Conversations linked: {conv_stats['conversations_linked']}")
+                    click.echo(f"  Edges created: {conv_stats['edges_created']}")
+                    if conv_stats["errors"] > 0:
+                        click.echo(f"  Errors: {conv_stats['errors']}")
+            except Exception as e:
+                if verbose:
+                    click.echo(f"  ⚠️  Conversation linking failed: {e}")
+
+        # Collect enhanced statistics
+        if verbose:
+            click.echo("\n" + "=" * 60)
+            click.echo("INDEXING STATISTICS")
+            click.echo("=" * 60)
+
+            try:
+                from knowgraph.application.indexing.post_index_hooks import collect_index_stats
+
+                stats = collect_index_stats(Path(graph_store_path))
+
+                click.echo(f"\n📊 Nodes by Type:")
+                click.echo(f"  Code nodes: {stats['code_nodes']}")
+                click.echo(f"  Markdown nodes: {stats['markdown_nodes']}")
+                if stats["conversation_nodes"] > 0:
+                    click.echo(f"  Conversation nodes: {stats['conversation_nodes']}")
+                if stats["bookmark_nodes"] > 0:
+                    click.echo(f"  Bookmarks: {stats['bookmark_nodes']}")
+                click.echo(f"  Total nodes: {stats['total_nodes']}")
+                click.echo(f"\n📈 Edges: {stats['total_edges']}")
+            except Exception:
+                pass
+
         elapsed = time.time() - start_time
         if verbose:
-            click.echo(f"\nGraph stored in: {graph_store_path}")
-            click.echo(f"Indexing completed in {elapsed:.1f}s")
+            click.echo(f"\n✅ Indexing completed in {elapsed:.1f}s")
+            click.echo(f"Graph stored in: {graph_store_path}")
 
     except RepositoryIngestorError as e:
         click.echo(f"Repository ingestion error: {e}", err=True)
@@ -544,21 +611,49 @@ async def run_index(
 
 
 @click.command()
-@click.argument("input_path", type=click.Path(exists=True))
+@click.argument("input_path", type=str)
 @click.option(
     "--output",
     "-o",
-    default=DEFAULT_GRAPH_STORE_PATH,
-    help="Output directory for graph storage",
+    default=str(DEFAULT_GRAPH_STORE_PATH),
+    help="Output path for the graph store",
 )
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
-def index_command(input_path: str, output: str, verbose: bool) -> None:
-    """Index markdown files into knowledge graph.
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
+@click.option(
+    "--link-conversations",
+    is_flag=True,
+    help="Auto-discover and link conversations to code after indexing",
+)
+@click.option(
+    "--incremental",
+    is_flag=True,
+    help="Only index new/modified files (uses checkpoint for faster re-indexing)",
+)
+def index_command(
+    input_path: str,
+    output: str,
+    verbose: bool,
+    link_conversations: bool,
+    incremental: bool,
+) -> None:
+    """Index markdown files, code, or repositories into a knowledge graph.
 
-    INPUT_PATH: Path to markdown file or directory
+    Enhanced with:
+    - Auto conversation discovery and linking (--link-conversations)
+    - Incremental indexing for faster updates (--incremental)
     """
+    import asyncio
+
     try:
-        asyncio.run(run_index(input_path, output, verbose))
+        asyncio.run(
+            run_index(
+                input_path,
+                output,
+                verbose,
+                link_conversations=link_conversations,
+                incremental=incremental,
+            )
+        )
     except Exception as error:
         click.echo(f"Error: {error}", err=True)
         if verbose:

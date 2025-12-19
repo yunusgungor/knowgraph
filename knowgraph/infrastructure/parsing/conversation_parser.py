@@ -115,22 +115,62 @@ def parse_antigravity_log(log_path: Path) -> ConversationData:
     # Simple parsing: split by task boundaries or user requests
     # This is a simplified version - can be enhanced
     user_pattern = r"<USER_REQUEST>(.*?)</USER_REQUEST>"
-    user_matches = re.finditer(user_pattern, content, re.DOTALL)
+    user_matches = list(re.finditer(user_pattern, content, re.DOTALL))
 
-    for match in user_matches:
-        user_content = match.group(1).strip()
-        has_code = "```" in user_content
-        code_blocks = extract_code_blocks(user_content) if has_code else []
+    if user_matches:
+        for match in user_matches:
+            user_content = match.group(1).strip()
+            has_code = "```" in user_content
+            code_blocks = extract_code_blocks(user_content) if has_code else []
 
-        messages.append(
-            Message(
-                role="user",
-                content=user_content,
-                timestamp=datetime.now(),  # Log doesn't have timestamps
-                has_code=has_code,
-                code_blocks=code_blocks,
+            messages.append(
+                Message(
+                    role="user",
+                    content=user_content,
+                    timestamp=datetime.now(),  # Log doesn't have timestamps
+                    has_code=has_code,
+                    code_blocks=code_blocks,
+                )
             )
+    else:
+        # Fallback: Try identifying 'User:' or 'Human:' lines
+        # This covers cases where logs are plain text dumps
+        fallback_pattern = (
+            r"(?:User|Human|Prompt):\s*(.*?)(?=\n(?:User|Human|Prompt|Assistant|Model|System):|$)"
         )
+        fallback_matches = list(re.finditer(fallback_pattern, content, re.DOTALL | re.IGNORECASE))
+
+        if not fallback_matches:
+            # Last resort: Treat the whole file as one user message if it's not too large
+            # but check if it looks like a conversation
+            if len(content) > 10 and len(content) < 50000:
+                messages.append(
+                    Message(
+                        role="user",
+                        content=content.strip(),
+                        timestamp=datetime.now(),
+                        has_code="```" in content,
+                        code_blocks=extract_code_blocks(content) if "```" in content else [],
+                    )
+                )
+
+        for match in fallback_matches:
+            user_content = match.group(1).strip()
+            if not user_content:
+                continue
+
+            has_code = "```" in user_content
+            code_blocks = extract_code_blocks(user_content) if has_code else []
+
+            messages.append(
+                Message(
+                    role="user",
+                    content=user_content,
+                    timestamp=datetime.now(),
+                    has_code=has_code,
+                    code_blocks=code_blocks,
+                )
+            )
 
     # Get file stats for timestamps
     stat = log_path.stat()
@@ -401,7 +441,9 @@ def detect_conversation_format(file_path: Path) -> str | None:
         Format type: "antigravity", "cursor", "claude", "github_copilot", or None
 
     """
-    if file_path.suffix == ".txt" and "antigravity" in str(file_path):
+    if (file_path.suffix == ".txt" or file_path.suffix == ".md") and "antigravity" in str(
+        file_path
+    ):
         return "antigravity"
 
     if file_path.suffix == ".aichat":
