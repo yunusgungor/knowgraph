@@ -177,45 +177,6 @@ def build_llm_prompt(
     return prompt
 
 
-def build_conversation_discovery_response(
-    discovered: dict[str, list[Path]],
-    indexed_count: int,
-    failed_count: int,
-    graph_path: Path,
-) -> str:
-    """Build conversation discovery response message.
-
-    Args:
-    ----
-        discovered: Dictionary of editor names to file paths
-        indexed_count: Number of successfully indexed conversations
-        failed_count: Number of failed indexing attempts
-        graph_path: Path to graph storage
-
-    Returns:
-    -------
-        Formatted discovery response
-    """
-    results_summary = []
-    for editor_name, files in discovered.items():
-        results_summary.append(f"\n📂 {editor_name.upper()}: {len(files)} conversations")
-
-    total_files = sum(len(files) for files in discovered.values())
-    response = (
-        f"✅ Auto-discovered {total_files} conversations across {len(discovered)} editors:\n"
-        + "".join(results_summary)
-        + "\n\n📥 Indexing complete:\n"
-        + f"  Indexed: {indexed_count} conversations\n"
-    )
-
-    if failed_count > 0:
-        response += f"  Failed: {failed_count} conversations\n"
-
-    response += f"\n📊 Graph stored in: {graph_path}"
-
-    return response
-
-
 def format_impact_result(result: Any) -> str:
     """Format impact analysis result to string.
 

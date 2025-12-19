@@ -6,8 +6,6 @@ from knowgraph.application.querying.hierarchical_lifting import (
 from knowgraph.application.querying.query_engine import (
     QueryEngine,
     QueryResult,
-    clear_query_result_cache,
-    get_query_cache_stats,
 )
 from knowgraph.application.querying.conversation_search import (
     search_bookmarks,
@@ -18,8 +16,6 @@ __all__ = [
     # Core query
     "QueryEngine",
     "QueryResult",
-    "clear_query_result_cache",
-    "get_query_cache_stats",
     # Hierarchical lifting
     "lift_hierarchical_context",
     # Conversation search

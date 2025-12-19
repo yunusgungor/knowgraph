@@ -81,24 +81,6 @@ def _get_query_cache_key(
     return hashlib.md5(key_parts.encode()).hexdigest()
 
 
-def clear_query_result_cache() -> None:
-    """Clear query result cache."""
-    _query_result_cache.clear()
-
-
-def get_query_cache_stats() -> dict[str, int]:
-    """Get query cache statistics."""
-    return {
-        "size": len(_query_result_cache),
-        "max_size": _query_cache_max_size,
-        "utilization": (
-            int((len(_query_result_cache) / _query_cache_max_size) * 100)
-            if _query_cache_max_size > 0
-            else 0
-        ),
-    }
-
-
 @dataclass
 class QueryResult:
     """Result from query execution.
@@ -848,20 +830,6 @@ class QueryEngine:
                 graph_expansion_time=0.0,
                 centrality_time=0.0,
             )
-
-    async def cancel_all_queries(self: "QueryEngine") -> None:
-        """Cancel all active queries gracefully.
-
-        This method cancels all currently running async queries and waits
-        for them to complete or be cancelled.
-
-        """
-        for task in self._active_tasks:
-            task.cancel()
-
-        # Wait for all tasks to complete/cancel
-        await asyncio.gather(*self._active_tasks, return_exceptions=True)
-        self._active_tasks.clear()
 
     async def batch_query_async(
         self: "QueryEngine",

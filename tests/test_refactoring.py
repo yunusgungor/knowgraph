@@ -5,7 +5,6 @@ from uuid import uuid4
 
 from knowgraph.domain.models.edge import Edge
 from knowgraph.shared.refactoring import (
-    build_conversation_discovery_response,
     build_error_response,
     build_graph_stats_response,
     build_llm_prompt,
@@ -46,7 +45,16 @@ class TestFilterActiveEdges:
 
     def test_filter_no_active_nodes(self):
         """Test filtering with no active nodes."""
-        edges = [Edge(source=uuid4(), target=uuid4(), type="semantic", score=0.5, created_at=0, metadata={})]
+        edges = [
+            Edge(
+                source=uuid4(),
+                target=uuid4(),
+                type="semantic",
+                score=0.5,
+                created_at=0,
+                metadata={},
+            )
+        ]
 
         result = filter_active_edges(edges, set())
 
@@ -139,7 +147,11 @@ class TestBuildGraphStatsResponse:
     def test_build_stats_response(self):
         """Test building graph statistics response."""
         from collections import namedtuple
-        Manifest = namedtuple("Manifest", ["version", "node_count", "edge_count", "semantic_edge_count", "file_hashes"])
+
+        Manifest = namedtuple(
+            "Manifest",
+            ["version", "node_count", "edge_count", "semantic_edge_count", "file_hashes"],
+        )
 
         manifest = Manifest(
             version="2.0",
@@ -164,6 +176,7 @@ class TestBuildValidationResponse:
     def test_build_valid_response(self):
         """Test building validation response for valid graph."""
         from collections import namedtuple
+
         ValidationResult = namedtuple("ValidationResult", ["valid", "get_error_summary"])
 
         result_obj = ValidationResult(valid=True, get_error_summary=lambda: "")
@@ -176,6 +189,7 @@ class TestBuildValidationResponse:
     def test_build_invalid_response(self):
         """Test building validation response for invalid graph."""
         from collections import namedtuple
+
         ValidationResult = namedtuple("ValidationResult", ["valid", "get_error_summary"])
 
         result_obj = ValidationResult(valid=False, get_error_summary=lambda: "Dangling edges found")
@@ -266,39 +280,6 @@ class TestBuildLLMPrompt:
 
         assert "Explanation Data:" in result
         assert explanation_data in result
-
-
-class TestBuildConversationDiscoveryResponse:
-    """Tests for build_conversation_discovery_response function."""
-
-    def test_build_discovery_response(self):
-        """Test building conversation discovery response."""
-        discovered = {
-            "antigravity": [Path("/path1"), Path("/path2")],
-            "cursor": [Path("/path3")],
-        }
-
-        result = build_conversation_discovery_response(
-            discovered, indexed_count=2, failed_count=1, graph_path=Path("/graph")
-        )
-
-        assert "3 conversations across 2 editors" in result
-        assert "ANTIGRAVITY: 2 conversations" in result
-        assert "CURSOR: 1 conversations" in result
-        assert "Indexed: 2 conversations" in result
-        assert "Failed: 1 conversations" in result
-        assert "Graph stored in: /graph" in result
-
-    def test_build_discovery_response_no_failures(self):
-        """Test building response with no failures."""
-        discovered = {"antigravity": [Path("/path1")]}
-
-        result = build_conversation_discovery_response(
-            discovered, indexed_count=1, failed_count=0, graph_path=Path("/graph")
-        )
-
-        assert "Indexed: 1 conversations" in result
-        assert "Failed:" not in result
 
 
 class TestIntegration:

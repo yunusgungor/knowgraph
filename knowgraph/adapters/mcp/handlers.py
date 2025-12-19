@@ -22,7 +22,6 @@ from knowgraph.shared.rate_limiter import (
     RateLimiter as SharedRateLimiter,
 )
 from knowgraph.shared.refactoring import (
-    build_conversation_discovery_response,
     build_error_response,
     build_graph_stats_response,
     build_llm_prompt,

@@ -3,6 +3,7 @@
 import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -231,9 +232,6 @@ class TestEndToEndResilience:
     @pytest.mark.asyncio
     async def test_circuit_breaker_opens_after_failures(self, mock_graph_store):
         """Test that circuit breaker opens after repeated failures."""
-        from knowgraph.application.querying.query_engine import clear_query_result_cache
-
-        clear_query_result_cache()
         engine = QueryEngine(mock_graph_store)
 
         # Mock implementation that always fails
@@ -242,16 +240,17 @@ class TestEndToEndResilience:
 
         with patch.object(engine, "_query_async_impl", side_effect=always_fails):
             # Execute multiple failing queries
+            unique_query = f"test query {uuid4()}"
             for _ in range(10):
                 try:
-                    await engine.query_async("test query")
+                    await engine.query_async(unique_query)
                 except Exception:
                     pass
 
             # Circuit breaker should eventually open
             # Next call should be rejected immediately
             with pytest.raises((CircuitBreakerError, Exception)):
-                await engine.query_async("test query")
+                await engine.query_async(unique_query)
 
 
 class TestResilienceConfiguration:
