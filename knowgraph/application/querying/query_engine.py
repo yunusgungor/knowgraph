@@ -501,6 +501,8 @@ class QueryEngine:
                             top_k=top_k,
                             max_hops=max_hops,
                             max_tokens=max_tokens,
+                            enable_hierarchical_lifting=enable_hierarchical_lifting,
+                            lift_levels=lift_levels,
                             with_explanation=with_explanation,
                         )
 
