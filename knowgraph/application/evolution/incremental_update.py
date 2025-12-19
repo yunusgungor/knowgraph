@@ -29,24 +29,6 @@ from knowgraph.infrastructure.storage.manifest import Manifest, write_manifest
 from knowgraph.shared.exceptions import IndexingError
 
 
-def is_indexing_incomplete(manifest: Manifest) -> bool:
-    """Check if indexing was interrupted (checkpoint detection).
-
-    An incomplete manifest has finalized=False, indicating the indexing
-    process was interrupted before completion. This enables resume-from-checkpoint.
-
-    Args:
-    ----
-        manifest: Manifest to check
-
-    Returns:
-    -------
-        True if indexing incomplete, False if finalized
-
-    """
-    return not manifest.finalized
-
-
 @dataclass
 class DeltaAnalysis:
     """Analysis of changes between old and new content.

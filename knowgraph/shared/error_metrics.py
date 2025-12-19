@@ -131,27 +131,4 @@ Errors: {len(self.error_details)} total
 
         return summary.strip()
 
-    def get_dict(self) -> dict[str, Any]:
-        """Get metrics as dictionary for serialization.
-
-        Returns:
-            Metrics data as dict.
-        """
-        return {
-            "total_chunks": self.total_chunks,
-            "successful_chunks": self.successful_chunks,
-            "success_rate": self.success_rate,
-            "cache_hit_rate": self.cache_hit_rate,
-            "ast_successes": self.ast_successes,
-            "ast_failures": self.ast_failures,
-            "llm_successes": self.llm_successes,
-            "llm_failures": self.llm_failures,
-            "cache_hits": self.cache_hits,
-            "cache_misses": self.cache_misses,
-            "duration_seconds": self.duration_seconds,
-            "chunks_per_second": (
-                self.total_chunks / self.duration_seconds if self.duration_seconds > 0 else 0
-            ),
-            "error_count": len(self.error_details),
-            "errors": self.error_details,
-        }
+    # get_dict removed as it was unused serialization helper

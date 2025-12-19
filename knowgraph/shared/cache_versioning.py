@@ -169,11 +169,6 @@ def initialize_cache_manager(graph_store_path: Path) -> None:
     _cache_manager = CacheVersionManager(graph_store_path)
 
 
-def get_cache_manager() -> CacheVersionManager | None:
-    """Get the global cache manager instance."""
-    return _cache_manager
-
-
 def set_cached(
     key: str, value: Any, ttl: int | None = None, graph_store_path: Path | None = None
 ) -> None:

@@ -40,14 +40,10 @@ async def test_call_tool_index():
         patch("knowgraph.adapters.mcp.server.resolve_graph_path"),
         patch("knowgraph.adapters.mcp.server.get_llm_provider") as mock_provider,
         # Mock the actual CLI functions that create OpenAIProvider
-        patch(
-            "knowgraph.adapters.mcp.methods.run_update", new_callable=AsyncMock
-        ) as mock_run_update,
         patch("knowgraph.adapters.mcp.methods.run_index", new_callable=AsyncMock) as mock_run_index,
     ):
 
         mock_provider.return_value = MagicMock()
-        mock_run_update.return_value = None
         mock_run_index.return_value = None
 
         result = await call_tool("knowgraph_index", {"input_path": "docs"})

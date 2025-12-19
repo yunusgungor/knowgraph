@@ -61,52 +61,6 @@ def filter_nodes_by_time_range(
     return filtered
 
 
-def filter_conversations_by_time(
-    graph_store_path: Path,
-    start_time: datetime | None = None,
-    end_time: datetime | None = None,
-    editor: str | None = None,
-) -> list[Node]:
-    """Find conversations in time range.
-
-    Args:
-    ----
-        graph_store_path: Path to graph storage
-        start_time: Optional start time
-        end_time: Optional end time
-        editor: Optional editor filter (antigravity, cursor, etc.)
-
-    Returns:
-    -------
-        List of conversation nodes in time range
-
-    """
-    # Load all nodes
-    node_ids = list_all_nodes(graph_store_path)
-    conversations = []
-
-    for node_id in node_ids:
-        node = read_node_json(node_id, graph_store_path)
-        if not node:
-            continue
-
-        # Filter to conversations only
-        node_type = node.metadata.get("type") if node.metadata else None
-        if node_type not in ["conversation", "tagged_snippet"]:
-            continue
-
-        # Filter by editor if specified
-        if editor:
-            node_editor = node.metadata.get("editor") if node.metadata else None
-            if node_editor != editor:
-                continue
-
-        conversations.append(node)
-
-    # Apply time filter
-    return filter_nodes_by_time_range(conversations, start_time, end_time)
-
-
 def query_with_time_range(
     query_text: str,
     graph_store_path: Path,

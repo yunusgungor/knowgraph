@@ -135,16 +135,13 @@ async def test_mcp_analyze_impact_path():
 async def test_mcp_index_resume_gc():
     """Test knowgraph_index with resume and gc options."""
     with (
-        patch(
-            "knowgraph.adapters.mcp.methods.run_update", new_callable=AsyncMock
-        ) as mock_run_update,
         patch("knowgraph.adapters.mcp.methods.run_index", new_callable=AsyncMock) as mock_run_index,
         patch(
             "knowgraph.adapters.mcp.handlers.resolve_graph_path", side_effect=lambda p, r: Path(p)
         ),
         patch("knowgraph.adapters.mcp.server.get_llm_provider", return_value=MagicMock()),
+        patch("knowgraph.adapters.mcp.methods.read_manifest", return_value=MagicMock()),
     ):
-        mock_run_update.return_value = None
         mock_run_index.return_value = None
 
         result = await call_tool(

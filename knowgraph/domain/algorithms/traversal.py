@@ -110,28 +110,6 @@ def traverse_graph_bfs(
     return visited
 
 
-def get_neighbors(node_id: UUID, edges: list[Edge]) -> list[UUID]:
-    """Get all neighbors of a node.
-
-    Args:
-    ----
-        node_id: Node UUID
-        edges: List of edges
-
-    Returns:
-    -------
-        List of neighbor UUIDs
-
-    """
-    neighbors = []
-    for edge in edges:
-        if edge.source == node_id:
-            neighbors.append(edge.target)
-        elif edge.target == node_id:
-            neighbors.append(edge.source)
-    return neighbors
-
-
 def traverse_reverse_references(
     target_nodes: list[UUID],
     edges: list[Edge],

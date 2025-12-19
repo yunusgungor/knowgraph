@@ -207,15 +207,6 @@ class VersionHistoryManager:
         versions.reverse()
         return versions[:limit]
 
-    def get_latest_version(self) -> VersionSnapshot | None:
-        """Get the most recent version.
-
-        Returns:
-            Latest version snapshot or None if no versions exist
-        """
-        versions = self.list_versions(limit=1)
-        return versions[0] if versions else None
-
     def _calculate_file_changes(
         self, current_hashes: dict[str, str], previous_hashes: dict[str, str]
     ) -> FileChangeSummary:

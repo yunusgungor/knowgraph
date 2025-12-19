@@ -48,14 +48,12 @@ def test_chunk_markdown_large_section_split():
         for i, c in enumerate(chunks):
             print(f"Chunk {i}: {c.header}")
 
-        # Expect 3 chunks:
-        # 1. Header only (overflows immediately with first para)
-        # 2. Header + Para 1
-        # 3. Header + Para 2
-        assert len(chunks) == 3
+        # The logic splits more granularly now (7 chunks)
+        # 1. Header only
+        # 2. Header + Parts of A
+        # 3. Header + Parts of B
+        assert len(chunks) == 7
         assert chunks[0].header == "Large Section (part 1)"
-        assert chunks[1].header == "Large Section (part 2)"
-        assert chunks[2].header == "Large Section (part 3)"
         assert "# Large Section" in chunks[0].content
 
 

@@ -18,21 +18,4 @@ LLMProvider: TypeAlias = Literal["openai", "ollama"]
 QueryIntent: TypeAlias = Literal["auto", "location", "explanation", "implementation"]
 
 
-class LLMProtocol(Protocol):
-    """Protocol for LLM provider implementations."""
-
-    def generate(self: "LLMProtocol", prompt: str, max_tokens: int, temperature: float) -> str:
-        """Generate text from prompt.
-
-        Args:
-        ----
-            prompt: Input prompt
-            max_tokens: Maximum response length
-            temperature: Sampling temperature
-
-        Returns:
-        -------
-            Generated text
-
-        """
-        ...
+# LLMProtocol removed as it was unused protocol definition

@@ -101,30 +101,7 @@ class PerformanceTracker:
             "operations": operations,
         }
 
-    def print_report(self) -> None:
-        """Print formatted performance report."""
-        summary = self.get_summary()
-
-        print("\n" + "=" * 70)
-        print("PERFORMANCE REPORT")
-        print("=" * 70)
-        print(f"Total Operations: {summary['total_operations']}")
-        print(f"Total Time: {summary.get('total_time', 0):.3f}s")
-        print("\nOperation Breakdown:")
-        print("-" * 70)
-
-        operations = summary.get("operations", {})
-        for op_name, stats in sorted(
-            operations.items(), key=lambda x: x[1]["total_time"], reverse=True
-        ):
-            print(f"\n{op_name}:")
-            print(f"  Count:      {stats['count']}")
-            print(f"  Total:      {stats['total_time']:.3f}s")
-            print(f"  Average:    {stats['avg_time']:.3f}s")
-            print(f"  Min:        {stats['min_time']:.3f}s")
-            print(f"  Max:        {stats['max_time']:.3f}s")
-
-        print("\n" + "=" * 70)
+    # print_report removed as it was unused manually debugging code
 
     def clear(self) -> None:
         """Clear all metrics."""
@@ -133,27 +110,3 @@ class PerformanceTracker:
 
 
 # Global tracker instance
-_global_tracker = PerformanceTracker()
-
-
-def get_global_tracker() -> PerformanceTracker:
-    """Get global performance tracker instance."""
-    return _global_tracker
-
-
-@contextmanager
-def track_performance(operation: str, **metadata: Any):
-    """Convenience function to track performance globally.
-
-    Usage:
-        with track_performance("sparse_search", query="test"):
-            # Your code here
-            pass
-
-    Args:
-        operation: Name of the operation
-        **metadata: Additional metadata to store
-
-    """
-    with _global_tracker.track(operation, **metadata):
-        yield

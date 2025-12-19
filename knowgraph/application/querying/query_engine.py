@@ -72,13 +72,12 @@ def _get_query_cache_key(
     max_tokens: int,
     enable_hierarchical_lifting: bool,
     lift_levels: int,
+    with_explanation: bool,
 ) -> str:
     """Generate cache key for query parameters."""
     import hashlib
 
-    key_parts = (
-        f"{query_text}|{top_k}|{max_hops}|{max_tokens}|{enable_hierarchical_lifting}|{lift_levels}"
-    )
+    key_parts = f"{query_text}|{top_k}|{max_hops}|{max_tokens}|{enable_hierarchical_lifting}|{lift_levels}|{with_explanation}"
     return hashlib.md5(key_parts.encode()).hexdigest()
 
 
@@ -243,7 +242,13 @@ class QueryEngine:
 
         # Check cache first (for identical queries)
         cache_key = _get_query_cache_key(
-            query_text, top_k, max_hops, max_tokens, enable_hierarchical_lifting, lift_levels
+            query_text,
+            top_k,
+            max_hops,
+            max_tokens,
+            enable_hierarchical_lifting,
+            lift_levels,
+            with_explanation,
         )
 
         if cache_key in _query_result_cache:
@@ -547,7 +552,13 @@ class QueryEngine:
 
         # Check cache first (for identical queries) - ASYNC CACHE SUPPORT
         cache_key = _get_query_cache_key(
-            query_text, top_k, max_hops, max_tokens, enable_hierarchical_lifting, lift_levels
+            query_text,
+            top_k,
+            max_hops,
+            max_tokens,
+            enable_hierarchical_lifting,
+            lift_levels,
+            with_explanation,
         )
 
         if cache_key in _query_result_cache:
@@ -965,123 +976,3 @@ class QueryEngine:
             await asyncio.sleep(0)
 
         return results
-
-    async def query_streaming_async(
-        self: "QueryEngine",
-        query_text: str,
-        top_k: int = TOP_K,
-        max_hops: int = MAX_HOPS,
-        max_tokens: int = MAX_TOKENS,
-        chunk_size: int = 50,
-        enable_hierarchical_lifting: bool = True,
-        lift_levels: int = 2,
-    ) -> AsyncIterator[tuple[str, dict]]:
-        """Execute query with streaming results for memory efficiency.
-
-        Yields context chunks as nodes are processed, allowing for:
-        - Lower memory usage on large result sets
-        - Progressive UI updates
-        - Early termination if needed
-
-        Args:
-        ----
-            query_text: Natural language query
-            top_k: Number of seed nodes
-            max_hops: Graph traversal depth
-            max_tokens: Maximum context tokens
-            chunk_size: Nodes per chunk (default: 50)
-            enable_hierarchical_lifting: Apply hierarchical context lifting
-            lift_levels: Directory levels to traverse upward
-
-        Yields:
-        ------
-            Tuple of (context_chunk, metadata_dict)
-
-        Example:
-        -------
-            >>> async for context, meta in engine.query_streaming_async(query):
-            ...     print(f"Chunk {meta['chunk_index']}: {len(context)} chars")
-            ...     display_partial_results(context)
-            ...     if meta['is_last']:
-            ...         print(f"Total nodes: {meta['total_nodes']}")
-        """
-        # Validate parameters explicitly
-        if not query_text or not query_text.strip():
-            raise QueryError("Query text cannot be empty")
-        if top_k <= 0:
-            raise QueryError(f"top_k must be positive, got {top_k}")
-        if max_hops < 0:
-            raise QueryError(f"max_hops cannot be negative, got {max_hops}")
-        if max_tokens <= 0:
-            raise QueryError(f"max_tokens must be positive, got {max_tokens}")
-        if chunk_size <= 0:
-            raise QueryError(f"chunk_size must be positive, got {chunk_size}")
-        if lift_levels < 0:
-            raise QueryError(f"lift_levels cannot be negative, got {lift_levels}")
-
-        # Note: Streaming queries don't use cache (results are streamed, not stored)
-
-        start_time = time.time()
-
-        try:
-            all_nodes = []
-            seed_node_ids = []
-
-            # Stream retrieve nodes in chunks
-            chunk_index = 0
-            async for nodes_chunk, is_last in self.retriever.retrieve_streaming_async(
-                query_text, self.edges, top_k, max_hops, chunk_size
-            ):
-                all_nodes.extend(nodes_chunk)
-
-                # Build partial context from accumulated nodes
-                if all_nodes:
-                    # Get similarity scores (only need to do once)
-                    if chunk_index == 0:
-                        retrieval_results = await self.retriever.retrieve_by_similarity_async(
-                            query_text, top_k
-                        )
-                        similarity_scores = {node.id: score for node, score in retrieval_results}
-                        seed_node_ids = [node.id for node, _ in retrieval_results[:top_k]]
-
-                    # Compute centrality on accumulated nodes
-                    active_node_ids = {node.id for node in all_nodes}
-                    active_edges = [
-                        edge
-                        for edge in self.edges
-                        if edge.source in active_node_ids and edge.target in active_node_ids
-                    ]
-
-                    centrality_scores = await compute_centrality_metrics_async(
-                        all_nodes, active_edges
-                    )
-
-                    # Assemble context from accumulated nodes
-                    context, _ = assemble_context(
-                        all_nodes,
-                        seed_node_ids,
-                        similarity_scores,
-                        centrality_scores,
-                        max_tokens,
-                    )
-
-                    # Yield chunk with metadata
-                    metadata = {
-                        "chunk_index": chunk_index,
-                        "nodes_in_chunk": len(nodes_chunk),
-                        "total_nodes_so_far": len(all_nodes),
-                        "is_last": is_last,
-                        "elapsed_time": time.time() - start_time,
-                    }
-
-                    yield (context, metadata)
-
-                chunk_index += 1
-
-        except QueryError:
-            raise
-        except Exception as error:
-            raise QueryError(
-                "Streaming query execution failed",
-                {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
-            ) from error

@@ -29,7 +29,6 @@ from knowgraph.infrastructure.storage.manifest import (
     write_manifest,
 )
 from knowgraph.shared.cache_versioning import CacheVersionManager
-from knowgraph.shared.streaming import paginate_nodes, stream_nodes_async
 
 
 @pytest.fixture
@@ -216,64 +215,6 @@ class TestCacheIntegration:
         # Version manager tracks changes; cache invalidates automatically
 
 
-class TestStreamingPaginationIntegration:
-    """Test streaming and pagination working together."""
-
-    @pytest.mark.asyncio
-    async def test_stream_then_paginate(self, sample_nodes):
-        """Test streaming nodes then paginating them."""
-        # Stream nodes
-        streamed_nodes = []
-        async for chunk in stream_nodes_async(sample_nodes, chunk_size=3):
-            streamed_nodes.extend(chunk.data)
-
-        # Should have all nodes
-        assert len(streamed_nodes) == len(sample_nodes)
-
-        # Now paginate the streamed results
-        page1_nodes, page1_state = paginate_nodes(streamed_nodes, page=1, page_size=4)
-        assert len(page1_nodes) == 4
-        assert page1_state.has_next is True
-
-        page2_nodes, page2_state = paginate_nodes(streamed_nodes, page=2, page_size=4)
-        assert len(page2_nodes) == 4
-        assert page2_state.has_previous is True
-
-    @pytest.mark.asyncio
-    async def test_large_dataset_streaming_pagination(self):
-        """Test streaming and pagination with large dataset."""
-        # Create large dataset
-        large_nodes = [
-            Node(
-                id=uuid4(),
-                hash="x" * 40,
-                title=f"Node {i}",
-                content=f"Content {i}",
-                path=f"doc{i}.md",
-                type="semantic",
-                token_count=10,
-                created_at=1000000 + i,
-                metadata={},
-            )
-            for i in range(100)
-        ]
-
-        # Stream in chunks
-        chunk_count = 0
-        total_streamed = 0
-        async for chunk in stream_nodes_async(large_nodes, chunk_size=10):
-            chunk_count += 1
-            total_streamed += len(chunk.data)
-
-        assert chunk_count == 10  # 100 nodes / 10 per chunk
-        assert total_streamed == 100
-
-        # Paginate all results
-        page_nodes, page_state = paginate_nodes(large_nodes, page=1, page_size=20)
-        assert len(page_nodes) == 20
-        assert page_state.total_items == 100
-
-
 class TestErrorPropagation:
     """Test error handling across component boundaries."""
 
@@ -343,26 +284,6 @@ class TestConcurrentOperations:
             assert result.id == node.id
 
     @pytest.mark.asyncio
-    async def test_concurrent_streaming_operations(self, sample_nodes):
-        """Test multiple concurrent streaming operations."""
-
-        async def stream_and_count(nodes, chunk_size):
-            count = 0
-            async for chunk in stream_nodes_async(nodes, chunk_size=chunk_size):
-                count += len(chunk.data)
-            return count
-
-        # Run multiple streams concurrently
-        results = await asyncio.gather(
-            stream_and_count(sample_nodes, 2),
-            stream_and_count(sample_nodes, 3),
-            stream_and_count(sample_nodes, 5),
-        )
-
-        # All should count same total
-        assert all(r == len(sample_nodes) for r in results)
-
-    @pytest.mark.asyncio
     async def test_concurrent_cache_operations(self, temp_graph_path):
         """Test concurrent cache read/write operations."""
         cache_mgr = CacheVersionManager(temp_graph_path)
@@ -412,47 +333,6 @@ class TestEndToEndWorkflows:
 
         loaded_edges = read_all_edges(temp_graph_path)
         assert len(loaded_edges) == len(sample_edges)
-
-        # Step 3: Pagination workflow
-        all_node_ids = [node.id for node in sample_nodes]
-        loaded_nodes = []
-        for node_id in all_node_ids:
-            node = read_node_json(node_id, temp_graph_path)
-            if node:
-                loaded_nodes.append(node)
-
-        page1, state1 = paginate_nodes(loaded_nodes, page=1, page_size=3)
-        assert len(page1) == 3
-        assert state1.has_next is True
-
-    @pytest.mark.asyncio
-    async def test_complete_async_workflow(self, temp_graph_path, sample_nodes):
-        """Test complete async workflow with all components."""
-        # Write data
-        for node in sample_nodes:
-            write_node_json(node, temp_graph_path)
-
-        # Stream nodes
-        node_ids = [node.id for node in sample_nodes]
-        loaded_nodes = []
-        for node_id in node_ids:
-            node = read_node_json(node_id, temp_graph_path)
-            if node:
-                loaded_nodes.append(node)
-
-        # Stream processing
-        processed = []
-        async for chunk in stream_nodes_async(loaded_nodes, chunk_size=3):
-            processed.extend(chunk.data)
-
-        assert len(processed) == len(sample_nodes)
-
-        # Pagination
-        page1, _ = paginate_nodes(processed, page=1, page_size=5)
-        page2, _ = paginate_nodes(processed, page=2, page_size=5)
-
-        assert len(page1) == 5
-        assert len(page2) == 5
 
     def test_graph_update_workflow(self, temp_graph_path, sample_nodes):
         """Test workflow for updating existing graph."""
@@ -535,17 +415,3 @@ class TestDataConsistency:
 
         loaded = read_manifest(temp_graph_path)
         assert loaded.file_hashes == file_hashes
-
-    @pytest.mark.asyncio
-    async def test_streaming_data_integrity(self, sample_nodes):
-        """Test data integrity during streaming."""
-        # Collect all streamed data
-        streamed = []
-        async for chunk in stream_nodes_async(sample_nodes, chunk_size=3):
-            streamed.extend(chunk.data)
-
-        # Verify order and content preserved
-        assert len(streamed) == len(sample_nodes)
-        for original, streamed_node in zip(sample_nodes, streamed):
-            assert original.id == streamed_node.id
-            assert original.content == streamed_node.content

@@ -389,26 +389,3 @@ def _default_centrality() -> dict[str, float]:
         "eigenvector": 0.0,
         "composite": 0.0,
     }
-
-
-def get_top_k_central_nodes(
-    centrality_metrics: dict[UUID, dict[str, float]],
-    k: int = 10,
-    metric: str = "composite",
-) -> list[tuple[UUID, float]]:
-    """Get top-k most central nodes by specified metric.
-
-    Args:
-    ----
-        centrality_metrics: Node centrality metrics
-        k: Number of results
-        metric: Centrality metric to use
-
-    Returns:
-    -------
-        List of (node_id, score) tuples
-
-    """
-    scores = [(node_id, metrics[metric]) for node_id, metrics in centrality_metrics.items()]
-    scores.sort(key=lambda x: x[1], reverse=True)
-    return scores[:k]

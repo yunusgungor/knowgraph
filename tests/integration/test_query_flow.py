@@ -92,7 +92,8 @@ async def test_end_to_end_local_query_logic():
         patch("knowgraph.application.querying.query_engine.QueryRetriever") as MockRetrieverCls,
         patch("knowgraph.application.querying.query_engine.assemble_context") as mock_assemble,
         patch(
-            "knowgraph.application.querying.query_engine.compute_centrality_metrics", return_value={}
+            "knowgraph.application.querying.query_engine.compute_centrality_metrics",
+            return_value={},
         ),
         patch("knowgraph.application.querying.query_engine.read_all_edges", return_value=[]),
     ):
@@ -106,7 +107,7 @@ async def test_end_to_end_local_query_logic():
         mock_assemble.return_value = ("context", [])
 
         engine = QueryEngine("graph_path")
-        result = engine.query("apple")
+        result = engine.query("apple", enable_hierarchical_lifting=False)
 
         # QueryEngine.query returns context as answer (no LLM generation)
         assert result.answer == "context"

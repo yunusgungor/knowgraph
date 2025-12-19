@@ -67,6 +67,4 @@ class Edge:
             metadata=cast(dict[str, str], data.get("metadata", {})),
         )
 
-    def is_semantic(self: Edge) -> bool:
-        """Check if edge is semantic."""
-        return self.type == "semantic"
+    # is_semantic removed as it was unused helper method

@@ -231,6 +231,9 @@ class TestEndToEndResilience:
     @pytest.mark.asyncio
     async def test_circuit_breaker_opens_after_failures(self, mock_graph_store):
         """Test that circuit breaker opens after repeated failures."""
+        from knowgraph.application.querying.query_engine import clear_query_result_cache
+
+        clear_query_result_cache()
         engine = QueryEngine(mock_graph_store)
 
         # Mock implementation that always fails

@@ -15,7 +15,7 @@ from knowgraph.infrastructure.storage.filesystem import (
 )
 from knowgraph.infrastructure.storage.manifest import Manifest, read_manifest, write_manifest
 from knowgraph.shared.exceptions import StorageError
-from knowgraph.shared.streaming import paginate_nodes, stream_nodes_async
+
 
 # ====================
 # Node Edge Cases
@@ -33,7 +33,7 @@ def test_node_with_minimal_content():
         type="semantic",
         token_count=1,
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
     assert len(node.content) == 1
     assert node.token_count == 1
@@ -51,7 +51,7 @@ def test_node_with_very_long_content():
         type="semantic",
         token_count=2000,  # Within MAX_NODE_TOKEN_COUNT
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
     assert len(node.content) == 10_000
 
@@ -68,7 +68,7 @@ def test_node_with_special_characters():
         type="semantic",
         token_count=20,
         created_at=1000000,
-        metadata={"emoji": "🎉", "unicode": "日本語"}
+        metadata={"emoji": "🎉", "unicode": "日本語"},
     )
     assert "世界" in node.content
     assert node.metadata["emoji"] == "🎉"
@@ -86,7 +86,7 @@ def test_node_with_invalid_hash_length():
             type="semantic",
             token_count=10,
             created_at=1000000,
-            metadata={}
+            metadata={},
         )
 
 
@@ -101,7 +101,7 @@ def test_node_with_one_token():
         type="semantic",
         token_count=1,  # Minimum valid
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
     assert node.token_count == 1
 
@@ -117,7 +117,7 @@ def test_node_with_negative_timestamp():
         type="semantic",
         token_count=10,
         created_at=-1000,  # Negative timestamp
-        metadata={}
+        metadata={},
     )
     assert node.created_at == -1000
 
@@ -137,19 +137,14 @@ def test_edge_self_loop():
             type="semantic",
             score=1.0,
             created_at=1000000,
-            metadata={}
+            metadata={},
         )
 
 
 def test_edge_with_empty_metadata():
     """Test edge with empty metadata dict."""
     edge = Edge(
-        source=uuid4(),
-        target=uuid4(),
-        type="semantic",
-        score=0.5,
-        created_at=1000000,
-        metadata={}
+        source=uuid4(), target=uuid4(), type="semantic", score=0.5, created_at=1000000, metadata={}
     )
     assert edge.metadata == {}
 
@@ -172,7 +167,7 @@ def test_write_node_to_nonexistent_directory():
             type="semantic",
             token_count=10,
             created_at=1000000,
-            metadata={}
+            metadata={},
         )
 
         # Should create directories and write successfully
@@ -222,7 +217,7 @@ def test_write_node_with_empty_id():
         type="semantic",
         token_count=10,
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -251,7 +246,7 @@ def test_cache_with_zero_max_size():
             type="semantic",
             token_count=10,
             created_at=1000000,
-            metadata={}
+            metadata={},
         )
 
         write_node_json(node, graph_path)
@@ -269,10 +264,7 @@ def test_cache_with_zero_max_size():
 
 def test_manifest_with_empty_file_hashes():
     """Test manifest with no files indexed."""
-    manifest = Manifest.create_new(
-        edges_filename="edges.jsonl",
-        sparse_index_filename="index.json"
-    )
+    manifest = Manifest.create_new(edges_filename="edges.jsonl", sparse_index_filename="index.json")
     assert manifest.file_hashes == {}
     assert manifest.node_count == 0
     assert manifest.edge_count == 0
@@ -287,7 +279,7 @@ def test_manifest_with_zero_counts():
         file_hashes={},
         edges_filename="edges.jsonl",
         sparse_index_filename="index.json",
-        semantic_edge_count=0
+        semantic_edge_count=0,
     )
     assert manifest.node_count == 0
     assert manifest.edge_count == 0
@@ -309,7 +301,7 @@ def test_manifest_with_very_large_counts():
         edge_count=2**31 - 1,
         file_hashes={"file.md": "a" * 40},
         edges_filename="edges.jsonl",
-        sparse_index_filename="index.json"
+        sparse_index_filename="index.json",
     )
     assert manifest.node_count == 2**31 - 1
 
@@ -325,7 +317,7 @@ def test_manifest_serialization_deserialization():
         file_hashes={"test.md": "a" * 40},
         edges_filename="edges.jsonl",
         sparse_index_filename="index.json",
-        semantic_edge_count=50
+        semantic_edge_count=50,
     )
 
     # Serialize to dict
@@ -338,164 +330,6 @@ def test_manifest_serialization_deserialization():
     assert restored.node_count == original.node_count
     assert restored.edge_count == original.edge_count
     assert restored.semantic_edge_count == original.semantic_edge_count
-
-
-# ====================
-# Streaming Edge Cases
-# ====================
-
-
-@pytest.mark.asyncio
-async def test_stream_empty_node_list():
-    """Test streaming with empty node list."""
-    chunks_collected = []
-    async for chunk in stream_nodes_async([], chunk_size=10):
-        chunks_collected.append(chunk)
-
-    assert len(chunks_collected) == 0
-
-
-@pytest.mark.asyncio
-async def test_stream_single_node():
-    """Test streaming with only one node."""
-    node = Node(
-        id=uuid4(),
-        hash="i" * 40,
-        title="Single",
-        content="Content",
-        path="test.md",
-        type="semantic",
-        token_count=10,
-        created_at=1000000,
-        metadata={}
-    )
-
-    chunks_collected = []
-    async for chunk in stream_nodes_async([node], chunk_size=10):
-        chunks_collected.append(chunk)
-
-    assert len(chunks_collected) == 1
-    assert len(chunk.data) == 1
-    assert chunks_collected[0].data[0] == node
-
-
-@pytest.mark.asyncio
-async def test_stream_with_chunk_size_larger_than_list():
-    """Test streaming where chunk size exceeds list size."""
-    nodes = [
-        Node(
-            id=uuid4(),
-            hash="j" * 40,
-            title=f"Node {i}",
-            content=f"Content {i}",
-            path=f"test{i}.md",
-            type="semantic",
-            token_count=10,
-            created_at=1000000 + i,
-            metadata={}
-        )
-        for i in range(5)
-    ]
-
-    chunks_collected = []
-    async for chunk in stream_nodes_async(nodes, chunk_size=100):
-        chunks_collected.append(chunk)
-
-    # Should get single chunk with all nodes
-    assert len(chunks_collected) == 1
-    assert len(chunks_collected[0].data) == 5
-
-
-def test_paginate_empty_list():
-    """Test pagination with empty list."""
-    page_nodes, state = paginate_nodes([], page=1, page_size=10)
-
-    assert page_nodes == []
-    assert state.page == 1
-    assert state.total_items == 0
-    assert state.has_next is False
-    assert state.has_previous is False
-
-
-def test_paginate_single_item():
-    """Test pagination with single item."""
-    node = Node(
-        id=uuid4(),
-        hash="k" * 40,
-        title="Single",
-        content="Content",
-        path="test.md",
-        type="semantic",
-        token_count=10,
-        created_at=1000000,
-        metadata={}
-    )
-
-    page_nodes, state = paginate_nodes([node], page=1, page_size=10)
-
-    assert len(page_nodes) == 1
-    assert state.total_items == 1
-    assert state.has_next is False
-
-
-def test_paginate_beyond_last_page():
-    """Test requesting page beyond available pages."""
-    nodes = [
-        Node(
-            id=uuid4(),
-            hash="l" * 40,
-            title=f"Node {i}",
-            content=f"Content {i}",
-            path=f"test{i}.md",
-            type="semantic",
-            token_count=10,
-            created_at=1000000 + i,
-            metadata={}
-        )
-        for i in range(5)
-    ]
-
-    # Request page 10 when only 1 page exists
-    page_nodes, state = paginate_nodes(nodes, page=10, page_size=10)
-
-    assert page_nodes == []
-    assert state.page == 10
-
-
-def test_paginate_with_page_size_one():
-    """Test pagination with page_size=1."""
-    nodes = [
-        Node(
-            id=uuid4(),
-            hash="m" * 40,
-            title=f"Node {i}",
-            content=f"Content {i}",
-            path=f"test{i}.md",
-            type="semantic",
-            token_count=10,
-            created_at=1000000 + i,
-            metadata={}
-        )
-        for i in range(3)
-    ]
-
-    # Page 1
-    nodes1, state1 = paginate_nodes(nodes, page=1, page_size=1)
-    assert len(nodes1) == 1
-    assert state1.has_next is True
-    assert state1.has_previous is False
-
-    # Page 2
-    nodes2, state2 = paginate_nodes(nodes, page=2, page_size=1)
-    assert len(nodes2) == 1
-    assert state2.has_next is True
-    assert state2.has_previous is True
-
-    # Page 3
-    nodes3, state3 = paginate_nodes(nodes, page=3, page_size=1)
-    assert len(nodes3) == 1
-    assert state3.has_next is False
-    assert state3.has_previous is True
 
 
 # ====================
@@ -515,7 +349,7 @@ def test_node_with_null_bytes():
         type="semantic",
         token_count=10,
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
     assert "\x00" in node.content
 
@@ -531,7 +365,7 @@ def test_node_with_only_whitespace():
         type="semantic",
         token_count=1,  # Must be positive
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
     assert node.content.strip() == ""
 
@@ -548,7 +382,7 @@ def test_node_with_very_long_path():
         type="semantic",
         token_count=10,
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
     assert len(node.path) > 200
 
@@ -569,22 +403,14 @@ def test_node_with_empty_metadata():
         type="semantic",
         token_count=10,
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
     assert node.metadata == {}
 
 
 def test_node_with_nested_metadata():
     """Test node with deeply nested metadata."""
-    nested_meta = {
-        "level1": {
-            "level2": {
-                "level3": {
-                    "value": "deep"
-                }
-            }
-        }
-    }
+    nested_meta = {"level1": {"level2": {"level3": {"value": "deep"}}}}
     node = Node(
         id=uuid4(),
         hash="r" * 40,
@@ -594,7 +420,7 @@ def test_node_with_nested_metadata():
         type="semantic",
         token_count=10,
         created_at=1000000,
-        metadata=nested_meta
+        metadata=nested_meta,
     )
     assert node.metadata["level1"]["level2"]["level3"]["value"] == "deep"
 
@@ -610,7 +436,7 @@ def test_node_with_list_in_metadata():
         type="semantic",
         token_count=10,
         created_at=1000000,
-        metadata={"tags": ["python", "graph", "test"], "counts": [1, 2, 3]}
+        metadata={"tags": ["python", "graph", "test"], "counts": [1, 2, 3]},
     )
     assert len(node.metadata["tags"]) == 3
     assert node.metadata["counts"][2] == 3
@@ -634,7 +460,7 @@ def test_node_with_large_token_count():
         type="semantic",
         token_count=MAX_NODE_TOKEN_COUNT - 1,  # Just under max
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
     assert node.token_count == MAX_NODE_TOKEN_COUNT - 1
 
@@ -645,8 +471,7 @@ def test_manifest_write_read_cycle():
         graph_path = Path(tmpdir)
 
         original = Manifest.create_new(
-            edges_filename="edges.jsonl",
-            sparse_index_filename="index.json"
+            edges_filename="edges.jsonl", sparse_index_filename="index.json"
         )
         original.node_count = 42
         original.edge_count = 84
@@ -683,7 +508,7 @@ def test_node_path_with_special_characters():
         type="semantic",
         token_count=10,
         created_at=1000000,
-        metadata={}
+        metadata={},
     )
     assert "(" in node.path
     assert "[" in node.path

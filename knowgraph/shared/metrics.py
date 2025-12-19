@@ -33,9 +33,6 @@ except ImportError:
         def inc(self, amount: float = 1) -> None:
             pass
 
-        def dec(self, amount: float = 1) -> None:
-            pass
-
         def set(self, value: float) -> None:
             pass
 
@@ -208,9 +205,6 @@ class KnowGraphMetrics:
         # Create mock metric instance locally in case module-level MockMetric not available
         class _MockMetric:
             def inc(self, amount: float = 1) -> None:
-                pass
-
-            def dec(self, amount: float = 1) -> None:
                 pass
 
             def set(self, value: float) -> None:

@@ -8,7 +8,6 @@ from uuid import uuid4
 import pytest
 
 from knowgraph.domain.models.node import Node
-from knowgraph.shared.streaming import stream_nodes_async
 
 
 @pytest.fixture
@@ -31,7 +30,7 @@ def sample_nodes():
             type="semantic",
             token_count=10,
             created_at=1000000,
-            metadata={}
+            metadata={},
         ),
         Node(
             id=uuid4(),
@@ -42,7 +41,7 @@ def sample_nodes():
             type="semantic",
             token_count=20,
             created_at=1000001,
-            metadata={}
+            metadata={},
         ),
     ]
 
@@ -116,11 +115,7 @@ async def test_concurrent_error_handling():
 
     # gather with return_exceptions=False (default) propagates first exception
     with pytest.raises(RuntimeError, match="Concurrent error"):
-        await asyncio.gather(
-            operation_success(),
-            operation_fail(),
-            operation_success()
-        )
+        await asyncio.gather(operation_success(), operation_fail(), operation_success())
 
 
 @pytest.mark.asyncio
@@ -141,83 +136,13 @@ async def test_concurrent_errors_with_exception_collection():
 
     # return_exceptions=True collects all results including exceptions
     results = await asyncio.gather(
-        operation_fail_1(),
-        operation_fail_2(),
-        operation_success(),
-        return_exceptions=True
+        operation_fail_1(), operation_fail_2(), operation_success(), return_exceptions=True
     )
 
     assert len(results) == 3
     assert isinstance(results[0], ValueError)
     assert isinstance(results[1], TypeError)
     assert results[2] == "success"
-
-
-@pytest.mark.asyncio
-async def test_stream_nodes_timeout():
-    """Test timeout handling in stream_nodes_async."""
-    nodes = [
-        Node(
-            id=uuid4(),
-            hash="a" * 40,  # Exactly 40 characters
-            title=f"Node {i}",
-            content=f"Content {i}",
-            path=f"test{i}.md",
-            type="semantic",
-            token_count=10,
-            created_at=1000000 + i,
-            metadata={}
-        )
-        for i in range(100)  # Many nodes
-    ]
-
-    async def slow_consumer():
-        """Consumer that times out."""
-        chunks = []
-        async for chunk in stream_nodes_async(nodes, chunk_size=10):
-            chunks.append(chunk)
-            if len(chunks) == 3:
-                # Simulate timeout after 3 chunks
-                await asyncio.sleep(10)
-        return chunks
-
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(slow_consumer(), timeout=0.5)
-
-
-@pytest.mark.asyncio
-async def test_stream_nodes_cancellation():
-    """Test cancellation handling in stream_nodes_async."""
-    nodes = [
-        Node(
-            id=uuid4(),
-            hash="b" * 40,  # Exactly 40 characters
-            title=f"Node {i}",
-            content=f"Content {i}",
-            path=f"test{i}.md",
-            type="semantic",
-            token_count=10,
-            created_at=1000000 + i,
-            metadata={}
-        )
-        for i in range(50)
-    ]
-
-    consumed_chunks = []
-
-    async def consumer():
-        """Consumer that can be cancelled."""
-        async for chunk in stream_nodes_async(nodes, chunk_size=5):
-            consumed_chunks.append(chunk)
-            if len(consumed_chunks) >= 3:
-                # Cancel after 3 chunks
-                raise asyncio.CancelledError()
-
-    with pytest.raises(asyncio.CancelledError):
-        await consumer()
-
-    # Verify partial consumption
-    assert len(consumed_chunks) == 3
 
 
 @pytest.mark.asyncio
@@ -301,7 +226,7 @@ async def test_multiple_concurrent_timeouts():
         asyncio.wait_for(operation_fast(), timeout=1.0),
         asyncio.wait_for(operation_medium(), timeout=1.0),
         asyncio.wait_for(operation_slow(), timeout=0.1),
-        return_exceptions=True
+        return_exceptions=True,
     )
 
     assert results[0] == "fast"
@@ -360,7 +285,7 @@ async def test_async_semaphore_with_errors():
         limited_operation(3, False),
         limited_operation(4, True),
         limited_operation(5, False),
-        return_exceptions=True
+        return_exceptions=True,
     )
 
     # Verify semaphore released even on errors
@@ -483,9 +408,7 @@ async def test_concurrent_node_loading_with_failures(sample_nodes):
 
     # Load with some failures
     results = await asyncio.gather(
-        load_node(sample_nodes[0], False),
-        load_node(sample_nodes[1], True),
-        return_exceptions=True
+        load_node(sample_nodes[0], False), load_node(sample_nodes[1], True), return_exceptions=True
     )
 
     assert isinstance(results[0], Node)

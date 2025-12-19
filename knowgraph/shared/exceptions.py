@@ -31,15 +31,3 @@ class QueryError(KnowGraphError):
 
 class EmbeddingError(KnowGraphError):
     """Raised when embedding generation fails."""
-
-
-class ConfigurationError(KnowGraphError):
-    """Raised when configuration is invalid."""
-
-
-class GraphConstructionError(KnowGraphError):
-    """Raised when graph construction fails."""
-
-
-class ExportError(KnowGraphError):
-    """Raised when export operations fail."""

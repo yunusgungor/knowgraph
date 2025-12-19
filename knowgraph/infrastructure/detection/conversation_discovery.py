@@ -112,21 +112,6 @@ def get_vscode_copilot_conversations_dir() -> Path | None:
     return None
 
 
-def get_claude_desktop_conversations_dir() -> Path | None:
-    """Get Claude Desktop conversation storage directory.
-
-    Note: Claude Desktop doesn't auto-store conversations locally by default.
-    Users need to export them manually.
-
-    Returns:
-    -------
-        None (manual export required)
-
-    """
-    # Claude Desktop requires manual export
-    return None
-
-
 def discover_all_conversations() -> dict[str, list[Path]]:
     """Discover all conversation files from all supported editors.
 

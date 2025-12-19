@@ -231,17 +231,3 @@ class RollbackManager:
                 shutil.copy2(versions_file, backup_path / "versions.jsonl")
 
         return backup_path
-
-    def list_rollback_backups(self) -> list[Path]:
-        """List available rollback backups.
-
-        Returns:
-            List of backup directory paths
-        """
-        backups_dir = self.metadata_dir / "rollback_backups"
-        if not backups_dir.exists():
-            return []
-
-        backups = list(backups_dir.iterdir())
-        backups.sort(key=lambda p: p.name, reverse=True)
-        return backups
