@@ -52,7 +52,7 @@ class OpenAIProvider(IntelligenceProvider):
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                temperature=0,
+                # Temperature removed - some models don't support temperature=0
             )
             # Update limits from headers (if available, client response might hide raw headers depending on lib version,
             # but usually response object has access if we use with_raw_response or verify lib behavior.
@@ -97,7 +97,7 @@ class OpenAIProvider(IntelligenceProvider):
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0,
+            # Temperature removed - some models don't support temperature=0
         )
         return response.choices[0].message.content or ""
 
@@ -108,7 +108,7 @@ class OpenAIProvider(IntelligenceProvider):
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0,
+            # Temperature removed - some models don't support temperature=0
         )
         content = response.choices[0].message.content
         if not content:
@@ -137,7 +137,7 @@ class OpenAIProvider(IntelligenceProvider):
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0,
+            # Temperature removed - some models don't support temperature=0
         )
         content = response.choices[0].message.content
         if not content:

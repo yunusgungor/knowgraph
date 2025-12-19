@@ -191,13 +191,14 @@ def validate_edges(
     return valid_edges, warnings
 
 
-def create_semantic_edges(nodes: list[Node], threshold: float = 0.1) -> list[Edge]:
-    """Create edges based on shared entities (Smart Mode).
+def create_semantic_edges(nodes: list[Node], threshold: float = 0.2, max_edges_per_node: int = 5) -> list[Edge]:
+    """Create edges based on shared entities (Smart Mode) - Optimized.
 
     Args:
     ----
         nodes: List of nodes with metadata['entities']
-        threshold: Jaccard similarity threshold
+        threshold: Jaccard similarity threshold (0.2 = 20% overlap required)
+        max_edges_per_node: Maximum edges per node (default 5, prevents edge explosion)
 
     Returns:
     -------
@@ -211,43 +212,53 @@ def create_semantic_edges(nodes: list[Node], threshold: float = 0.1) -> list[Edg
     node_entities: dict[UUID, set[str]] = {}
     for node in nodes:
         if node.metadata and "entities" in node.metadata:
-            # metadata["entities"] is list[dict]
-            # We assume it is populated correctly
             raw_entities = node.metadata["entities"]
             if isinstance(raw_entities, list):
-                # Extract names
                 names = {e.get("name", "").lower() for e in raw_entities if isinstance(e, dict)}
                 if names:
                     node_entities[node.id] = names
 
-    # Pairwise comparison
+    # Early exit if not enough nodes have entities
+    if len(node_entities) < 2:
+        return edges
+
+    # Pairwise comparison with top-K selection
     active_nodes = [n for n in nodes if n.id in node_entities]
 
     for i, node1 in enumerate(active_nodes):
         entities1 = node_entities[node1.id]
+        
+        # Collect similarities for this node
+        similarities = []
 
-        for node2 in active_nodes[i + 1 :]:
+        for j, node2 in enumerate(active_nodes[i + 1 :], start=i + 1):
             entities2 = node_entities[node2.id]
 
             shared = entities1.intersection(entities2)
             if shared:
-                union = len(entities1.union(entities2))
-                score = len(shared) / union
+                union_size = len(entities1.union(entities2))
+                score = len(shared) / union_size
 
                 if score > threshold:
-                    edges.append(
-                        Edge(
-                            source=node1.id,
-                            target=node2.id,
-                            type="semantic",
-                            score=score,
-                            created_at=created_at,
-                            metadata={
-                                "similarity_type": "ai_entity_overlap",
-                                "shared_entities": list(shared),
-                            },
-                        )
-                    )
+                    similarities.append((node2.id, score, shared))
+        
+        # Keep only top-K most similar for this node
+        similarities.sort(key=lambda x: x[1], reverse=True)
+        for target_id, score, shared in similarities[:max_edges_per_node]:
+            edges.append(
+                Edge(
+                    source=node1.id,
+                    target=target_id,
+                    type="semantic",
+                    score=score,
+                    created_at=created_at,
+                    metadata={
+                        "similarity_type": "ai_entity_overlap",
+                        "shared_entities": list(shared),
+                    },
+                )
+            )
+    
     return edges
 
 
@@ -424,7 +435,18 @@ class SmartGraphBuilder:
                                         self.metrics.record_llm_success()
                                     return list(zip(batch_nodes, batch_entities))
                                 except Exception as e:
-                                    if attempt == LLM_RETRY_COUNT - 1:
+                                    error_msg = str(e).lower()
+                                    
+                                    # Check for rate limit errors
+                                    if "429" in error_msg or "rate limit" in error_msg or "too many requests" in error_msg:
+                                        # Trigger aggressive backoff for rate limits
+                                        backoff_time = LLM_RETRY_BASE_DELAY * (3 ** attempt)  # Exponential: 3, 9, 27 seconds
+                                        logger.warning(
+                                            f"Rate limit hit on attempt {attempt + 1}/{LLM_RETRY_COUNT}. "
+                                            f"Backing off for {backoff_time}s..."
+                                        )
+                                        await asyncio.sleep(backoff_time)
+                                    elif attempt == LLM_RETRY_COUNT - 1:
                                         for node in batch_nodes:
                                             self.metrics.record_llm_failure(
                                                 str(e), f"node_{node.id}"
@@ -433,7 +455,9 @@ class SmartGraphBuilder:
                                             f"LLM batch failed after {LLM_RETRY_COUNT} retries: {e}"
                                         )
                                         return [(n, []) for n in batch_nodes]
-                                    await asyncio.sleep(LLM_RETRY_BASE_DELAY * (2**attempt))
+                                    else:
+                                        # Regular exponential backoff for other errors
+                                        await asyncio.sleep(LLM_RETRY_BASE_DELAY * (2**attempt))
                             return [(n, []) for n in batch_nodes]
 
                     tasks = []
@@ -473,28 +497,37 @@ class SmartGraphBuilder:
                 if graph_path_obj.exists():
                     try:
                         node_ids = list_all_nodes(graph_path_obj)
-                        for n_id in node_ids:
-                            # Skip nodes we just built (they are already in final_nodes)
+                        
+                        # Parallel metadata loading
+                        async def load_metadata(n_id):
+                            # Skip nodes we just built
                             if any(fn.id == n_id for fn in final_nodes):
-                                continue
-
+                                return None
+                            
                             # Load ONLY metadata (95% memory reduction)
-                            metadata_dict = read_node_metadata_only(n_id, graph_path_obj)
+                            metadata_dict = await asyncio.get_event_loop().run_in_executor(
+                                None, read_node_metadata_only, n_id, graph_path_obj
+                            )
                             if metadata_dict and metadata_dict.get("entities"):
-                                # Create minimal pseudo-node for reference linking
-                                # (we only need id and metadata, not content)
-                                pseudo_node = Node(
+                                return Node(
                                     id=metadata_dict["id"],
-                                    hash="",  # Not needed for linking
+                                    hash="",
                                     title="",
-                                    content="",  # Skip heavy content field
+                                    content="",
                                     path=metadata_dict["path"],
                                     type="code",
                                     token_count=0,
                                     created_at=0,
                                     metadata={"entities": metadata_dict["entities"]},
                                 )
-                                existing_metadata.append(pseudo_node)
+                            return None
+                        
+                        # Load all metadata in parallel
+                        metadata_results = await asyncio.gather(
+                            *[load_metadata(n_id) for n_id in node_ids],
+                            return_exceptions=True
+                        )
+                        existing_metadata = [m for m in metadata_results if m is not None and not isinstance(m, Exception)]
                     except Exception as e:
                         logger.warning(
                             f"Could not load existing node metadata for reference context: {e}"
@@ -502,7 +535,10 @@ class SmartGraphBuilder:
 
                 all_context_nodes = final_nodes + existing_metadata
 
+                # OPTIMIZATION: Only create semantic edges between NEW nodes
+                # (semantic similarity between new and old nodes is less useful)
                 semantic_edges = create_semantic_edges(final_nodes)
+                
                 # create_reference_edges uses global context to resolve symbols
                 reference_edges = create_reference_edges(all_context_nodes)
 

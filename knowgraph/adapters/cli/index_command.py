@@ -127,7 +127,7 @@ async def run_index(
         graph_store_path = validate_path(output_path, must_exist=False, must_be_file=False)
         existing_manifest = load_existing_manifest(output_path, verbose)
 
-        file_hashes, files_ready = await prepare_files_and_hashes(
+        file_hashes, files_ready, cached_files, cache, file_hash_map = await prepare_files_and_hashes(
             files_to_process, base_path, verbose
         )
 
@@ -138,16 +138,36 @@ async def run_index(
         # Step 4: Chunk files
         all_chunks = await chunk_files(files_ready, verbose)
 
+        # Load nodes from cache for cached files
+        cached_nodes = []
+        if cached_files and cache:
+            from knowgraph.domain.models.node import Node
+            for cached_file in cached_files:
+                cached_result = cache.get_cached_result(cached_file)
+                if cached_result and 'nodes' in cached_result:
+                    for node_dict in cached_result['nodes']:
+                        try:
+                            cached_nodes.append(Node.from_dict(node_dict))
+                        except Exception as e:
+                            if verbose:
+                                click.echo(f"Warning: Could not load cached node: {e}")
+            
+            if cached_nodes:
+                click.echo(f"✓ Loaded {len(cached_nodes)} nodes from cache")
+
         # Step 5: Build knowledge graph
-        nodes, edges = await build_knowledge_graph(
-            all_chunks, input_path, graph_store_path, provider, verbose
+        nodes, edges, _ = await build_knowledge_graph(
+            all_chunks, input_path, graph_store_path, provider, verbose, base_path, file_hash_map
         )
+        
+        # Merge cached nodes with newly created nodes
+        all_nodes = cached_nodes + nodes
 
         # Step 6: Write to storage
-        await write_graph_to_storage(nodes, edges, existing_manifest, graph_store_path, verbose)
+        await write_graph_to_storage(all_nodes, edges, existing_manifest, graph_store_path, verbose)
 
         # Step 7: Create and save manifest
-        await create_and_save_manifest(nodes, edges, file_hashes, graph_store_path, verbose)
+        await create_and_save_manifest(all_nodes, edges, file_hashes, graph_store_path, verbose)
 
         # Step 8: Run post-index hooks
         await run_post_index_hooks(

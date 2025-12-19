@@ -187,15 +187,18 @@ def get_optimal_workers() -> int:
     try:
         from knowgraph.shared.resource_detector import ResourceDetector
 
-        return ResourceDetector.recommend_workers(max_workers=30)
+        # Reduced max workers to avoid rate limits (30 -> 5)
+        return ResourceDetector.recommend_workers(max_workers=5)
     except Exception:
-        return 30
+        return 5
 
 
-# Maximum concurrent API requests
+# Maximum concurrent API requests (reduced to avoid rate limits)
 MAX_CONCURRENT_REQUESTS = int(os.getenv("KNOWGRAPH_WORKERS", get_optimal_workers()))
 
-BATCH_SIZE = 15
+# Batch size for LLM entity extraction (balanced for rate limits)
+# Smaller batches = more API calls but less likely to hit rate limits
+BATCH_SIZE = 10
 
 # Async Configuration
 MAX_CONCURRENT_QUERIES = 15
