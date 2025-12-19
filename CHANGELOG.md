@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-12-19
+
+### 🚀 Major Feature: Conversational Knowledge Graph
+This massive update allows KnowGraph to treat AI conversations as first-class citizens (`Logic: 6358500`).
+- **Universal Parser**: Unified parsing engine for **Antigravity** artifacts (`task.md`), **Cursor** (`.aichat`), and **GitHub Copilot** exports.
+- **Auto-Discovery**: `knowgraph discover-conversations` CLI command scans the workspace for chat history artifacts.
+- **Snippet Tagging**: Added `knowgraph_tag_snippet` MCP tool to bookmark and tag critical code explanations.
+- **Linking Strategy**: Automatically creates semantic edges between Conversation Nodes and the Code Files they discuss.
+- **Files Added**: `knowgraph/infrastructure/parsing/conversation_parser.py`, `snippet_tagger.py`, `conversation_discovery.py`.
+
+### 🛡️ Major Feature: Graph Versioning & Time-Travel
+Complete implementation of a Git-like version control system for the knowledge graph (`Logic: a95db12`).
+- **Snapshot System**: Every indexing operation creates an atomic snapshot in `manifest.json`.
+- **Diff Engine**: `GraphDiffer` calculates set-difference between versions ($V_{new} \setminus V_{old}$) with $O(n)$ efficiency.
+- **Atomic Rollback**: `knowgraph version rollback` provides transactional safety to revert corrupt states.
+- **API**: Added `list`, `diff`, `show`, `rollback` methods to both CLI and MCP.
+- **Files Added**: `knowgraph/shared/versioning.py`, `knowgraph/application/versioning/rollback.py`.
+
+### ⚡ Technical Improvements & Automation
+- **Event-Driven Pipeline**: Implemented a Hook system triggering on `INDEXING_COMPLETE`.
+- **Manifest Backup**: Automatic backup rotation for graph metadata (`manifest_backup.py` - `d38cce7`).
+- **Resource Detection**: `ResourceDetector` now dynamically optimizes `KNOWGRAPH_WORKERS` based on CPU load.
+- **Smart Metrics**: `ErrorMetrics` module tracking fine-grained indexing failures.
+
+### 🧪 Quality Assurance
+- **New Test Suites**: Added 7 comprehensive test suites covering 2600+ new lines of code.
+- **Project Root**: Enhanced `ProjectDetector` with Monorepo support and Caching (`7c0a7b5`).
+- **Coverage**: Maintained >96% coverage across new Versioning and Conversation modules.
+
+### 📚 Documentation (Sync)
+- **Complete Overhaul**: README, USER_GUIDE, and ARCHITECTURE updated to reflect all features above.
+- **Config Audit**: All hidden environment variables (`RETRY`, `WORKERS`) documented.
+
 ## [0.5.0] - 2025-12-18
 
 ### 🎉 Major Release: Enterprise Resilience & Production Readiness

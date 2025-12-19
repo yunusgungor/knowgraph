@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "knowgraph"
-version = "0.3.0"
+version = "0.6.0"
 description = "Knowledge Graph-Powered RAG system with enterprise resilience patterns"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -38,7 +38,6 @@ dependencies = [
     "tenacity>=8.2.0",      # Retry logic for async operations
     "psutil>=5.9.0",        # System resource detection for auto-tuning
 ]
-
 
 [project.optional-dependencies]
 dev = [

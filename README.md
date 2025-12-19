@@ -35,7 +35,7 @@ KnowGraph leverages **Graph Theory** and **Network Science** principles to offer
 
 ---
 
-## 🚀 Performance Engine (v0.3.0)
+## 🚀 Performance Engine (v0.6.0)
 
 KnowGraph is built for scale. The **Smart Indexing Engine** processes large repositories efficiently:
 
@@ -47,110 +47,54 @@ KnowGraph is built for scale. The **Smart Indexing Engine** processes large repo
 
 ---
 
-## 🛡️ Resilience & Production Readiness (v0.5.0)
+## 🎯 Key Features
+
+### 1. 📊 Time-Travel Debugging (Graph Versioning - v0.6.0)
+
+KnowGraph now treats your knowledge graph as a versioned artifact, similar to Git for your code.
+
+*   **Snapshots:** Every `knowgraph index` creates a new, immutable version checkpoint.
+*   **Diffing:** See exactly how your knowledge graph evolved. Which nodes were added? Which relationships broke?
+*   **Rollback:** Broke something? Instantly revert to a previous healthy state with `knowgraph version rollback`.
+
+```bash
+# Compare current graph with the previous version
+knowgraph version diff HEAD HEAD~1
+
+# Rollback to a safe state
+knowgraph version rollback v0.5.9-stable
+```
+
+### 2. 🔗 Conversational Intelligence (v0.6.0)
+
+Your code doesn't live in a vacuum. It lives in the conversations you have with your AI assistant. KnowGraph now indexes **Code + Conversations** together.
+
+*   **Multi-Editor Support:** Supports Antigravity (Gemini), Cursor (`.aichat`), GitHub Copilot, and Claude Desktop.
+*   **Semantic Linking:** Automatically links chat discussions to the code files they mention.
+*   **Unified Search:** Query code and chat history simultaneously. "Show me the authentication code AND the discussion where we decided to use JWT."
+
+```bash
+# Auto-discover and index all AI conversations
+knowgraph discover-conversations
+```
+
+### 3. ⚡ Smart Automation (Post-Indexing Hooks - v0.6.0)
+
+The workflow doesn't end with indexing. KnowGraph triggers intelligent agents after every update.
+
+*   **Auto-Tagging:** Automatically tags nodes with concepts like "Security Critical", "Legacy Code", or "Performance Hotspot" based on analysis.
+*   **Analytics:** Generates growth reports and health metrics automatically.
+*   **Dynamic Linking:** Connects new code to existing documentation in real-time.
+
+### 4. 🛡️ Resilience & Production Readiness (v0.5.0)
 
 KnowGraph is built for production with enterprise-grade resilience patterns:
 
-*   **🔌 Circuit Breaker:** Automatic failure detection and recovery with half-open state testing. Prevents cascading failures by temporarily blocking failing operations.
-*   **⏱️ Rate Limiting:** Token bucket algorithm with configurable burst capacity. Protects API quotas with per-user tracking and intelligent throttling.
-*   **🔄 Retry Logic:** Exponential backoff with jitter for transient failures. Smart retry strategies (immediate, linear, exponential) with maximum attempt limits.
-*   **🚦 Request Throttling:** Adaptive concurrency control with queue management. Dynamically adjusts based on system load and response times.
-*   **📋 API Versioning:** Semantic versioning (SemVer) with automatic negotiation. Backward-compatible API changes with deprecation warnings.
-
-### Resilience Statistics
-
-| Pattern | Test Coverage | Status | Location |
-|---------|--------------|--------|----------|
-| **Circuit Breaker** | 97.78% (25 tests) | ✅ Active | `knowgraph/shared/circuit_breaker.py` |
-| **Rate Limiter** | 98.73% (28 tests) | ✅ Active | `knowgraph/shared/rate_limiter.py` |
-| **Retry Logic** | 92.00% (20 tests) | ✅ Active | `knowgraph/shared/retry.py` |
-| **Throttle** | 97.48% (21 tests) | ✅ Active | `knowgraph/shared/throttle.py` |
-| **API Versioning** | 96.62% (29 tests) | ✅ Active | `knowgraph/shared/versioning.py` |
-
-**Total Resilience Tests:** 123 tests, all passing ✅
-
-### Integration Points
-
-**QueryEngine Protection:**
-```python
-# Automatic retry for transient failures
-with RetryContext(max_attempts=3, backoff="exponential"):
-    result = engine.query("complex query")
-
-# Throttling for concurrent query management
-async with throttle.acquire():
-    result = await engine.query_async("query")
-
-# Circuit breaker prevents cascading failures
-await circuit_breaker.call(execute_query)
-```
-
-**MCP Handler Protection:**
-```python
-# Rate limiting with per-user tracking
-await rate_limiter.allow(user_id)  # 10 req/s
-
-# Version negotiation for backward compatibility
-version = negotiate_version(requested="1.1.0")
-
-# Global circuit breaker for all MCP operations
-await global_circuit_breaker.call(handler)
-```
-
----
-
-## 🎯 Key Features
-
-### Multi-Source Indexing (v0.4.0)
-
-KnowGraph now supports **four input formats** for maximum flexibility:
-
-| Source Type | Description | Example |
-|------------|-------------|---------|
-| 📝 **Markdown Files** | Original functionality, optimized for documentation | `knowgraph index ./docs` |
-| 🔗 **Git Repositories** | Direct indexing from GitHub, GitLab, Bitbucket | `knowgraph index https://github.com/user/repo` |
-| 📁 **Code Directories** | Automatic conversion to markdown via gitingest | `knowgraph index ./my-project` |
-| 💬 **AI Conversations** | Index chat histories from AI code editors | `knowgraph discover-conversations` |
-
-**Conversation Indexing (NEW in v0.4.0):**
-
-Index your AI coding conversations automatically - no manual export needed!
-
-```bash
-# Auto-discover and index conversations from all supported editors
-knowgraph discover-conversations --output ./graphstore
-
-# Filter by specific editor
-knowgraph discover-conversations --editor antigravity
-
-# Preview without indexing
-knowgraph discover-conversations --dry-run
-```
-
-**Supported AI Editors:**
-- 🤖 **Antigravity** (Gemini) - Conversation artifacts (task.md, walkthrough.md, implementation_plan.md)
-- 🎯 **Cursor** - .aichat files
-- 🧠 **Claude Desktop** - JSON conversation exports
-- 🐙 **GitHub Copilot** - VSCode chat histories
-
-**Why Index Conversations?**
-- 💡 Preserve important AI-generated code snippets
-- 🔍 Search across all your coding sessions
-- 📚 Build a knowledge base from your AI interactions
-- 🏷️ Tag and bookmark critical responses
-
-**Advanced Filtering:**
-```bash
-# Include only Python and Markdown files
-knowgraph index https://github.com/user/repo --include "*.py" --include "*.md"
-
-# Exclude dependencies and build artifacts
-knowgraph index ./project --exclude "node_modules/*" --exclude "*.lock"
-
-# Index private repositories
-export GITHUB_TOKEN="github_pat_xxx"
-knowgraph index https://github.com/company/private-repo
-```
+*   **🔌 Circuit Breaker:** Automatic failure detection and recovery.
+*   **⏱️ Rate Limiting:** Token bucket algorithm with burst capacity.
+*   **🔄 Retry Logic:** Exponential backoff with jitter.
+*   **🚦 Request Throttling:** Adaptive concurrency control.
+*   **📋 API Versioning:** Semantic versioning with automatic negotiation.
 
 ### Core Capabilities
 
@@ -160,26 +104,16 @@ knowgraph index https://github.com/company/private-repo
 *   **📊 Impact Analysis:** Predict ripple effects of code changes using `ImpactAnalyzer`
 *   **🎯 Hierarchical Context:** Automatic lifting of parent README context for enriched understanding
 *   **🧠 Graph Traversal:** BFS/DFS exploration of code relationships (imports, calls, inheritance)
-*   **🏷️ Semantic Bookmarking:** Tag and retrieve important AI responses with custom labels (NEW in v0.4.0)
-*   **💬 Conversation Indexing:** Automatically index and search AI coding conversations (NEW in v0.4.0)
 *   **✅ Graph Validation:** Ensure knowledge graph consistency via `GraphValidator`
-*   **📈 Statistics & Metrics:** Monitor graph health and coverage with `get_stats`
-*   **🎯 Query Expansion:** Semantic query enrichment through `QueryExpander`
-*   **📝 Explanation Generation:** Transparent reasoning paths via `ExplanationObject`
-*   **🏛️ Hierarchical Lifting:** Context from parent directories for better understanding
-*   **🛡️ Circuit Breaker:** Automatic failure detection and recovery with half-open state (NEW in v0.5.0)
-*   **⏱️ Rate Limiting:** Token bucket algorithm with burst capacity and per-user tracking (NEW in v0.5.0)
-*   **🔄 Retry Logic:** Smart retry strategies with exponential backoff and jitter (NEW in v0.5.0)
-*   **🚦 Request Throttling:** Adaptive concurrency control with queue management (NEW in v0.5.0)
-*   **📋 API Versioning:** SemVer with automatic negotiation and deprecation warnings (NEW in v0.5.0)
 
-#### Performance Highlights (v0.3.0)
+#### Performance Highlights (v0.6.0)
 
 | Feature | Performance | Improvement |
 |---------|-------------|-------------|
 | **Batch Queries** | 1.19s (5 queries) | **15.72x faster** 🚀 |
 | **Warm Cache** | 0.18s | **22x faster** 🔥 |
 | **Centrality** | 0.01s (cached) | **372x faster** ⚡ |
+| **Indexing** | ~10 files/sec | **Optimized AST** 🏎️ |
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 
@@ -213,40 +147,34 @@ Add the following to your **Claude Desktop** (`claude_desktop_config.json`) or *
 }
 ```
 
-> 💡 **Auto-Detection**: KnowGraph automatically detects your project root using:
-> 1. Git repository root (if in a git repo)
-> 2. Project marker files (pyproject.toml, package.json, Cargo.toml, etc.)
-> 3. Current working directory (fallback)
-> 
-> Each project automatically uses its own `graphstore` directory!
-
-> 📝 **New in v0.3.0:** KnowGraph now supports multiple input formats:
-> - **Markdown files** (`.md`) - Original functionality
-> - **Git repositories** (GitHub, GitLab, Bitbucket) - NEW! 🎉
-> - **Code directories** (automatically converted to markdown) - NEW! 🎉
-> 
-> While we still recommend [Gittodoc](https://gittodoc.com/) for pre-processing, you can now index repositories directly!
-
 ### 3. Index Your Knowledge Base
 
 ```bash
 # Index local markdown files
 knowgraph index /path/to/markdown/files
 
-# NEW: Index a GitHub repository directly
+# Index a GitHub repository directly
 knowgraph index https://github.com/user/repo
 
-# NEW: Index with filtering
-knowgraph index https://github.com/user/repo \
-  --include "*.py" --include "*.md" \
-  --exclude "node_modules/*"
+# Index conversations from your editor
+knowgraph discover-conversations
 ```
 
-For more details, see [Repository Indexing Guide](docs/REPOSITORY_INDEXING.md).
+### 4. Cheat Sheet: Version Control
 
-### 4. Usage
+```bash
+# List all graph versions
+knowgraph version list
 
-Set your environment variables and start chatting with your AI assistant.
+# Show details of a specific version
+knowgraph version show <version_id>
+
+# See what changed between updates
+knowgraph version diff <old_id> <new_id>
+
+# Revert to a previous state
+knowgraph version rollback <version_id>
+```
 
 ---
 
@@ -254,109 +182,30 @@ Set your environment variables and start chatting with your AI assistant.
 
 Run these **scientific experiments** (prompts) to witness the KnowGraph difference.
 
-### Experiment 0: Warm-up & Calibration
-*Start the engines and test basic instruments.*
-
 <details open>
 <summary><b>🧪 Click to Expand: Ready-to-use Commands</b></summary>
 
 > 🤖 **User (Stats):** "Show me the node and edge statistics of my KnowGraph database."
 >
-> 🤖 **User (Health):** "Validate the health and consistency of the knowledge graph."
+> 🤖 **User (Time Travel):** "List the available versions of the knowledge graph and tell me what changed in the last update."
 >
-> 🤖 **User (Expansion Only):** "What are the video processing memory strategies? Search by expanding the query with similar technical terms."
->
-> 🤖 **User (Proof Only):** "What security measures are taken in the Docker configuration? Provide your logical explanation along with the answer."
+> 🤖 **User (Conversational Memory):** "Find the conversation where we discussed the 'Retry Logic' implementation and show me the relevant code snippets."
 
-*   **Background:** These commands allow you to test the core functions of the MCP server (`get_stats`, `validate`, `expand_query`, `with_explanation`) individually (atomically).
 </details>
 
 <details open>
 <summary><b>🦋 Experiment 1: The "Butterfly Effect" Analysis (Impact Analysis)</b> - <i>Predict chaotic consequences.</i></summary>
-
 > 🤖 **User:** "Analyze the 'butterfly effect' if I delete `include/video_processor.hpp`. Show the chain of broken dependencies, both direct and indirect (N-Hop)."
-
-*   **Background:** `knowgraph_analyze_impact(mode="path")`. The system performs reverse graph traversal to map the dependency tree.
 </details>
 
 <details open>
 <summary><b>🕸️ Experiment 2: Semantic Network Discovery (Conceptual Integration)</b> - <i>Meaning beyond keywords.</i></summary>
-
 > 🤖 **User:** "Explain FFmpeg's 'memory management' strategies and 'buffering' mechanisms. Expand my query with technical terminology (Query Expansion) and provide logical proof (explanation) for your answer."
-
-*   **Background:** `expand_query=True` + `with_explanation=True`. The LLM semantically expands "buffering" to terms like "ring buffer", "zero-copy", and "allocation".
 </details>
 
 <details open>
 <summary><b>🦴 Experiment 3: Architectural X-Ray (Deep Architecture)</b> - <i>Reveal invisible connections.</i></summary>
-
 > 🤖 **User:** "Trace the connection between the `RATE_LIMIT` value in `docker-compose.yml` and `rate_limiter.cpp` deep in the C++ code, including all intermediate layers, up to 8 hops deep (Deep Hop)."
-
-*   **Background:** `max_hops=8`. Based on "Small World Network" theory, it finds the shortest paths between distant nodes.
-</details>
-
-<details open>
-<summary><b>🛡️ Experiment 4: Resilience Audit</b> - <i>Test the system's immune system.</i></summary>
-
-> 🤖 **User:** "Analyze the system's survival mechanisms (Try-Catch blocks, Docker Restart Policy) when a 'video processing' operation crashes (exception)."
-
-*   **Background:** Queries both code-level error handling and orchestration-level (Docker) recovery policies holistically.
-</details>
-
-<details open>
-<summary><b>🔌 Experiment 5: Discovering Invisible Links (Infrastructure Audit)</b> - <i>Blind spots between infrastructure and code.</i></summary>
-
-> 🤖 **User:** "Explain how SSL certificates generated by `ssl/generate_cert.sh` are mounted into the Docker container and how the application reads them in the code. Prove the chain."
-
-*   **Background:** Bridges the gap between DevOps and Developer worlds. Traces the Shell script -> YAML -> Source Code chain.
-</details>
-
-<details open>
-<summary><b>⛓️ Experiment 6: Dependency Chain Reaction (Dependency Graph)</b> - <i>Risk analysis for library updates.</i></summary>
-
-> 🤖 **User:** "If I change the Boost library version in `CMakeLists.txt`, which source code files using (including) this library should I quarantine and test?"
-
-*   **Background:** `knowgraph_analyze_impact`. Maps the propagation of external dependencies (3rd party libs) within the code.
-</details>
-
-<details open>
-<summary><b>🩺 Experiment 7: System Check-Up (Health & Maintenance)</b> - <i>Audit your cognitive engine.</i></summary>
-
-> 🤖 **User:** "First, validate the topological consistency of the knowledge graph. If the graph is healthy, report the node and edge statistics (stats)."
-
-*   **Background:** `knowgraph_validate` -> `knowgraph_get_stats`. Checks the data integrity and scale of the MCP server.
-</details>
-
-<details open>
-<summary><b>🧬 Experiment 8: Semantic Mutation (Conceptual Evolution)</b> - <i>Impact of abstract changes.</i></summary>
-
-> 🤖 **User:** "We decided to replace 'JWT Authentication' with 'OAuth2'. Apart from `auth.cpp`, which components (API server, Docker config, etc.) will be affected by this conceptual change?"
-
-*   **Background:** `mode="semantic"`. Analyzes modules semantically linked to auth logic (session management, header parsing) even if the exact string "JWT" is absent.
-</details>
-
-<details open>
-<summary><b>🔭 Experiment 9: Hierarchical Cognition (High-Context Lifting)</b> - <i>See the big picture.</i></summary>
-
-> 🤖 **User:** "Describe the role of `src/api_server.cpp` in the general architecture, using information from both its content and the `README`/`CMakeLists.txt` files in the project root. Use a wide 4000-token window for the answer."
-
-*   **Background:** `enable_hierarchical_lifting=True` + `lift_levels=3` + `max_tokens=4000`. Interprets the file not just by its code, but within the context of its ecosystem (folder and project).
-</details>
-
-<details open>
-<summary><b>🎨 Experiment 10: The "Impossible" Synthesis (Sequence Diagram)</b> - <i>Push existing limits.</i></summary>
-
-> 🤖 **User:** "Assume I am a new developer. Draw a text-based 'Sequence Diagram' showing the path of a request from `main.cpp` until video processing is complete. Support every step with proofs (file references)."
-
-*   **Background:** Tests the engine's limits (Deep Traversal + Semantic Understanding + Synthesis). Combines scattered procedures into a single coherent flow.
-</details>
-
-<details>
-<summary><b>🌑 Experiment 11: Negative Existence Proof (Void Detection)</b> - <i>Find what is missing.</i></summary>
-
-> 🤖 **User:** "Is there a 'LICENSE' file among the indexed files, and has its content created any nodes in the graph?"
-
-*   **Background:** Existence/Absence check. Queries directly across nodes in the graph.
 </details>
 
 ---
@@ -365,12 +214,10 @@ Run these **scientific experiments** (prompts) to witness the KnowGraph differen
 
 For those who want to dive into the deep tech:
 
-*   **[📖 User Guide](docs/USER_GUIDE.md)**: Comprehensive guide covering installation, configuration, indexing, querying, and troubleshooting.
+*   **[📖 User Guide](docs/USER_GUIDE.md)**: Comprehensive guide covering versioning, indexing, querying, and troubleshooting.
 *   **[🔧 MCP Rules & Detailed Prompts](docs/KNOWGRAPH_MCP_RULES.md)**: Best practices for using KnowGraph with AI assistants.
 *   **[🏗️ Architecture & Algorithms](docs/ARCHITECTURE.md)**: Graph theory, node weighting algorithms, and system architecture.
 *   **[📦 Repository Indexing](docs/REPOSITORY_INDEXING.md)**: Guide for indexing Git repositories and code directories.
-*   **[🛡️ Resilience Integration](RESILIENCE_INTEGRATION_SUMMARY.md)**: Enterprise resilience patterns and production readiness guide.
-*   **[✅ Integration Approval](ENTEGRASYON_ONAY.md)**: Complete integration verification and validation report (Turkish).
 
 ## 🤝 Contribute to Science
 
