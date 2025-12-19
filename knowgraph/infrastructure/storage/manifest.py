@@ -33,6 +33,8 @@ class Manifest:
         sparse_index_filename: Filename for the sparse index data
         semantic_edge_count: Number of semantic edges
         finalized: Whether indexing completed successfully (for checkpoint/resume)
+        version_id: Version identifier (e.g., "v1", "v2"); auto-incremented
+        previous_version_id: Previous version ID for version chain
 
     """
 
@@ -46,6 +48,8 @@ class Manifest:
     updated_at: int | None = None
     semantic_edge_count: int = 0
     finalized: bool = False
+    version_id: str = "v1"
+    previous_version_id: str | None = None
 
     def __post_init__(self) -> None:
         """Set default timestamps if not provided."""
@@ -69,6 +73,8 @@ class Manifest:
             },
             "semantic_edge_count": self.semantic_edge_count,
             "finalized": self.finalized,
+            "version_id": self.version_id,
+            "previous_version_id": self.previous_version_id,
         }
 
     @classmethod
@@ -91,6 +97,8 @@ class Manifest:
                 int, data.get("semantic_edge_count", data.get("lexical_edge_count", 0))
             ),  # Fallback
             finalized=cast(bool, data.get("finalized", False)),
+            version_id=cast(str, data.get("version_id", "v1")),
+            previous_version_id=cast(str | None, data.get("previous_version_id")),
         )
 
     @classmethod
@@ -201,12 +209,34 @@ def write_manifest(manifest: Manifest, graph_store_path: Path) -> None:
     """
     # Import here to avoid circular dependency
     from knowgraph.infrastructure.storage.manifest_backup import ManifestBackupManager
+    from knowgraph.infrastructure.storage.version_history import VersionHistoryManager
 
     with acquire_manifest_lock(graph_store_path):
         metadata_dir = graph_store_path / "metadata"
         metadata_dir.mkdir(parents=True, exist_ok=True)
 
         manifest_file = metadata_dir / "manifest.json"
+
+        # Read existing manifest for version tracking
+        existing_manifest = None
+        if manifest_file.exists():
+            try:
+                existing_manifest = read_manifest(graph_store_path)
+            except Exception:
+                pass  # If read fails, treat as new
+
+        # Auto-increment version if file hashes changed
+        if existing_manifest:
+            # Check if this is an actual update (file hashes changed)
+            if existing_manifest.file_hashes != manifest.file_hashes:
+                # Increment version
+                current_version_num = int(existing_manifest.version_id.lstrip("v"))
+                manifest.version_id = f"v{current_version_num + 1}"
+                manifest.previous_version_id = existing_manifest.version_id
+            else:
+                # No changes, keep same version
+                manifest.version_id = existing_manifest.version_id
+                manifest.previous_version_id = existing_manifest.previous_version_id
 
         # Create backup before writing (only if manifest exists)
         if manifest_file.exists():
@@ -225,6 +255,24 @@ def write_manifest(manifest: Manifest, graph_store_path: Path) -> None:
             with open(temp_file, "w", encoding="utf-8") as file:
                 json.dump(manifest.to_dict(), file, indent=2, ensure_ascii=False)
             temp_file.rename(manifest_file)
+
+            # Create version snapshot in history (only if file hashes actually changed)
+            if existing_manifest is None or existing_manifest.file_hashes != manifest.file_hashes:
+                try:
+                    version_mgr = VersionHistoryManager(graph_store_path)
+                    version_mgr.add_version(
+                        node_count=manifest.node_count,
+                        edge_count=manifest.edge_count,
+                        file_hashes=manifest.file_hashes,
+                        previous_file_hashes=(
+                            existing_manifest.file_hashes if existing_manifest else {}
+                        ),
+                        metadata={"finalized": manifest.finalized},
+                    )
+                    logger.info(f"Created version snapshot: {manifest.version_id}")
+                except Exception as version_error:
+                    # Log but don't fail the write operation
+                    logger.warning(f"Failed to create version snapshot: {version_error}")
 
             # Trigger cache invalidation after successful manifest update
             invalidate_all_caches()

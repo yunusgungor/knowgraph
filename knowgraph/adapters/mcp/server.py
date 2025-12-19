@@ -21,6 +21,12 @@ from knowgraph.adapters.mcp.handlers import (
     handle_tag_snippet,
     handle_validate,
 )
+from knowgraph.adapters.mcp.version_handlers import (
+    handle_list_versions,
+    handle_version_info,
+    handle_diff_versions,
+    handle_rollback,
+)
 from knowgraph.adapters.mcp.utils import get_llm_provider, resolve_graph_path
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.shared.versioning import (
@@ -177,6 +183,18 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
 
     elif name == "knowgraph_analyze_conversations":
         return await handle_analyze_conversations(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_list_versions":
+        return await handle_list_versions(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_version_info":
+        return await handle_version_info(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_diff_versions":
+        return await handle_diff_versions(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_rollback":
+        return await handle_rollback(arguments, PROJECT_ROOT)
 
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -483,6 +501,89 @@ async def list_tools() -> list[types.Tool]:
                 },
             },
         ),
+        types.Tool(
+            name="knowgraph_list_versions",
+            description="List all versions in the knowledge graph history.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of versions to return (default: 50)",
+                    },
+                },
+            },
+        ),
+        types.Tool(
+            name="knowgraph_version_info",
+            description="Get detailed information about a specific version.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "version_id": {
+                        "type": "string",
+                        "description": "Version identifier (e.g., 'v1', 'v2', 'v3')",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
+                "required": ["version_id"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_diff_versions",
+            description="Compare two versions and show differences in nodes, edges, and files.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "version1": {
+                        "type": "string",
+                        "description": "First version ID (e.g., 'v1')",
+                    },
+                    "version2": {
+                        "type": "string",
+                        "description": "Second version ID (e.g., 'v3')",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
+                "required": ["version1", "version2"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_rollback",
+            description="Rollback manifest to a previous version (metadata only). Creates backup and requires confirmation.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "version_id": {
+                        "type": "string",
+                        "description": "Version to rollback to (e.g., 'v3')",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                    "create_backup": {
+                        "type": "boolean",
+                        "description": "Create backup before rollback (default: true)",
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "Skip validation checks (default: false)",
+                    },
+                },
+                "required": ["version_id"],
+            },
+        ),
     ]
 
 
@@ -494,3 +595,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+# Version management tools added below
