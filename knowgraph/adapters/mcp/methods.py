@@ -62,7 +62,7 @@ async def index_graph(
     # Redirect stdout to stderr to prevent polluting the MCP JSON-RPC stream
     with contextlib.redirect_stdout(sys.stderr):
         try:
-            manifest_path = graph_path / "metadata" / "manifest.json"
+            graph_path / "metadata" / "manifest.json"
 
             if resume_mode and source_type != "repository":
                 # Resume mode only works for local files/directories

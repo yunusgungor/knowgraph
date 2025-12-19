@@ -25,8 +25,8 @@ def test_retrieve_bfs():
     store_path = "store"
 
     with (
-        patch("knowgraph.application.querying.retriever.SparseEmbedder") as mock_embedder_cls,
-        patch("knowgraph.application.querying.retriever.SparseIndex") as mock_index_cls,
+        patch("knowgraph.application.querying.retriever.SparseEmbedder"),
+        patch("knowgraph.application.querying.retriever.SparseIndex"),
         patch("knowgraph.application.querying.retriever.read_node_json") as mock_read,
     ):
 

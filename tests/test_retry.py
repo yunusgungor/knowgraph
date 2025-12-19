@@ -146,7 +146,6 @@ class TestRetryContext:
     @pytest.mark.asyncio
     async def test_exponential_backoff(self):
         """Test exponential backoff."""
-        delays = []
 
         async def task():
             raise ValueError("error")

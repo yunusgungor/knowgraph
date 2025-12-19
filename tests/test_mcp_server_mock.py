@@ -28,7 +28,7 @@ async def test_mcp_validate():
 async def test_mcp_get_stats():
     """Test knowgraph_get_stats tool."""
     with (
-        patch("builtins.open", create=True) as mock_open,
+        patch("builtins.open", create=True),
         patch("json.load") as mock_json_load,
         patch("pathlib.Path.exists", return_value=True),
         patch("knowgraph.adapters.mcp.server.resolve_graph_path", side_effect=lambda p, r: Path(p)),

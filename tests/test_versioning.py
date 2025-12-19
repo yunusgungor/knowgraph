@@ -384,7 +384,7 @@ class TestVersionRegistry:
         # Negotiating deprecated version should warn
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            version = registry.negotiate_version("0.9.0")
+            registry.negotiate_version("0.9.0")
             assert len(w) == 1
             assert issubclass(w[0].category, DeprecationWarning)
             assert "0.9.0 is deprecated" in str(w[0].message)

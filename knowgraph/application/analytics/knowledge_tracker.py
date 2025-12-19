@@ -10,7 +10,6 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from knowgraph.domain.models.node import Node
 from knowgraph.infrastructure.storage.filesystem import list_all_nodes, read_node_json
 
 

@@ -99,7 +99,7 @@ def test_restore_from_specific_backup(manifest_with_content):
     # Modify and create second backup
     manager.manifest_path.write_text('{"version": "2.0"}')
     time.sleep(0.1)
-    second_backup = manager.backup_manifest()
+    manager.backup_manifest()
 
     # Debug: List all backups
     print(f"\nDEBUG: Backups available: {[b.name for b in manager._list_backups()]}")

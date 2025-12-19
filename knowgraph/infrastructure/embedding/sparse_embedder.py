@@ -6,6 +6,7 @@ based retrieval, avoiding heavy neural models.
 
 import re
 from collections import Counter
+from functools import lru_cache
 
 from knowgraph.shared.exceptions import EmbeddingError
 
@@ -163,13 +164,23 @@ class SparseEmbedder:
 
         """
         try:
-            tokens = self._tokenize(text)
-            return dict(Counter(tokens))
+            # Use cached version
+            return self._embed_text_cached(text, frozenset(self.stop_words))
         except Exception as error:
             raise EmbeddingError(
                 "Failed to generate sparse text embedding",
                 {"error": str(error), "text_length": len(text)},
             ) from error
+
+    @staticmethod
+    @lru_cache(maxsize=1000)
+    def _embed_text_cached(text: str, stop_words: frozenset[str]) -> dict[str, int]:
+        """Cached text embedding computation."""
+        token_pattern = re.compile(r"(?u)\b\w\w+\b")
+        text = text.lower()
+        tokens = token_pattern.findall(text)
+        filtered = [t for t in tokens if t not in stop_words]
+        return dict(Counter(filtered))
 
     def embed_code(self, code: str) -> dict[str, int]:
         """Generate sparse embedding for code (CODE-AWARE TOKENIZATION).
@@ -180,13 +191,115 @@ class SparseEmbedder:
         - Preserves keywords and operators
         """
         try:
-            tokens = self._tokenize_code(code)
-            return dict(Counter(tokens))
+            # Use cached version
+            return self._embed_code_cached(code, frozenset(self.stop_words))
         except Exception as error:
             raise EmbeddingError(
                 "Failed to generate sparse code embedding",
                 {"error": str(error), "code_length": len(code)},
             ) from error
+
+    @staticmethod
+    @lru_cache(maxsize=1000)
+    def _embed_code_cached(code: str, stop_words: frozenset[str]) -> dict[str, int]:
+        """Cached code embedding computation."""
+        token_pattern = re.compile(r"(?u)\b\w\w+\b")
+        code_keywords = {
+            "def",
+            "class",
+            "import",
+            "from",
+            "return",
+            "if",
+            "else",
+            "elif",
+            "for",
+            "while",
+            "try",
+            "except",
+            "finally",
+            "with",
+            "as",
+            "async",
+            "await",
+            "yield",
+            "lambda",
+            "pass",
+            "break",
+            "continue",
+            "raise",
+            "assert",
+            "global",
+            "nonlocal",
+            "del",
+            "in",
+            "is",
+            "not",
+            "and",
+            "or",
+            "true",
+            "false",
+            "none",
+            "self",
+            "super",
+            "init",
+            "main",
+            "function",
+            "var",
+            "let",
+            "const",
+            "new",
+            "this",
+            "null",
+            "undefined",
+            "public",
+            "private",
+            "protected",
+            "static",
+            "void",
+            "int",
+            "string",
+            "bool",
+            "float",
+            "double",
+            "char",
+            "interface",
+            "extends",
+            "implements",
+        }
+
+        raw_tokens_original = token_pattern.findall(code)
+        expanded_tokens = []
+
+        for token_original in raw_tokens_original:
+            token_lower = token_original.lower()
+
+            # Skip stop words but NOT code keywords
+            if token_lower in stop_words and token_lower not in code_keywords:
+                continue
+
+            # Always include the lowercased token
+            expanded_tokens.append(token_lower)
+
+            # Split camelCase
+            camel_parts = re.findall(r"[a-z]+|[A-Z][a-z]*", token_original)
+            if len(camel_parts) > 1:
+                expanded_tokens.extend([p.lower() for p in camel_parts])
+
+            # Split snake_case
+            if "_" in token_lower:
+                snake_parts = token_lower.split("_")
+                expanded_tokens.extend([p for p in snake_parts if p and p not in stop_words])
+
+        # Deduplicate
+        seen = set()
+        unique_tokens = []
+        for t in expanded_tokens:
+            if t and t not in seen:
+                seen.add(t)
+                unique_tokens.append(t)
+
+        return dict(Counter(unique_tokens))
 
     def _tokenize(self, text: str) -> list[str]:
         """Normalize and tokenize text."""
@@ -209,23 +322,23 @@ class SparseEmbedder:
 
         for token_original in raw_tokens_original:
             token_lower = token_original.lower()
-            
+
             # Skip stop words but NOT code keywords
             if token_lower in self.stop_words and not self._is_code_keyword(token_lower):
                 continue
-            
+
             # Always include the lowercased token
             expanded_tokens.append(token_lower)
-            
+
             # Split camelCase: getUserById → ['get', 'user', 'by', 'id']
             # Use ORIGINAL case for detection, then lowercase the parts
-            camel_parts = re.findall(r'[a-z]+|[A-Z][a-z]*', token_original)
+            camel_parts = re.findall(r"[a-z]+|[A-Z][a-z]*", token_original)
             if len(camel_parts) > 1:
                 expanded_tokens.extend([p.lower() for p in camel_parts])
-            
+
             # Split snake_case: user_profile → ['user', 'profile']
-            if '_' in token_lower:
-                snake_parts = token_lower.split('_')
+            if "_" in token_lower:
+                snake_parts = token_lower.split("_")
                 expanded_tokens.extend([p for p in snake_parts if p and p not in self.stop_words])
             if "_" in token_lower:
                 snake_parts = token_lower.split("_")

@@ -2,7 +2,6 @@
 
 import hashlib
 
-from knowgraph.config import FILE_READ_CHUNK_SIZE
 
 
 def hash_content(content: str) -> str:

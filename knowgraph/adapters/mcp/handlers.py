@@ -4,6 +4,7 @@ This module contains individual handler functions for each MCP tool,
 improving maintainability and testability.
 """
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -331,7 +332,7 @@ async def handle_search_bookmarks(
 
             for i, bookmark in enumerate(results, 1):
                 tag = bookmark.metadata.get("tag", "unknown") if bookmark.metadata else "unknown"
-                preview = (
+                (
                     bookmark.content[:100] + "..."
                     if len(bookmark.content) > 100
                     else bookmark.content
@@ -591,7 +592,6 @@ async def handle_discover_conversations(
         conversation_to_markdown,
     )
     from knowgraph.infrastructure.storage.filesystem import (
-        write_node_json,
         ensure_directory,
     )
     from knowgraph.infrastructure.storage.manifest import (
@@ -656,17 +656,23 @@ async def handle_discover_conversations(
         indexed_count = 0
         failed_count = 0
 
-        for editor_name, files in discovered.items():
-            for file_path in files:
+        # Import async filesystem
+        from knowgraph.infrastructure.storage.filesystem import write_node_json_async
+
+        # Semaphore to limit concurrent file processing
+        semaphore = asyncio.Semaphore(10)  # Max 10 concurrent files
+
+        async def process_conversation_file(editor_name: str, file_path: Path) -> bool:
+            """Process a single conversation file asynchronously."""
+            async with semaphore:
                 try:
-                    # 1. Parse conversation
-                    conversation = parse_conversation(file_path)
+                    # 1. Parse conversation (CPU-bound, run in thread pool)
+                    conversation = await asyncio.to_thread(parse_conversation, file_path)
                     if not conversation:
-                        failed_count += 1
-                        continue
+                        return False
 
                     # 2. Convert to markdown content
-                    content = conversation_to_markdown(conversation)
+                    content = await asyncio.to_thread(conversation_to_markdown, conversation)
 
                     # 3. Create Node
                     try:
@@ -675,10 +681,7 @@ async def handle_discover_conversations(
                         rel_path = f".conversations/{editor_name}/{file_path.name}"
 
                     # Hash for dedup
-                    content_hash = hash_content(content)
-
-                    # Check if already indexed (via hash)
-                    # For simplicity, we overwrite updates
+                    content_hash = await asyncio.to_thread(hash_content, content)
 
                     node = Node(
                         id=uuid4(),
@@ -697,17 +700,28 @@ async def handle_discover_conversations(
                         },
                     )
 
-                    # 4. Write to disk
-                    write_node_json(node, graph_path)
+                    # 4. Write to disk (async for non-blocking I/O)
+                    await write_node_json_async(node, graph_path)
 
-                    # Update manifest hash map
+                    # Update manifest hash map (thread-safe for dict in asyncio)
                     manifest.file_hashes[rel_path] = content_hash
 
-                    indexed_count += 1
+                    return True
 
                 except Exception as e:
-                    failed_count += 1
                     print(f"Failed to index {file_path}: {e}")
+                    return False
+
+        # Process all files in parallel with controlled concurrency
+        tasks = []
+        for editor_name, files in discovered.items():
+            for file_path in files:
+                tasks.append(process_conversation_file(editor_name, file_path))
+
+        # Execute all tasks and gather results
+        results = await asyncio.gather(*tasks)
+        indexed_count = sum(1 for r in results if r)
+        failed_count = sum(1 for r in results if not r)
 
         # Update and save manifest
         if indexed_count > 0:
@@ -909,10 +923,9 @@ async def handle_batch_query(
             lift_levels=lift_levels,
         )
 
-        # Format results with LLM generation if provider available
-        results = []
-        for query, result in zip(queries, results_list):
-            # Generate answer with LLM if provider available
+        # Format results with LLM generation if provider available (PARALLELIZED)
+        async def generate_answer_for_result(query: str, result: Any) -> dict:
+            """Generate LLM answer for a single query result."""
             answer = result.context
             if provider and result.answer:  # Only if we have context
                 try:
@@ -921,16 +934,19 @@ async def handle_batch_query(
                     if generated_answer:
                         answer = generated_answer
                 except Exception:
-                    pass
+                    pass  # Use context as fallback
 
-            results.append(
-                {
-                    "query": query,
-                    "answer": answer,
-                    "nodes_retrieved": len(result.seed_nodes),
-                    "execution_time": result.execution_time,
-                }
-            )
+            return {
+                "query": query,
+                "answer": answer,
+                "nodes_retrieved": len(result.seed_nodes),
+                "execution_time": result.execution_time,
+            }
+
+        # Parallel LLM generation for all queries
+        results = await asyncio.gather(
+            *[generate_answer_for_result(q, r) for q, r in zip(queries, results_list)]
+        )
 
         # Format results as text
         output = f"Batch Query Results ({len(queries)} queries)\n" + "=" * 50 + "\n\n"

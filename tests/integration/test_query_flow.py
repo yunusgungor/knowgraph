@@ -48,10 +48,6 @@ async def test_integration_query_flow():
             "knowgraph.application.querying.retriever.read_node_json",
             side_effect=side_effect_read_node,
         ),
-        patch(
-            "knowgraph.application.querying.query_engine.read_node_json",
-            side_effect=side_effect_read_node,
-        ),
         patch("knowgraph.application.querying.query_engine.read_all_edges", return_value=[]),
         patch(
             "knowgraph.infrastructure.embedding.sparse_embedder.SparseEmbedder.embed_text",
@@ -64,7 +60,7 @@ async def test_integration_query_flow():
         # QueryEngine creates its own Retriever. We need to inject our index?
         # QueryRetriever loads index from disk. We should mock SparseIndex.load
 
-        with patch("knowgraph.infrastructure.search.sparse_index.SparseIndex.load") as mock_load:
+        with patch("knowgraph.infrastructure.search.sparse_index.SparseIndex.load"):
             # We want the retriever to use OUR index.
             # The retriever creates a new SparseIndex() and calls load().
             # We can't easily swap the instance unless we patch the class or the constructor.

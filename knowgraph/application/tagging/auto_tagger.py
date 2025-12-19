@@ -7,9 +7,7 @@ Automatically suggests tags based on snippet content using:
 """
 
 import re
-from collections import Counter
 
-from knowgraph.domain.models.node import Node
 from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
 
 

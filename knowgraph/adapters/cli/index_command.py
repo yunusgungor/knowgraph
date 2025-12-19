@@ -1,6 +1,5 @@
 """CLI command for indexing markdown files, repositories, and code directories into knowledge graph."""
 
-import asyncio
 import glob
 import shutil
 import subprocess
@@ -12,7 +11,6 @@ from pathlib import Path
 import click
 
 from knowgraph.application.indexing.graph_builder import (
-    create_nodes_from_chunks,
     normalize_markdown_content,
     SmartGraphBuilder,
 )
@@ -74,13 +72,11 @@ CODE_PATTERNS = [f"**/*.{ext}" for ext in LANGUAGE_MAP.keys()]
 
 from knowgraph.domain.intelligence.provider import IntelligenceProvider
 from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
-from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
 from knowgraph.infrastructure.parsing.chunker import chunk_markdown
 from knowgraph.infrastructure.parsing.hasher import hash_content
 from knowgraph.infrastructure.parsing.repo_ingestor import (
     RepositoryIngestorError,
     detect_source_type,
-    ingest_source,
 )
 from knowgraph.infrastructure.search.sparse_index import SparseIndex
 from knowgraph.infrastructure.storage.filesystem import write_all_edges, write_node_json

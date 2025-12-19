@@ -11,7 +11,6 @@ Example:
 """
 
 from pathlib import Path
-from uuid import UUID
 
 from knowgraph.domain.models.node import Node
 from knowgraph.infrastructure.storage.filesystem import list_all_nodes, read_node_json

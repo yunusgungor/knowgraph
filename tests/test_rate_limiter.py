@@ -35,7 +35,7 @@ async def test_acquire_with_backoff():
     # Verify backoff set
     assert limiter._backoff_time > time.time()
 
-    start = time.time()
+    time.time()
     # Mock sleep to run fast but verify it was called
     with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         await limiter.acquire()

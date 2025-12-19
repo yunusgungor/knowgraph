@@ -2,7 +2,6 @@
 
 import ast
 import re
-from typing import Any
 
 from knowgraph.domain.intelligence.provider import Entity
 

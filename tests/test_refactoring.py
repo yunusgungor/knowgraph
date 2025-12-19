@@ -1,6 +1,5 @@
 """Tests for refactoring utilities."""
 
-from pathlib import Path
 from uuid import uuid4
 
 from knowgraph.domain.models.edge import Edge

@@ -145,7 +145,6 @@ async def index_tagged_snippet(
     """
     # Create temporary markdown file
     import tempfile
-    from typing import Any
 
     from knowgraph.adapters.cli.index_command import run_index
 

@@ -337,7 +337,6 @@ async def test_async_exception_in_task_group():
         await asyncio.sleep(0.02)
         raise ValueError("Task failed")
 
-    results = []
     exception_caught = None
 
     tasks = [
@@ -347,7 +346,7 @@ async def test_async_exception_in_task_group():
     ]
 
     try:
-        results = await asyncio.gather(*tasks)
+        await asyncio.gather(*tasks)
     except ValueError as e:
         exception_caught = e
         # Cancel remaining tasks

@@ -5,7 +5,7 @@ Coordinates retrieval, graph reasoning, and context assembly.
 Supports both sync and async modes for backward compatibility.
 """
 
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -23,9 +23,7 @@ from knowgraph.application.querying.retriever import QueryRetriever
 from knowgraph.config import (
     DEFAULT_CENTRALITY_SCORE,
     MAX_CONCURRENT_QUERIES,
-    MAX_HOPS,
     MAX_QUERY_PREVIEW_LENGTH,
-    MAX_TOKENS,
     QUERY_TIMEOUT_SECONDS,
     TOP_K,
 )
@@ -33,9 +31,9 @@ from knowgraph.domain.algorithms.centrality import (
     compute_centrality_metrics,
     compute_centrality_metrics_async,
 )
+from knowgraph.domain.models.edge import Edge
 from knowgraph.infrastructure.storage.filesystem import (
     read_all_edges,
-    read_node_json,
 )
 from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from knowgraph.shared.exceptions import QueryError
@@ -136,7 +134,9 @@ class QueryEngine:
         """
         self.graph_store_path = graph_store_path
         self.retriever = QueryRetriever(graph_store_path)
-        self.edges = read_all_edges(graph_store_path)
+        # LAZY LOADING: Don't load all edges upfront
+        # Instead, load only when needed with optional filtering
+        self._edges_cache: list[Edge] | None = None
 
         # Async concurrency control
         self._query_semaphore = asyncio.Semaphore(MAX_CONCURRENT_QUERIES)
@@ -167,6 +167,19 @@ class QueryEngine:
 
         # Metrics tracking
         self.metrics = get_metrics()
+
+    def _get_edges(self) -> list[Edge]:
+        """Lazy load edges with caching and memory monitoring."""
+        if self._edges_cache is None:
+            from knowgraph.shared.memory_profiler import memory_guard
+
+            with memory_guard(
+                operation_name="lazy_edge_loading",
+                warning_threshold_mb=200,  # Warn if edges use >200MB
+                critical_threshold_mb=500,  # Error if >500MB
+            ):
+                self._edges_cache = read_all_edges(self.graph_store_path)
+        return self._edges_cache
 
     def __del__(self) -> None:
         """Cleanup resources on deletion."""
@@ -294,7 +307,9 @@ class QueryEngine:
         try:
             # Step 1: Sparse search + graph expansion
             retrieval_start = time.time()
-            nodes, seed_node_ids = self.retriever.retrieve(query_text, self.edges, top_k, max_hops)
+            nodes, seed_node_ids = self.retriever.retrieve(
+                query_text, self._get_edges(), top_k, max_hops
+            )
             timings["sparse_search"] = time.time() - retrieval_start
             timings["graph_expansion"] = 0.0  # Included in retrieval
 
@@ -319,7 +334,7 @@ class QueryEngine:
             # Step 2: Compute centrality on active subgraph
             centrality_start = time.time()
             active_node_ids = {node.id for node in nodes}
-            active_edges = filter_active_edges(self.edges, active_node_ids)
+            active_edges = filter_active_edges(self._get_edges(), active_node_ids)
             centrality_scores = compute_centrality_metrics(nodes, active_edges)
             timings["centrality"] = time.time() - centrality_start
 
@@ -535,7 +550,7 @@ class QueryEngine:
             # Step 1: Sparse search + graph expansion (async)
             retrieval_start = time.time()
             nodes, seed_node_ids = await self.retriever.retrieve_async(
-                query_text, self.edges, top_k, max_hops
+                query_text, self._get_edges(), top_k, max_hops
             )
             timings["sparse_search"] = time.time() - retrieval_start
             timings["graph_expansion"] = 0.0  # Included in retrieval
@@ -549,7 +564,7 @@ class QueryEngine:
             # Step 2: Compute centrality on active subgraph (ASYNC with multiprocessing)
             centrality_start = time.time()
             active_node_ids = {node.id for node in nodes}
-            active_edges = filter_active_edges(self.edges, active_node_ids)
+            active_edges = filter_active_edges(self._get_edges(), active_node_ids)
             centrality_scores = await compute_centrality_metrics_async(nodes, active_edges)
             timings["centrality"] = time.time() - centrality_start
 
@@ -643,7 +658,7 @@ class QueryEngine:
             # Step 1: Find target nodes via vector search (async)
             vector_start = time.time()
             _nodes, seed_node_ids = await self.retriever.retrieve_async(
-                query_text, self.edges, top_k=TOP_K, max_hops=1  # At least 1 hop for context
+                query_text, self._get_edges(), top_k=TOP_K, max_hops=1  # At least 1 hop for context
             )
             vector_time = time.time() - vector_start
 
@@ -664,7 +679,7 @@ class QueryEngine:
             # Step 2: Traverse reverse references
             traversal_start = time.time()
             affected_node_ids = traverse_reverse_references(
-                seed_node_ids, self.edges, max_hops, edge_types or ["semantic"]
+                seed_node_ids, self._get_edges(), max_hops, edge_types or ["semantic"]
             )
             traversal_time = time.time() - traversal_start
 

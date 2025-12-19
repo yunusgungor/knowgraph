@@ -294,14 +294,14 @@ if __name__ == "__main__":
         # Single-process
         print("📊 Single-process")
         start = time.time()
-        result1 = await compute_centrality_async(nodes, edges, use_multiprocessing=False)
+        await compute_centrality_async(nodes, edges, use_multiprocessing=False)
         single_time = time.time() - start
         print(f"  Time: {single_time:.3f}s")
 
         # Multi-process
         print("\n📊 Multi-process")
         start = time.time()
-        result2 = await compute_centrality_async(nodes, edges, use_multiprocessing=True)
+        await compute_centrality_async(nodes, edges, use_multiprocessing=True)
         multi_time = time.time() - start
         print(f"  Time: {multi_time:.3f}s")
 

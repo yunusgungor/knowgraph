@@ -11,7 +11,6 @@ import click
 
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.domain.intelligence.provider import IntelligenceProvider
-from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
 from knowgraph.shared.security import validate_path
 
 

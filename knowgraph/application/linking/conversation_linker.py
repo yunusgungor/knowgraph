@@ -6,7 +6,6 @@ enabling "show related conversations" in query results.
 
 import re
 from pathlib import Path
-from uuid import UUID
 
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node

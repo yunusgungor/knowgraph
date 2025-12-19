@@ -96,7 +96,7 @@ def test_cache_invalidation_on_update(tmp_path: Path):
     """Test that invalidate_on_update forces refresh."""
     manager = CacheVersionManager(tmp_path)
 
-    version1 = manager.get_current_version()
+    manager.get_current_version()
 
     # Force invalidation
     manager.invalidate_on_update()
@@ -217,7 +217,7 @@ def test_cache_version_mismatch(tmp_path: Path):
     manager._version_last_checked = 0
 
     # Cache should be invalidated due to version mismatch
-    result = get_cached("key", "invalidated")
+    get_cached("key", "invalidated")
     # Note: This might still return "value" if version wasn't updated yet
     # due to caching interval, but the mechanism is in place
 

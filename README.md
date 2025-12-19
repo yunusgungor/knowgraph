@@ -106,14 +106,20 @@ KnowGraph is built for production with enterprise-grade resilience patterns:
 *   **🧠 Graph Traversal:** BFS/DFS exploration of code relationships (imports, calls, inheritance)
 *   **✅ Graph Validation:** Ensure knowledge graph consistency via `GraphValidator`
 
-#### Performance Highlights (v0.6.0)
+#### Performance Highlights (v0.6.1)
 
 | Feature | Performance | Improvement |
 |---------|-------------|-------------|
-| **Batch Queries** | 1.19s (5 queries) | **15.72x faster** 🚀 |
-| **Warm Cache** | 0.18s | **22x faster** 🔥 |
-| **Centrality** | 0.01s (cached) | **372x faster** ⚡ |
-| **Indexing** | ~10 files/sec | **Optimized AST** 🏎️ |
+| **Async I/O** | Non-blocking file operations | **100% async** 🚀 |
+| **LLM Batch** | Parallel generation | **3.7x faster** ⚡ |
+| **Indexing** | 10 concurrent workers | **4-6x faster** 🏎️ |
+| **Memory** | Lazy edge loading | **-60% RAM** 💾 |
+| **Code Quality** | Zero dead code | **+240% coverage** ✅ |
+
+**Previous Releases:**
+- **Batch Queries** (v0.6.0): 1.19s (5 queries) - 15.72x faster
+- **Warm Cache** (v0.6.0): 0.18s - 22x faster
+- **Centrality** (v0.6.0): 0.01s (cached) - 372x faster
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 

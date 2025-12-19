@@ -6,7 +6,6 @@ across both code and conversation history.
 
 from pathlib import Path
 
-from knowgraph.application.linking.conversation_linker import link_conversation_to_code
 
 
 from knowgraph.domain.models.node import Node
@@ -96,7 +95,7 @@ def enrich_with_conversations(
 
     # Load all edges and nodes
     edge_ids = list_all_edges(graph_store_path)
-    node_ids = list_all_nodes(graph_store_path)
+    list_all_nodes(graph_store_path)
 
     # Find conversation nodes that reference our result nodes
     result_node_ids = {node.id for node in query_result_nodes}

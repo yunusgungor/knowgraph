@@ -163,7 +163,7 @@ class TestCacheIntegration:
 
     def test_cache_version_manager_with_manifest(self, temp_graph_path):
         """Test cache version manager with manifest updates."""
-        cache_mgr = CacheVersionManager(temp_graph_path)
+        CacheVersionManager(temp_graph_path)
 
         # Initial state
         from knowgraph.shared.cache_versioning import get_cached, set_cached
@@ -189,7 +189,7 @@ class TestCacheIntegration:
 
     def test_cache_invalidation_on_graph_update(self, temp_graph_path, sample_nodes):
         """Test cache invalidates when graph updates."""
-        cache_mgr = CacheVersionManager(temp_graph_path)
+        CacheVersionManager(temp_graph_path)
 
         # Cache some results
         from knowgraph.shared.cache_versioning import set_cached
@@ -231,7 +231,7 @@ class TestErrorPropagation:
 
     def test_write_to_invalid_path_error(self, sample_nodes):
         """Test error when writing to invalid path."""
-        invalid_path = Path("/nonexistent/impossible/path")
+        Path("/nonexistent/impossible/path")
         # Should raise or handle gracefully
         # (Depends on implementation)
 
@@ -258,7 +258,7 @@ class TestErrorPropagation:
         write_manifest(manifest, temp_graph_path)
 
         # Query should handle empty graph gracefully
-        engine = QueryEngine(temp_graph_path)
+        QueryEngine(temp_graph_path)
         # May raise or return empty results depending on implementation
 
 
@@ -286,7 +286,7 @@ class TestConcurrentOperations:
     @pytest.mark.asyncio
     async def test_concurrent_cache_operations(self, temp_graph_path):
         """Test concurrent cache read/write operations."""
-        cache_mgr = CacheVersionManager(temp_graph_path)
+        CacheVersionManager(temp_graph_path)
 
         from knowgraph.shared.cache_versioning import get_cached, set_cached
 

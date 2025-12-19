@@ -7,7 +7,6 @@ Supports both sync and async modes for backward compatibility.
 """
 
 import asyncio
-from collections.abc import AsyncIterator
 from pathlib import Path
 from uuid import UUID
 
@@ -122,12 +121,22 @@ class QueryRetriever:
             # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
             expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
 
-            # Step 3: Load nodes
+            # Step 3: Load nodes CONCURRENTLY (using thread pool for I/O)
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
             nodes = []
-            for node_id in expanded_node_ids:
-                node = read_node_json(node_id, self.graph_store_path)
-                if node:
-                    nodes.append(node)
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                # Submit all node loading tasks
+                future_to_id = {
+                    executor.submit(read_node_json, node_id, self.graph_store_path): node_id
+                    for node_id in expanded_node_ids
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_id):
+                    node = future.result()
+                    if node:
+                        nodes.append(node)
 
             return nodes, seed_node_ids
 

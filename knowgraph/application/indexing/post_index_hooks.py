@@ -8,7 +8,6 @@ Provides automatic processing after code indexing:
 
 from pathlib import Path
 
-from knowgraph.domain.models.node import Node
 
 
 async def auto_link_conversations(
@@ -29,7 +28,6 @@ async def auto_link_conversations(
     """
     from knowgraph.application.linking.conversation_linker import link_conversation_to_code
     from knowgraph.infrastructure.parsing.conversation_discovery import discover_conversations
-    from knowgraph.infrastructure.storage.filesystem import list_all_nodes, read_node_json
 
     stats = {
         "conversations_found": 0,
@@ -80,8 +78,6 @@ async def auto_tag_bookmarks(
     from knowgraph.application.tagging.auto_tagger import auto_tag_snippet
     from knowgraph.infrastructure.storage.filesystem import (
         list_all_nodes,
-        read_node_json,
-        write_node_json,
     )
 
     stats = {
@@ -91,15 +87,22 @@ async def auto_tag_bookmarks(
         "errors": 0,
     }
 
+    from knowgraph.infrastructure.storage.filesystem import (
+        read_node_json_async,
+        write_node_json_async,
+    )
+    import asyncio
+
     try:
         # Load all nodes
         node_ids = list_all_nodes(graphstore_path)
 
-        for node_id in node_ids:
-            node = read_node_json(node_id, graphstore_path)
+        # Process nodes in parallel batches for better performance
+        async def process_node(node_id):
+            node = await read_node_json_async(node_id, graphstore_path)
 
             if not node or node.type != "tagged_snippet":
-                continue
+                return None
 
             stats["bookmarks_found"] += 1
 
@@ -116,15 +119,21 @@ async def auto_tag_bookmarks(
                     node.metadata["auto_tag_confidence"] = result["confidence"]
                     node.metadata["auto_topic"] = result.get("topic", "general")
 
-                    # Save updated node
-                    write_node_json(node, graphstore_path)
+                    # Save updated node (async)
+                    await write_node_json_async(node, graphstore_path)
 
                     stats["bookmarks_enhanced"] += 1
                     stats["suggestions_added"] += len(result["suggested_tags"])
-
+                    return True
             except Exception:
                 stats["errors"] += 1
-                continue
+                return None
+
+        # Process in batches of 10 for controlled concurrency
+        batch_size = 10
+        for i in range(0, len(node_ids), batch_size):
+            batch = node_ids[i : i + batch_size]
+            await asyncio.gather(*[process_node(nid) for nid in batch])
 
     except Exception:
         stats["errors"] += 1

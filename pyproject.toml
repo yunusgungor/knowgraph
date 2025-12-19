@@ -37,6 +37,7 @@ dependencies = [
     "gitingest>=0.3.1",
     "tenacity>=8.2.0",      # Retry logic for async operations
     "psutil>=5.9.0",        # System resource detection for auto-tuning
+    "aiofiles>=23.2.0",     # Async file I/O
 ]
 
 [project.optional-dependencies]
