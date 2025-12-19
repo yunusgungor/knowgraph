@@ -134,7 +134,7 @@ async def index_tagged_snippet(
     graph_path: Path,
     provider: Any | None = None,
 ) -> None:
-    """Index a tagged snippet into the graph.
+    """Index a tagged snippet into the graph and FTS5 search index.
 
     Args:
     ----
@@ -172,3 +172,18 @@ async def index_tagged_snippet(
         raise RuntimeError(
             "Snippet verification failed: Missing tag in metadata"
         )
+    
+    # Index into FTS5 for fast search
+    try:
+        from knowgraph.infrastructure.search.bookmark_search import BookmarkSearch
+        
+        search = BookmarkSearch(graph_path)
+        search.add(snippet)
+        
+    except Exception as e:
+        # Log error but don't fail the operation
+        # FTS5 indexing is performance optimization, not critical
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to index snippet into FTS5: {e}")
+
