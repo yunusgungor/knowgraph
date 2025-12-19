@@ -284,9 +284,10 @@ class SparseEmbedder:
             # Always include the lowercased token
             expanded_tokens.append(token_lower)
 
-            # Split camelCase
+            # Split camelCase (but skip all-uppercase tokens like TTL, API, HTTP)
+            # This prevents acronyms from being split into individual letters
             camel_parts = re.findall(r"[a-z]+|[A-Z][a-z]*", token_original)
-            if len(camel_parts) > 1:
+            if len(camel_parts) > 1 and not token_original.isupper():
                 expanded_tokens.extend([p.lower() for p in camel_parts])
 
             # Split snake_case

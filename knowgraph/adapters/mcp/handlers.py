@@ -635,10 +635,25 @@ async def handle_get_stats(
         return [types.TextContent(type="text", text="No manifest found. Graph might be empty.")]
 
     try:
+        # Use real-time node/edge counting instead of manifest for accuracy
+        # Manifest can be outdated when nodes are added via tag_snippet
+        from knowgraph.infrastructure.storage.filesystem import (
+            list_all_nodes,
+            list_all_edges,
+        )
+        
+        node_ids = list_all_nodes(graph_path)
+        edge_ids = list_all_edges(graph_path)
+        
+        # Still read manifest for version and file count
         with open(manifest_path, encoding="utf-8") as f:
             data = json.load(f)
-
         manifest = Manifest.from_dict(data)
+        
+        # Override node/edge counts with real-time values
+        manifest.node_count = len(node_ids)
+        manifest.edge_count = len(edge_ids)
+        
         stats = build_graph_stats_response(manifest)
         return [types.TextContent(type="text", text=stats)]
     except Exception as e:

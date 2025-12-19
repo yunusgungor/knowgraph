@@ -546,6 +546,8 @@ class QueryEngine:
         top_k: int,
         max_hops: int,
         max_tokens: int,
+        enable_hierarchical_lifting: bool,
+        lift_levels: int,
         with_explanation: bool,
     ) -> QueryResult:
         """Internal async implementation without timeout wrapper."""
@@ -581,9 +583,15 @@ class QueryEngine:
             retrieval_results = await self.retriever.retrieve_by_similarity_async(query_text, top_k)
             similarity_scores = {node.id: score for node, score in retrieval_results}
 
-            # Step 4: Assemble context
+            # Step 4: Assemble context with hierarchical lifting
             context, _context_blocks = assemble_context(
-                nodes, seed_node_ids, similarity_scores, centrality_scores, max_tokens
+                nodes, 
+                seed_node_ids, 
+                similarity_scores, 
+                centrality_scores, 
+                max_tokens,
+                enable_hierarchical_lifting=enable_hierarchical_lifting,
+                lift_levels=lift_levels,
             )
 
             # Step 5: Return context
@@ -755,6 +763,8 @@ class QueryEngine:
         top_k: int = 20,
         max_hops: int = 4,
         max_tokens: int = 3000,
+        enable_hierarchical_lifting: bool = True,
+        lift_levels: int = 2,
         batch_size: int = 5,
         timeout: float | None = None,
         progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
@@ -820,6 +830,8 @@ class QueryEngine:
                         top_k=top_k,
                         max_hops=max_hops,
                         max_tokens=max_tokens,
+                        enable_hierarchical_lifting=enable_hierarchical_lifting,
+                        lift_levels=lift_levels,
                         with_explanation=False,  # Disable for batch performance
                     ),
                     timeout=timeout,
