@@ -75,11 +75,14 @@ class TestManifestCreation:
 
     def test_manifest_post_init_sets_defaults(self):
         """Test __post_init__ sets default timestamps."""
-        manifest = Manifest(
+        manifest = Manifest.create_new(
+            edges_filename="edges.json",
+            sparse_index_filename="index.json",
+        )
 
         assert manifest.created_at > 0
         assert manifest.updated_at > 0
-        assert manifest.finalized is True
+        assert manifest.finalized is False  # New manifests are not finalized by default
 
 
 class TestManifestSerialization:

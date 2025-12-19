@@ -1,11 +1,11 @@
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import mcp.types as types
 
-from knowgraph.shared.refactoring import validate_required_argument
 from knowgraph.adapters.mcp.utils import resolve_graph_path
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+from knowgraph.shared.refactoring import validate_required_argument
 
 
 # Version management handlers
@@ -124,6 +124,6 @@ async def handle_rollback(
         return [
             types.TextContent(
                 type="text",
-                text=f"Error during rollback: {str(e)}",
+                text=f"Error during rollback: {e!s}",
             )
         ]

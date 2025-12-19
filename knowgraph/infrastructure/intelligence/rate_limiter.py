@@ -43,7 +43,7 @@ class RateLimiter:
                 wait_seconds = min(wait_seconds, 30.0)
                 if wait_seconds > 0:
                     await asyncio.sleep(wait_seconds)
-            
+
             # Add small delay between all requests (rate smoothing)
             await asyncio.sleep(0.1)
 

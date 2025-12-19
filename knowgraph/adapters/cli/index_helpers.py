@@ -13,7 +13,6 @@ import click
 
 from knowgraph.infrastructure.parsing.repo_ingestor import detect_source_type
 
-
 # Global list to track temporary files for cleanup
 _temp_cleanup_registry: list[Path] = []
 
@@ -200,14 +199,14 @@ def _collect_code_files_from_directory(
     from knowgraph.infrastructure.filtering.file_filter import should_skip_file
 
     # Generate CODE_PATTERNS from LANGUAGE_MAP
-    CODE_PATTERNS = [f"**/*.{ext}" for ext in LANGUAGE_MAP.keys()]
+    CODE_PATTERNS = [f"**/*.{ext}" for ext in LANGUAGE_MAP]
 
     files_to_process = []
 
     for pattern in CODE_PATTERNS:
         for match in glob.glob(str(directory / pattern), recursive=True):
             path_obj = Path(match)
-            
+
             # Use smart filtering
             if should_skip_file(path_obj):
                 continue
@@ -224,7 +223,7 @@ def _collect_code_files_from_directory(
 
             files_to_process.append(path_obj)
 
-    files_to_process = sorted(list(set(files_to_process)))
+    files_to_process = sorted(set(files_to_process))
 
     _log_verbose(verbose, f"Found {len(files_to_process)} files to index.")
 
@@ -290,23 +289,23 @@ import time
 async def prepare_files_and_hashes(files, base_path, verbose):
     from knowgraph.adapters.cli.index_command import EXT_MAP
     from knowgraph.application.indexing.graph_builder import normalize_markdown_content
-    from knowgraph.infrastructure.parsing.hasher import hash_content
     from knowgraph.infrastructure.cache.indexing_cache import IndexingCache
     from knowgraph.infrastructure.filtering.file_filter import filter_files
+    from knowgraph.infrastructure.parsing.hasher import hash_content
 
     # Filter out unnecessary files first
     files = filter_files(files)
-    
+
     current_hashes, files_ready = {}, []
     _log_verbose(verbose, "Analysing file states...")
-    
+
     # Initialize cache
     cache_dir = base_path if isinstance(base_path, Path) else Path(base_path)
     cache = IndexingCache(cache_dir)
-    
+
     total_files = len(files)
     cached_count = 0
-    
+
     click.echo(f"Processing {total_files} files (with smart caching)...")
 
     async def process_single_file(file_path, index):
@@ -317,7 +316,7 @@ async def prepare_files_and_hashes(files, base_path, verbose):
             if (index + 1) % 10 == 0 or index == total_files - 1:
                 click.echo(f"  [{index + 1}/{total_files}] Reading (cached: {cached_count})...", nl=False)
                 click.echo("\r", nl=False)
-            
+
             # Read file asynchronously
             try:
                 loop = asyncio.get_event_loop()
@@ -337,7 +336,7 @@ async def prepare_files_and_hashes(files, base_path, verbose):
             markdown_wrapper = f"# {relative_path.as_posix()}\n\n```{lang}\n{content}\n```"
             normalized = normalize_markdown_content(markdown_wrapper)
             file_hash = hash_content(normalized)
-            
+
             # Check cache
             if cache.is_cached(file_path, file_hash):
                 cached_count += 1
@@ -352,9 +351,9 @@ async def prepare_files_and_hashes(files, base_path, verbose):
 
     # Process all files in parallel
     results = await asyncio.gather(*[process_single_file(f, i) for i, f in enumerate(files)])
-    
+
     click.echo(f"\n✓ Processed {total_files} files ({cached_count} from cache)")
-    
+
     cached_files = []  # Track cached files
     file_hash_map = {}  # Map file_path to hash
     for result in results:
@@ -378,7 +377,7 @@ def load_existing_manifest(output_path, verbose):
         return None
     try:
         manifest = read_manifest(manifest_path)
-        _log_verbose(verbose, f"Loaded manifest (v{manifest.version})")
+        _log_verbose(verbose, f"Loaded manifest (v{manifest.version})")  # type: ignore[union-attr]
         return manifest
     except:
         return None
@@ -388,7 +387,8 @@ def should_skip_indexing(existing_manifest, current_hashes, verbose):
     if not existing_manifest:
         return False
     if existing_manifest.file_hashes == current_hashes and existing_manifest.finalized:
-        click.echo(f"✓ No changes detected ({len(current_hashes)} files).")
+        version_str = getattr(existing_manifest, "version", "unknown")  # type: ignore[union-attr]
+        click.echo(f"✓ No changes detected ({len(current_hashes)} files, v{version_str}).")
         return True
     _log_verbose(verbose, "Changes detected. Re-indexing...")
     return False
@@ -402,7 +402,7 @@ def should_skip_indexing(existing_manifest, current_hashes, verbose):
 async def chunk_files(files_ready, verbose):
     """Chunk all prepared files in parallel."""
     from knowgraph.infrastructure.parsing.chunker import chunk_markdown
-    
+
     total_files = len(files_ready)
     click.echo(f"Chunking {total_files} files...")
 
@@ -413,7 +413,7 @@ async def chunk_files(files_ready, verbose):
             if (index + 1) % 10 == 0 or index == total_files - 1:
                 click.echo(f"  [{index + 1}/{total_files}] Chunking...", nl=False)
                 click.echo("\r", nl=False)
-            
+
             _log_verbose(verbose, f"✓ Processing {relative_path} ({len(normalized_content)} chars)")
             # Run chunking in executor to avoid blocking
             loop = asyncio.get_event_loop()
@@ -429,7 +429,7 @@ async def chunk_files(files_ready, verbose):
     chunk_results = await asyncio.gather(
         *[chunk_single_file(fp, nc, rp, i) for i, (fp, nc, rp) in enumerate(files_ready)]
     )
-    
+
     all_chunks = []
     for chunks in chunk_results:
         all_chunks.extend(chunks)
@@ -471,14 +471,14 @@ async def build_knowledge_graph(chunks, input_path, graph_store_path, provider, 
     if base_path and file_hash_map:
         cache_dir = base_path if isinstance(base_path, Path) else Path(base_path)
         cache = IndexingCache(cache_dir)
-        
+
         # Group nodes by file and cache them
         from collections import defaultdict
         nodes_by_file = defaultdict(list)
         for node in nodes:
             if node.path:
                 nodes_by_file[node.path].append(node.to_dict())
-        
+
         # Cache each file's nodes with the correct file hash
         for file_path_str, file_nodes in nodes_by_file.items():
             try:
@@ -507,9 +507,9 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
     from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
     from knowgraph.infrastructure.search.sparse_index import SparseIndex
     from knowgraph.infrastructure.storage.filesystem import (
-        write_node_json_async,
-        write_all_edges_async,
         read_all_edges_async,
+        write_all_edges_async,
+        write_node_json_async,
     )
 
     # Skip if no new nodes to write
@@ -632,7 +632,7 @@ async def run_post_index_hooks(
             from knowgraph.application.indexing.post_index_hooks import collect_index_stats
 
             stats = collect_index_stats(Path(graph_store_path))
-            click.echo(f"\n📊 Nodes by Type:")
+            click.echo("\n📊 Nodes by Type:")
             click.echo(f"  Code nodes: {stats['code_nodes']}")
             click.echo(f"  Markdown nodes: {stats['markdown_nodes']}")
             if stats["conversation_nodes"] > 0:
@@ -648,7 +648,7 @@ async def run_post_index_hooks(
 def log_completion(start_time, graph_store_path, verbose):
     """Log indexing completion statistics."""
     elapsed = time.time() - start_time
-    
+
     # Show cache statistics
     try:
         from knowgraph.infrastructure.cache.indexing_cache import IndexingCache
@@ -657,7 +657,7 @@ def log_completion(start_time, graph_store_path, verbose):
         click.echo(f"\n📊 Cache: {stats['cached_files']} files ({stats['cache_size_mb']:.1f} MB)")
     except Exception:
         pass
-    
+
     click.echo(f"\n✅ Indexing completed in {elapsed:.1f}s")
     _log_verbose(verbose, f"\n✅ Indexing completed in {elapsed:.1f}s")
     _log_verbose(verbose, f"Graph stored in: {graph_store_path}")

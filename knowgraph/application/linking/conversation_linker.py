@@ -143,6 +143,7 @@ def create_conversation_reference_edges(
             target=code_node.id,
             type=reference_type,
             score=0.9,  # High confidence for explicit references
+            created_at=conversation_node.created_at,
             metadata={
                 "reference_text": ref_text,
                 "extraction_method": "conversation_linker",
@@ -178,7 +179,7 @@ def link_conversation_to_code(
         "conversation_id": conversation_node.id,
         "references_found": len(extract_code_references(conversation_node.content)),
         "edges_created": len(edges),
-        "linked_code_files": len(set(edge.target for edge in edges)),
+        "linked_code_files": len({edge.target for edge in edges}),
     }
 
     return edges, metadata

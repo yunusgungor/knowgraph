@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +18,11 @@ async def test_call_tool_query():
         ),  # Mock expander too to avoid side effects
     ):
 
-        mock_resolve.return_value = "path"
+        # Mock Path object with exists() method
+        mock_path = MagicMock(spec=Path)
+        mock_path.exists.return_value = True
+        mock_resolve.return_value = mock_path
+
         mock_engine = mock_engine_cls.return_value
         # Mock query_async (server uses async version)
         mock_result = MagicMock(context="Answer", explanation=None)

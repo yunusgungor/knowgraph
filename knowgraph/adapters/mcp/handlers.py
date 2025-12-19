@@ -84,12 +84,12 @@ async def handle_query(
     ) as trace:
         # Create progress notifier for real-time updates
         progress = ProgressNotifier(server, "Query Search") if server else None
-        
+
         try:
             if progress:
                 await progress.start(5, "Initializing semantic search...")
                 await progress.update(1, "🔍 Starting semantic search...")
-            
+
             # Rate limiting - use unique identifier for tracking
             identifier = arguments.get("user_id", "default")
             await _global_rate_limiter.allow(identifier)
@@ -119,7 +119,7 @@ async def handle_query(
 
             graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
             graph_path = resolve_graph_path(graph_path_arg, project_root)
-            
+
             # Validate graph store exists and has nodes
             if not graph_path.exists():
                 error_msg = f"Graph store not found at {graph_path}. Please run indexing first."
@@ -127,7 +127,7 @@ async def handle_query(
                 if progress:
                     await progress.error(error_msg)
                 return [types.TextContent(type="text", text=error_msg)]
-            
+
             # Check if provider is available for LLM features
             if not provider:
                 import os
@@ -136,7 +136,7 @@ async def handle_query(
                     "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY"),
                 }
                 available_keys = [k for k, v in api_keys.items() if v]
-                
+
                 if not available_keys:
                     warning_msg = (
                         "⚠️ No LLM provider configured. Query will return raw context only.\n"
@@ -149,13 +149,13 @@ async def handle_query(
                 warning_msg = ""
 
             if progress:
-                await progress.update(1, f"📝 Query: \"{query[:50]}...\"")
+                await progress.update(1, f'📝 Query: "{query[:50]}..."')
 
             # Wrap query execution with circuit breaker
             async def execute_query():
                 if progress:
                     await progress.update(2, "🔧 Initializing query engine...")
-                
+
                 engine = QueryEngine(graph_path)
                 params = extract_query_parameters(arguments)
 
@@ -182,10 +182,10 @@ async def handle_query(
                     enable_hierarchical_lifting=params["enable_hierarchical_lifting"],
                     lift_levels=params["lift_levels"],
                 )
-                
+
                 if progress:
                     await progress.update(4, f"✅ Found {result.active_subgraph_size} relevant nodes")
-                
+
                 return result, params
 
             # Execute with circuit breaker protection
@@ -211,14 +211,14 @@ async def handle_query(
 
             if progress:
                 await progress.complete("✅ Search completed successfully!")
-            
+
             trace.add_event("query_completed", {"success": True})
             return [types.TextContent(type="text", text=answer)]
 
         except Exception as e:
             trace.record_exception(e)
             if progress:
-                await progress.error(f"Query failed: {str(e)}")
+                await progress.error(f"Query failed: {e!s}")
             return [
                 types.TextContent(
                     type="text", text=build_error_response(e, "Error executing query")
@@ -327,17 +327,17 @@ async def handle_index(
 
             # Create progress notifier for real-time updates
             progress = ProgressNotifier(server, "Indexing") if server else None
-            
+
             if progress:
                 await progress.start(90, f"Starting indexing for {input_path[:50]}...")
-            
+
             async def progress_callback(stage: str, current: int, total: int, message: str) -> None:
                 """Callback for progress updates from run_index."""
                 if progress:
                     # Map 9 steps to 90 units (10 per step) for smoother progress
                     progress_value = current * 10
                     await progress.update(progress_value, f"[{stage}] {message}")
-            
+
             result = await index_graph(
                 input_path,
                 graph_path,
@@ -638,22 +638,22 @@ async def handle_get_stats(
         # Use real-time node/edge counting instead of manifest for accuracy
         # Manifest can be outdated when nodes are added via tag_snippet
         from knowgraph.infrastructure.storage.filesystem import (
-            list_all_nodes,
             list_all_edges,
+            list_all_nodes,
         )
-        
+
         node_ids = list_all_nodes(graph_path)
         edge_ids = list_all_edges(graph_path)
-        
+
         # Still read manifest for version and file count
         with open(manifest_path, encoding="utf-8") as f:
             data = json.load(f)
         manifest = Manifest.from_dict(data)
-        
+
         # Override node/edge counts with real-time values
         manifest.node_count = len(node_ids)
         manifest.edge_count = len(edge_ids)
-        
+
         stats = build_graph_stats_response(manifest)
         return [types.TextContent(type="text", text=stats)]
     except Exception as e:
@@ -677,26 +677,26 @@ async def handle_discover_conversations(
     -------
         List of text content responses
     """
+    import time
+    from uuid import uuid4
+
+    from knowgraph.domain.models.node import Node
     from knowgraph.infrastructure.detection.conversation_discovery import (
         discover_all_conversations,
     )
     from knowgraph.infrastructure.parsing.conversation_parser import (
-        parse_conversation,
         conversation_to_markdown,
+        parse_conversation,
     )
+    from knowgraph.infrastructure.parsing.hasher import hash_content
     from knowgraph.infrastructure.storage.filesystem import (
         ensure_directory,
     )
     from knowgraph.infrastructure.storage.manifest import (
+        Manifest,
         read_manifest,
         write_manifest,
-        Manifest,
     )
-    from knowgraph.domain.models.node import Node
-    from knowgraph.infrastructure.parsing.hasher import hash_content
-    from knowgraph.infrastructure.parsing.hasher import hash_content
-    import time
-    from uuid import uuid4
 
     def count_tokens(text: str) -> int:
         """Approximate token count."""
@@ -838,7 +838,7 @@ async def handle_discover_conversations(
         for editor, files in discovered.items():
             response_text += f"📂 {editor.upper()}: {len(files)} conversations\n"
 
-        response_text += f"\n📥 Indexing complete:\n"
+        response_text += "\n📥 Indexing complete:\n"
         response_text += f"  Indexed: {indexed_count} conversations\n"
 
         if failed_count > 0:
@@ -946,7 +946,7 @@ async def handle_tag_snippet(
             ]
 
             if suggested_tags:
-                response_lines.append(f"\n💡 **Auto-suggested tags**:")
+                response_lines.append("\n💡 **Auto-suggested tags**:")
                 for sugg_tag in suggested_tags[:5]:
                     response_lines.append(f"  - `{sugg_tag}`")
                 response_lines.append(f"\nConfidence: {confidence:.0%}")

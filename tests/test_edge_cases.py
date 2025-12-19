@@ -16,7 +16,6 @@ from knowgraph.infrastructure.storage.filesystem import (
 from knowgraph.infrastructure.storage.manifest import Manifest, read_manifest, write_manifest
 from knowgraph.shared.exceptions import StorageError
 
-
 # ====================
 # Node Edge Cases
 # ====================

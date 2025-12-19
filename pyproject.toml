@@ -146,7 +146,7 @@ warn_return_any = false
 no_implicit_optional = false
 
 [[tool.mypy.overrides]]
-module = ["opentelemetry.*", "psutil"]
+module = ["opentelemetry.*", "psutil", "aiofiles", "aiofiles.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -187,6 +187,19 @@ exclude_lines = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "graph_store",
+]
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -253,24 +266,13 @@ ignore = [
     "N818",   # Exception naming convention
     "S311",   # Random generator for jitter
 ]
-exclude = [
-    ".git",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".venv",
-    "venv",
-    "build",
-    "dist",
-    "graph_store",
-]
 
 [tool.ruff.lint.mccabe]
 # McCabe complexity - monitor functions over threshold
 # Current: 100 functions exceed threshold (top: run_index at 94)
 # Target: Gradually reduce to max 15
-max-complexity = 15  # Increased from 10 to reduce noise, focus on worst offenders5
+max-complexity = 15  # Increased from 10 to reduce noise, focus on worst offenders
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "D104"]
 "tests/**/*.py" = ["S101", "D", "ANN"]

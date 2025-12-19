@@ -13,7 +13,6 @@ def test_validate_path_traversal():
     """Test detection of path traversal."""
     # Without allowed_parent, traversal is allowed (resolves to absolute path)
     # So we should test WITH allowed_parent to see traversal prevention
-    pass
 
 
 def test_validate_path_existence(tmp_path):

@@ -55,7 +55,6 @@ async def run_update(
         output_path=graph_store,
         verbose=verbose,
         provider=provider,
-        gc=gc,
         exclude_patterns=exclude_patterns or [],
     )
 

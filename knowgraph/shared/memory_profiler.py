@@ -8,8 +8,9 @@ import functools
 import gc
 import logging
 import os
+from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 from knowgraph.config import get_settings
 

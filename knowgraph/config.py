@@ -14,7 +14,6 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 # =============================================================================
 # Pydantic Settings (Environment-Aware Configuration)
 # =============================================================================
@@ -165,7 +164,7 @@ def get_settings() -> KnowGraphSettings:
 
     Settings are loaded once and cached for the application lifetime.
     """
-    return KnowGraphSettings()
+    return KnowGraphSettings()  # type: ignore[call-arg]
 
 
 # =============================================================================

@@ -152,12 +152,12 @@ class VersionDiffEngine:
         lines.append(f"\nTime difference: {time_str}")
 
         # Graph statistics
-        lines.append(f"\nGraph Statistics:")
+        lines.append("\nGraph Statistics:")
         lines.append(f"  Nodes:  {diff.node_count_diff:+,}")
         lines.append(f"  Edges:  {diff.edge_count_diff:+,}")
 
         # File changes
-        lines.append(f"\nFile Changes:")
+        lines.append("\nFile Changes:")
         if diff.file_changes.added:
             lines.append(f"  Added:    {len(diff.file_changes.added)} files")
             for f in sorted(diff.file_changes.added)[:5]:  # Show first 5
@@ -180,7 +180,7 @@ class VersionDiffEngine:
                 lines.append(f"    ... and {len(diff.file_changes.deleted) - 5} more")
 
         # Summary
-        lines.append(f"\nSignificant Changes:")
+        lines.append("\nSignificant Changes:")
         for change in diff.significant_changes:
             lines.append(f"  • {change}")
 

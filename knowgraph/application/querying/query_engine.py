@@ -26,12 +26,12 @@ from knowgraph.config import (
     MAX_QUERY_PREVIEW_LENGTH,
     QUERY_TIMEOUT_SECONDS,
     TOP_K,
+    get_settings,
 )
 from knowgraph.domain.algorithms.centrality import (
     compute_centrality_metrics,
     compute_centrality_metrics_async,
 )
-from knowgraph.config import get_settings
 from knowgraph.domain.models.edge import Edge
 from knowgraph.infrastructure.storage.filesystem import (
     read_all_edges,
@@ -227,10 +227,6 @@ class QueryEngine:
         # Validate parameters explicitly
         if not query_text or not query_text.strip():
             raise QueryError("Query text cannot be empty")
-        # Use config defaults if not specified
-        settings = get_settings()
-        top_k = top_k if top_k is not None else settings.query.top_k
-        max_hops = max_hops if max_hops is not None else settings.query.max_hops
 
         if top_k <= 0:
             raise QueryError(f"top_k must be positive, got {top_k}")
@@ -445,6 +441,14 @@ class QueryEngine:
         # Validate parameters explicitly
         if not query_text or not query_text.strip():
             raise QueryError("Query text cannot be empty")
+
+        # Use config defaults if not specified
+        settings = get_settings()
+        if top_k is None:
+            top_k = settings.query.top_k
+        if max_hops is None:
+            max_hops = settings.query.max_hops
+
         if top_k <= 0:
             raise QueryError(f"top_k must be positive, got {top_k}")
         if max_hops < 0:
@@ -587,10 +591,10 @@ class QueryEngine:
 
             # Step 4: Assemble context with hierarchical lifting
             context, _context_blocks = assemble_context(
-                nodes, 
-                seed_node_ids, 
-                similarity_scores, 
-                centrality_scores, 
+                nodes,
+                seed_node_ids,
+                similarity_scores,
+                centrality_scores,
                 max_tokens,
                 enable_hierarchical_lifting=enable_hierarchical_lifting,
                 lift_levels=lift_levels,

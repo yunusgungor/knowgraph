@@ -10,7 +10,7 @@ from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from knowgraph.application.tagging.auto_tagger import extract_entities, categorize_topic
+from knowgraph.application.tagging.auto_tagger import categorize_topic, extract_entities
 from knowgraph.infrastructure.storage.filesystem import list_all_nodes, read_node_json
 
 

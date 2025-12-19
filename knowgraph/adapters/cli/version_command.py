@@ -1,17 +1,17 @@
 """CLI commands for version management."""
 
-import click
 from pathlib import Path
 
+import click
+
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
-from knowgraph.infrastructure.storage.version_history import VersionHistoryManager
 from knowgraph.infrastructure.storage.version_diff import VersionDiffEngine
+from knowgraph.infrastructure.storage.version_history import VersionHistoryManager
 
 
 @click.group()
 def version_commands():
     """Version control commands."""
-    pass
 
 
 @click.command(name="versions")
@@ -96,7 +96,7 @@ def show_version(version_id: str, graph_store: Path):
         click.echo(f"Hash:     {version.manifest_hash}")
         click.echo()
 
-        click.echo(f"Graph Statistics:")
+        click.echo("Graph Statistics:")
         click.echo(f"  Nodes:    {version.node_count:>8,}")
         click.echo(f"  Edges:    {version.edge_count:>8,}")
         click.echo(f"  Files:    {version.file_count:>8,}")
@@ -104,7 +104,7 @@ def show_version(version_id: str, graph_store: Path):
 
         fc = version.file_changes
         if fc.total_changes > 0:
-            click.echo(f"File Changes:")
+            click.echo("File Changes:")
             if fc.added:
                 click.echo(f"  Added:    {len(fc.added):>8,} files")
                 for f in sorted(fc.added)[:10]:
@@ -128,7 +128,7 @@ def show_version(version_id: str, graph_store: Path):
 
         if version.metadata:
             click.echo()
-            click.echo(f"Metadata:")
+            click.echo("Metadata:")
             for key, value in version.metadata.items():
                 click.echo(f"  {key}: {value}")
 
@@ -225,13 +225,13 @@ def rollback_version(version_id: str, graph_store: Path, no_backup: bool, force:
                 click.echo(f"Backup created: {result.backup_path}")
 
             if result.errors:
-                click.echo(f"\n⚠️  Warnings:")
+                click.echo("\n⚠️  Warnings:")
                 for error in result.errors:
                     click.echo(f"  • {error}")
 
-            click.echo(f"\n💡 Next steps:")
-            click.echo(f"  1. Review the rollback")
-            click.echo(f"  2. Run 'knowgraph index' to restore files if needed")
+            click.echo("\n💡 Next steps:")
+            click.echo("  1. Review the rollback")
+            click.echo("  2. Run 'knowgraph index' to restore files if needed")
 
         else:
             click.echo(f"\n❌ Rollback failed: {result.message}", err=True)

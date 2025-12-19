@@ -159,11 +159,11 @@ def compute_reference_path_quality(
         # Expand to neighbors
         for edge in edges:
             if edge.source == current and edge.target not in visited:
-                queue.append((edge.target, path_edges + [edge], depth + 1))
+                queue.append((edge.target, [*path_edges, edge], depth + 1))
             elif edge.target == current and edge.source not in visited:
                 # For semantic edges, also traverse backward
                 if edge.type != "reference":
-                    queue.append((edge.source, path_edges + [edge], depth + 1))
+                    queue.append((edge.source, [*path_edges, edge], depth + 1))
 
     return best_path_quality
 
@@ -175,6 +175,8 @@ def assemble_context(
     centrality_scores: dict[UUID, dict[str, float]],
     max_tokens: int = MAX_TOKENS,
     edges: list | None = None,  # NEW: Optional edges for path quality
+    enable_hierarchical_lifting: bool = True,  # NEW: Enable hierarchical context lifting
+    lift_levels: int = 2,  # NEW: Number of directory levels to lift from
 ) -> tuple[str, list[ContextBlock]]:
     """Assemble context from nodes with greedy token-aware packing (REFERENCE-AWARE).
 

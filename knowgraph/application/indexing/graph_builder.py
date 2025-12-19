@@ -227,7 +227,7 @@ def create_semantic_edges(nodes: list[Node], threshold: float = 0.2, max_edges_p
 
     for i, node1 in enumerate(active_nodes):
         entities1 = node_entities[node1.id]
-        
+
         # Collect similarities for this node
         similarities = []
 
@@ -241,7 +241,7 @@ def create_semantic_edges(nodes: list[Node], threshold: float = 0.2, max_edges_p
 
                 if score > threshold:
                     similarities.append((node2.id, score, shared))
-        
+
         # Keep only top-K most similar for this node
         similarities.sort(key=lambda x: x[1], reverse=True)
         for target_id, score, shared in similarities[:max_edges_per_node]:
@@ -258,7 +258,7 @@ def create_semantic_edges(nodes: list[Node], threshold: float = 0.2, max_edges_p
                     },
                 )
             )
-    
+
     return edges
 
 
@@ -424,10 +424,12 @@ class SmartGraphBuilder:
                     ) -> list[tuple[Node, list[Any]]]:
                         texts = [node.content for node in batch_nodes]
                         async with semaphore:
-                            from knowgraph.config import LLM_RETRY_COUNT, LLM_RETRY_BASE_DELAY
+                            from knowgraph.config import LLM_RETRY_BASE_DELAY, LLM_RETRY_COUNT
 
                             for attempt in range(LLM_RETRY_COUNT):
                                 try:
+                                    if self.provider is None:
+                                        return [(node, []) for node in batch_nodes]
                                     batch_entities = await self.provider.extract_entities_batch(
                                         texts
                                     )
@@ -436,7 +438,7 @@ class SmartGraphBuilder:
                                     return list(zip(batch_nodes, batch_entities))
                                 except Exception as e:
                                     error_msg = str(e).lower()
-                                    
+
                                     # Check for rate limit errors
                                     if "429" in error_msg or "rate limit" in error_msg or "too many requests" in error_msg:
                                         # Trigger aggressive backoff for rate limits
@@ -497,13 +499,13 @@ class SmartGraphBuilder:
                 if graph_path_obj.exists():
                     try:
                         node_ids = list_all_nodes(graph_path_obj)
-                        
+
                         # Parallel metadata loading
                         async def load_metadata(n_id):
                             # Skip nodes we just built
                             if any(fn.id == n_id for fn in final_nodes):
                                 return None
-                            
+
                             # Load ONLY metadata (95% memory reduction)
                             metadata_dict = await asyncio.get_event_loop().run_in_executor(
                                 None, read_node_metadata_only, n_id, graph_path_obj
@@ -521,7 +523,7 @@ class SmartGraphBuilder:
                                     metadata={"entities": metadata_dict["entities"]},
                                 )
                             return None
-                        
+
                         # Load all metadata in parallel
                         metadata_results = await asyncio.gather(
                             *[load_metadata(n_id) for n_id in node_ids],
@@ -538,7 +540,7 @@ class SmartGraphBuilder:
                 # OPTIMIZATION: Only create semantic edges between NEW nodes
                 # (semantic similarity between new and old nodes is less useful)
                 semantic_edges = create_semantic_edges(final_nodes)
-                
+
                 # create_reference_edges uses global context to resolve symbols
                 reference_edges = create_reference_edges(all_context_nodes)
 

@@ -8,6 +8,9 @@ Provides automatic processing after code indexing:
 
 from pathlib import Path
 
+# Type: ignore for conversation_discovery - it's infrastructure code
+# mypy: disable-error-code="import-not-found"
+
 
 
 async def auto_link_conversations(
@@ -87,11 +90,12 @@ async def auto_tag_bookmarks(
         "errors": 0,
     }
 
+    import asyncio
+
     from knowgraph.infrastructure.storage.filesystem import (
         read_node_json_async,
         write_node_json_async,
     )
-    import asyncio
 
     try:
         # Load all nodes
@@ -154,8 +158,8 @@ def collect_index_stats(graphstore_path: Path) -> dict:
 
     """
     from knowgraph.infrastructure.storage.filesystem import (
-        list_all_nodes,
         list_all_edges,
+        list_all_nodes,
         read_node_json,
     )
 
@@ -181,7 +185,7 @@ def collect_index_stats(graphstore_path: Path) -> dict:
 
             if node.type == "code":
                 stats["code_nodes"] += 1
-            elif node.type == "markdown":
+            elif node.type in ("markdown", "text", "documentation", "config"):
                 stats["markdown_nodes"] += 1
             elif node.type == "conversation":
                 stats["conversation_nodes"] += 1

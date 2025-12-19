@@ -6,8 +6,6 @@ across both code and conversation history.
 
 from pathlib import Path
 
-
-
 from knowgraph.domain.models.node import Node
 
 
@@ -33,25 +31,26 @@ def search_bookmarks(
 
     """
     import logging
+
     from knowgraph.infrastructure.search.bookmark_search import BookmarkSearch
     from knowgraph.infrastructure.storage.filesystem import read_node_json
 
     logger = logging.getLogger(__name__)
-    
+
     try:
         # Try FTS5 search first (fast path)
         search = BookmarkSearch(graph_store_path)
-        
+
         # Check if index needs migration
         if search.count() == 0:
             logger.info("FTS5 index empty, running auto-migration...")
             from knowgraph.infrastructure.search.bookmark_search import migrate_bookmarks
             stats = migrate_bookmarks(graph_store_path)
             logger.info(f"Auto-migration complete: {stats['bookmarks_migrated']} bookmarks indexed")
-        
+
         # Perform FTS5 search
         results = search.search(query, top_k=top_k)
-        
+
         # Load full nodes
         nodes = []
         for node_id, score in results:
@@ -59,10 +58,10 @@ def search_bookmarks(
             if node:
                 nodes.append(node)
                 logger.debug(f"FTS5 result: {node.metadata.get('tag', 'unknown') if node.metadata else 'no-tag'} (score={score:.3f})")
-        
+
         logger.info(f"search_bookmarks: FTS5 returned {len(nodes)} results for '{query}'")
         return nodes
-        
+
     except Exception as e:
         # Fallback to legacy full-scan search
         logger.warning(f"FTS5 search failed ({e}), falling back to full-scan")
@@ -75,19 +74,20 @@ def _search_bookmarks_legacy(
     top_k: int = 10,
 ) -> list[Node]:
     """Legacy full-scan bookmark search (fallback).
-    
+
     This is the original O(N) implementation kept for backward compatibility.
     """
     import logging
+
     from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
     from knowgraph.infrastructure.storage.filesystem import list_all_nodes, read_node_json
 
     logger = logging.getLogger(__name__)
-    
+
     # Load all nodes from filesystem
     node_ids = list_all_nodes(graph_store_path)
     logger.debug(f"search_bookmarks (legacy): Scanning {len(node_ids)} total nodes")
-    
+
     bookmarks = []
     nodes_checked = 0
 
@@ -98,7 +98,7 @@ def _search_bookmarks_legacy(
             bookmarks.append(node)
 
     logger.info(f"search_bookmarks (legacy): Found {len(bookmarks)} bookmarks out of {nodes_checked} nodes checked")
-    
+
     if not bookmarks:
         logger.warning(f"No bookmarks found in {graph_store_path}. Use tag_snippet to create bookmarks first.")
         return []
@@ -113,7 +113,10 @@ def _search_bookmarks_legacy(
         tag_tokens = bookmark.metadata.get("tag_tokens", []) if bookmark.metadata else []
 
         # Calculate overlap score
-        overlap = len(set(query_tokens.keys()) & set(tag_tokens))
+        query_keys_list: list[str] = list(query_tokens.keys())
+        query_keys_set: set[str] = set(query_keys_list)
+        tag_tokens_set: set[str] = set(tag_tokens)  # type: ignore[call-overload]
+        overlap = len(query_keys_set & tag_tokens_set)
         if overlap > 0:
             score = overlap / len(query_tokens)
             scored_bookmarks.append((bookmark, score))

@@ -1,7 +1,5 @@
 """Comprehensive tests for configuration system."""
 
-import os
-import tempfile
 from pathlib import Path
 
 import pytest

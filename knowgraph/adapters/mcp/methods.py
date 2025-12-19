@@ -1,9 +1,9 @@
 import asyncio
 import contextlib
 import sys
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from pathlib import Path
-from typing import Awaitable, Callable
 
 import mcp.types as types
 
@@ -43,7 +43,7 @@ async def index_graph(
     - Git repository URLs (GitHub, GitLab, Bitbucket)
     - Code directories (with automatic conversion to markdown)
     - Resume mode and incremental updates
-    
+
     Args:
         progress_callback: Optional callback for progress updates (stage, current, total, message)
     """

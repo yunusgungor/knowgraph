@@ -146,40 +146,40 @@ async def index_tagged_snippet(
     # Write snippet node directly to graph store instead of using run_index
     # This preserves the tagged_snippet type and all metadata
     from knowgraph.infrastructure.storage.filesystem import write_node_json
-    
+
     # Ensure graph store directory exists
     graph_path.mkdir(parents=True, exist_ok=True)
-    
+
     # Write node to storage
     write_node_json(snippet, graph_path)
-    
+
     # Verification: Check if snippet was written successfully
     from knowgraph.infrastructure.storage.filesystem import read_node_json
-    
+
     verification_node = read_node_json(snippet.id, graph_path)
     if not verification_node:
         raise RuntimeError(
             f"Snippet verification failed: Node {snippet.id} not found in graph store after writing"
         )
-    
+
     if verification_node.type != "tagged_snippet":
         raise RuntimeError(
             f"Snippet verification failed: Node type is '{verification_node.type}', expected 'tagged_snippet'"
         )
-    
+
     # Validation: Check required metadata
     if not verification_node.metadata or "tag" not in verification_node.metadata:
         raise RuntimeError(
             "Snippet verification failed: Missing tag in metadata"
         )
-    
+
     # Index into FTS5 for fast search
     try:
         from knowgraph.infrastructure.search.bookmark_search import BookmarkSearch
-        
+
         search = BookmarkSearch(graph_path)
         search.add(snippet)
-        
+
     except Exception as e:
         # Log error but don't fail the operation
         # FTS5 indexing is performance optimization, not critical

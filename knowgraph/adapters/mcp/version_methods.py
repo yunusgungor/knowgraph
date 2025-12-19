@@ -57,7 +57,7 @@ async def list_graph_versions(
         return [
             types.TextContent(
                 type="text",
-                text=f"Error listing versions: {str(e)}",
+                text=f"Error listing versions: {e!s}",
             )
         ]
 
@@ -95,7 +95,7 @@ async def get_version_info(
         lines.append(f"  Created: {version.created_at_iso}")
         lines.append(f"  Hash: {version.manifest_hash}")
         lines.append("")
-        lines.append(f"Graph Statistics:")
+        lines.append("Graph Statistics:")
         lines.append(f"  Nodes: {version.node_count:,}")
         lines.append(f"  Edges: {version.edge_count:,}")
         lines.append(f"  Files: {version.file_count:,}")
@@ -103,7 +103,7 @@ async def get_version_info(
         fc = version.file_changes
         if fc.total_changes > 0:
             lines.append("")
-            lines.append(f"File Changes:")
+            lines.append("File Changes:")
             if fc.added:
                 lines.append(f"  Added: {len(fc.added)} files")
                 for f in sorted(fc.added)[:5]:
@@ -131,7 +131,7 @@ async def get_version_info(
         return [
             types.TextContent(
                 type="text",
-                text=f"Error getting version info: {str(e)}",
+                text=f"Error getting version info: {e!s}",
             )
         ]
 
@@ -185,6 +185,6 @@ async def diff_graph_versions(
         return [
             types.TextContent(
                 type="text",
-                text=f"Error diffing versions: {str(e)}",
+                text=f"Error diffing versions: {e!s}",
             )
         ]

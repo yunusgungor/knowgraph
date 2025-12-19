@@ -9,6 +9,7 @@ import mcp.types as types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
+from knowgraph.adapters.mcp.diagnostic_handler import handle_diagnostic
 from knowgraph.adapters.mcp.handlers import (
     handle_analyze_conversations,
     handle_analyze_impact,
@@ -21,14 +22,13 @@ from knowgraph.adapters.mcp.handlers import (
     handle_tag_snippet,
     handle_validate,
 )
-from knowgraph.adapters.mcp.diagnostic_handler import handle_diagnostic
-from knowgraph.adapters.mcp.version_handlers import (
-    handle_list_versions,
-    handle_version_info,
-    handle_diff_versions,
-    handle_rollback,
-)
 from knowgraph.adapters.mcp.utils import get_llm_provider, resolve_graph_path
+from knowgraph.adapters.mcp.version_handlers import (
+    handle_diff_versions,
+    handle_list_versions,
+    handle_rollback,
+    handle_version_info,
+)
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.shared.versioning import (
     VersionStatus,

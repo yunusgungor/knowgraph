@@ -9,17 +9,14 @@ from dotenv import load_dotenv
 warnings.filterwarnings("ignore", category=SyntaxWarning, message="invalid escape sequence")
 
 from knowgraph import __version__  # noqa: E402
-from knowgraph.adapters.cli.discover_conversations_command import (  # noqa: E402
+from knowgraph.adapters.cli.discover_conversations_command import (  # noqa: E402  # noqa: E402
     discover_and_index_conversations,
+    list_conversations,
 )
 from knowgraph.adapters.cli.index_command import index_command  # noqa: E402
 from knowgraph.adapters.cli.query_command import query_command  # noqa: E402
 from knowgraph.adapters.cli.update_command import update_command  # noqa: E402
-
 from knowgraph.adapters.cli.version_command import version_commands  # noqa: E402
-from knowgraph.adapters.cli.discover_conversations_command import (  # noqa: E402
-    list_conversations,
-)
 
 # Load environment variables
 load_dotenv()

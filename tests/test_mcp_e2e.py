@@ -7,18 +7,16 @@ Comprehensive tests for all MCP tools verifying beta branch improvements:
 - All MCP tools functionality
 """
 
-import asyncio
-import json
 import tempfile
 from pathlib import Path
 
 import pytest
 
 from knowgraph.adapters.mcp.handlers import (
-    handle_index,
-    handle_query,
     handle_batch_query,
     handle_get_stats,
+    handle_index,
+    handle_query,
     handle_validate,
 )
 from knowgraph.config import get_settings
@@ -249,12 +247,12 @@ class TestE2EHelperFunctions:
     def test_helpers_importable(self):
         """Verify helper functions are importable."""
         from knowgraph.adapters.cli.index_helpers import (
+            build_knowledge_graph,
+            chunk_files,
+            create_and_save_manifest,
             detect_and_prepare_source,
             prepare_files_and_hashes,
-            chunk_files,
-            build_knowledge_graph,
             write_graph_to_storage,
-            create_and_save_manifest,
         )
 
         # All should be callable
@@ -268,8 +266,9 @@ class TestE2EHelperFunctions:
     @pytest.mark.asyncio
     async def test_run_index_imports_helpers(self):
         """Verify run_index uses helpers."""
-        from knowgraph.adapters.cli.index_command import run_index
         import inspect
+
+        from knowgraph.adapters.cli.index_command import run_index
 
         source = inspect.getsource(run_index)
 
