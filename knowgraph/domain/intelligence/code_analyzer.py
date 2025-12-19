@@ -109,7 +109,3 @@ class ASTAnalyzer:
                 )
 
             return entities
-
-    def _get_docstring(self, node: Any) -> str | None:
-        """Extract docstring from an AST node."""
-        return ast.get_docstring(node)

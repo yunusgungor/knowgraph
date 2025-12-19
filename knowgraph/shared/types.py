@@ -1,6 +1,6 @@
 """Type definitions and protocols for KnowGraph system."""
 
-from typing import Literal, Protocol, TypeAlias
+from typing import Literal, TypeAlias
 
 # Node types
 NodeType: TypeAlias = Literal[
@@ -16,6 +16,3 @@ LLMProvider: TypeAlias = Literal["openai", "ollama"]
 
 # Query intents
 QueryIntent: TypeAlias = Literal["auto", "location", "explanation", "implementation"]
-
-
-# LLMProtocol removed as it was unused protocol definition

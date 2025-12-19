@@ -4,7 +4,7 @@ A production-grade library for converting Git repositories into queryable
 knowledge graphs with explainable reasoning paths.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.5.0"
 __author__ = "Yunus Güngör"
 __license__ = "MIT"
 

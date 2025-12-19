@@ -13,10 +13,6 @@ class KnowGraphError(Exception):
         self.details = details or {}
 
 
-class ValidationError(KnowGraphError):
-    """Raised when input validation fails."""
-
-
 class StorageError(KnowGraphError):
     """Raised when storage operations fail."""
 
