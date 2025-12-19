@@ -7,7 +7,6 @@ from pathlib import Path
 import mcp.types as types
 
 from knowgraph.adapters.cli.index_command import run_index
-from knowgraph.adapters.cli.update_command import run_update
 from knowgraph.application.evolution.incremental_update import (
     apply_incremental_update,
     detect_delta,
@@ -113,51 +112,37 @@ async def index_graph(
                         )
                     ]
 
-            # Standard indexing or update
-            if manifest_path.exists() and source_type != "repository":
-                await run_update(
-                    input_path=input_path,
-                    graph_store=str(graph_path),
-                    gc=gc,
-                    provider=provider,
-                )
-                return [
-                    types.TextContent(
-                        type="text",
-                        text=f"Successfully added/updated {input_path} in knowledge graph.",
-                    )
-                ]
-            else:
-                # Full indexing (supports repositories, code directories, and markdown)
-                await run_index(
-                    input_path=input_path,
-                    output_path=str(graph_path),
-                    provider=provider,
-                    include_patterns=include_patterns,
-                    exclude_patterns=exclude_patterns,
-                    access_token=access_token,
-                )
+            # Use run_index for all cases - it has efficient hash checking
+            # and only processes changed files at manifest level
+            await run_index(
+                input_path=input_path,
+                output_path=str(graph_path),
+                provider=provider,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns,
+                access_token=access_token,
+            )
 
-                source_desc = (
-                    "repository"
-                    if source_type == "repository"
+            source_desc = (
+                "repository"
+                if source_type == "repository"
+                else (
+                    "code directory"
+                    if source_type == "directory"
                     else (
-                        "code directory"
-                        if source_type == "directory"
-                        else (
-                            "conversation history"
-                            if source_type == "conversation"
-                            else "markdown files"
-                        )
+                        "conversation history"
+                        if source_type == "conversation"
+                        else "markdown files"
                     )
                 )
+            )
 
-                return [
-                    types.TextContent(
-                        type="text",
-                        text=f"Successfully initialized knowledge graph from {source_desc}: {input_path}.",
-                    )
-                ]
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"Successfully indexed/updated {source_desc}: {input_path}.",
+                ),
+            ]
 
         except Exception as e:
             import traceback
