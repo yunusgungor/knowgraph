@@ -140,45 +140,35 @@ async def index_tagged_snippet(
     ----
         snippet: Tagged snippet node
         graph_path: Path to graph storage
-        provider: Optional IntelligenceProvider (defaults to OpenAIProvider)
+        provider: Optional IntelligenceProvider (not used, kept for compatibility)
 
     """
-    # Create temporary markdown file
-    import tempfile
-
-    from knowgraph.adapters.cli.index_command import run_index
-
-    snippet_data = TaggedSnippet(
-        tag=(snippet.metadata or {}).get("tag", "unknown"),
-        content=snippet.content,
-        conversation_id=(snippet.metadata or {}).get("conversation_id"),
-        user_question=(snippet.metadata or {}).get("user_question"),
-        timestamp=datetime.fromisoformat(
-            (snippet.metadata or {}).get("timestamp", datetime.now().isoformat())
-        ),
-    )
-
-    markdown_content = format_tagged_snippet_markdown(snippet_data)
-
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        suffix=".md",
-        prefix=f"tagged_{str(snippet_data.tag).replace(' ', '_')}_",
-        delete=False,
-        encoding="utf-8",
-    ) as temp_file:
-        temp_file.write(markdown_content)
-        temp_path = Path(temp_file.name)
-
-    try:
-        # Index the snippet (provider can be None, run_index will handle it)
-        await run_index(
-            input_path=str(temp_path),
-            output_path=str(graph_path),
-            verbose=False,
-            provider=provider,
+    # Write snippet node directly to graph store instead of using run_index
+    # This preserves the tagged_snippet type and all metadata
+    from knowgraph.infrastructure.storage.filesystem import write_node_json
+    
+    # Ensure graph store directory exists
+    graph_path.mkdir(parents=True, exist_ok=True)
+    
+    # Write node to storage
+    write_node_json(snippet, graph_path)
+    
+    # Verification: Check if snippet was written successfully
+    from knowgraph.infrastructure.storage.filesystem import read_node_json
+    
+    verification_node = read_node_json(snippet.id, graph_path)
+    if not verification_node:
+        raise RuntimeError(
+            f"Snippet verification failed: Node {snippet.id} not found in graph store after writing"
         )
-    finally:
-        # Cleanup
-        if temp_path.exists():
-            temp_path.unlink()
+    
+    if verification_node.type != "tagged_snippet":
+        raise RuntimeError(
+            f"Snippet verification failed: Node type is '{verification_node.type}', expected 'tagged_snippet'"
+        )
+    
+    # Validation: Check required metadata
+    if not verification_node.metadata or "tag" not in verification_node.metadata:
+        raise RuntimeError(
+            "Snippet verification failed: Missing tag in metadata"
+        )

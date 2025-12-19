@@ -119,6 +119,34 @@ async def handle_query(
 
             graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
             graph_path = resolve_graph_path(graph_path_arg, project_root)
+            
+            # Validate graph store exists and has nodes
+            if not graph_path.exists():
+                error_msg = f"Graph store not found at {graph_path}. Please run indexing first."
+                trace.add_event("graph_store_error", {"path": str(graph_path)})
+                if progress:
+                    await progress.error(error_msg)
+                return [types.TextContent(type="text", text=error_msg)]
+            
+            # Check if provider is available for LLM features
+            if not provider:
+                import os
+                api_keys = {
+                    "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+                    "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY"),
+                }
+                available_keys = [k for k, v in api_keys.items() if v]
+                
+                if not available_keys:
+                    warning_msg = (
+                        "⚠️ No LLM provider configured. Query will return raw context only.\n"
+                        "To enable AI-generated answers, set one of: OPENAI_API_KEY, ANTHROPIC_API_KEY\n\n"
+                    )
+                    trace.add_event("provider_warning", {"message": "No API keys found"})
+                else:
+                    warning_msg = ""
+            else:
+                warning_msg = ""
 
             if progress:
                 await progress.update(1, f"📝 Query: \"{query[:50]}...\"")

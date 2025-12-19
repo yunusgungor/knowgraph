@@ -21,6 +21,7 @@ from knowgraph.adapters.mcp.handlers import (
     handle_tag_snippet,
     handle_validate,
 )
+from knowgraph.adapters.mcp.diagnostic_handler import handle_diagnostic
 from knowgraph.adapters.mcp.version_handlers import (
     handle_list_versions,
     handle_version_info,
@@ -195,6 +196,9 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
 
     elif name == "knowgraph_rollback":
         return await handle_rollback(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_diagnostic":
+        return await handle_diagnostic(arguments, PROJECT_ROOT)
 
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -582,6 +586,19 @@ async def list_tools() -> list[types.Tool]:
                     },
                 },
                 "required": ["version_id"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_diagnostic",
+            description="Run diagnostic checks on the KnowGraph system. Check graph store status, LLM provider configuration, and get recommendations.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
             },
         ),
     ]

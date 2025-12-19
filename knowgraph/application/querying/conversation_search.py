@@ -31,19 +31,30 @@ def search_bookmarks(
         List of bookmark nodes matching query
 
     """
+    import logging
     from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
     from knowgraph.infrastructure.storage.filesystem import list_all_nodes, read_node_json
 
+    logger = logging.getLogger(__name__)
+    
     # Load all nodes from filesystem
     node_ids = list_all_nodes(graph_store_path)
+    logger.debug(f"search_bookmarks: Scanning {len(node_ids)} total nodes")
+    
     bookmarks = []
+    nodes_checked = 0
 
     for node_id in node_ids:
         node = read_node_json(node_id, graph_store_path)
+        nodes_checked += 1
         if node and node.type == "tagged_snippet":
             bookmarks.append(node)
+            logger.debug(f"Found bookmark: {node.metadata.get('tag', 'unknown') if node.metadata else 'no-tag'}")
 
+    logger.info(f"search_bookmarks: Found {len(bookmarks)} bookmarks out of {nodes_checked} nodes checked")
+    
     if not bookmarks:
+        logger.warning(f"No bookmarks found in {graph_store_path}. Use tag_snippet to create bookmarks first.")
         return []
 
     # Use code-aware tokenization on query

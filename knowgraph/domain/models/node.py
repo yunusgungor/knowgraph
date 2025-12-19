@@ -85,7 +85,7 @@ class Node:
             "path": self.path,
             "type": self.type,
             "token_count": self.token_count,
-            "created_at": self.created_at,
+            "created_at": self.created_at.isoformat() if hasattr(self.created_at, 'isoformat') else self.created_at,
             "header_depth": self.header_depth,
             "header_path": self.header_path,
             "chunk_id": self.chunk_id,
