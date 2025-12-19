@@ -12,9 +12,10 @@ from pathlib import Path
 import click
 
 from knowgraph.application.indexing.graph_builder import (
+    create_nodes_from_chunks,
     normalize_markdown_content,
+    SmartGraphBuilder,
 )
-from knowgraph.application.indexing.smart_graph_builder import SmartGraphBuilder
 from knowgraph.config import (
     DEFAULT_GRAPH_STORE_PATH,
     EDGES_FILENAME,
@@ -431,20 +432,14 @@ async def run_index(
 
                 provider = OpenAIProvider()
 
-                from knowgraph.application.indexing.smart_graph_builder import SmartGraphBuilder
-
                 builder = SmartGraphBuilder(provider)
             except Exception as e:
                 if verbose:
                     click.echo(f"  AI features disabled (Provider init failed): {e}")
 
                 # Fallback to smart builder without provider (uses AST only)
-                from knowgraph.application.indexing.smart_graph_builder import SmartGraphBuilder
-
                 builder = SmartGraphBuilder(provider=None)
         else:
-            from knowgraph.application.indexing.smart_graph_builder import SmartGraphBuilder
-
             builder = SmartGraphBuilder(provider)
 
         nodes, all_edges = await builder.build(

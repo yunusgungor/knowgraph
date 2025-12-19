@@ -129,7 +129,7 @@ knowgraph/
 │
 ├── application/                     # Use cases and orchestration
 │   ├── indexing/                   # Graph building and indexing
-│   │   └── smart_graph_builder.py # Hybrid indexing engine (SmartGraphBuilder)
+│   │   └── graph_builder.py        # Hybrid indexing engine (SmartGraphBuilder + utilities)
 │   ├── querying/                   # Query engine
 │   │   ├── query_engine.py        # Main query engine (QueryEngine, QueryResult)
 │   │   ├── retriever.py           # Graph traversal and node collection (QueryRetriever)
@@ -530,7 +530,7 @@ print(result.explanation)  # Reasoning path
 Graph building:
 
 ```python
-from knowgraph.application.indexing.smart_graph_builder import SmartGraphBuilder
+from knowgraph.application.indexing.graph_builder import SmartGraphBuilder
 from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
 
 # Create provider

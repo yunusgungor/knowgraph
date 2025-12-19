@@ -148,7 +148,6 @@ async def index_tagged_snippet(
     from typing import Any
 
     from knowgraph.adapters.cli.index_command import run_index
-    from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
 
     snippet_data = TaggedSnippet(
         tag=(snippet.metadata or {}).get("tag", "unknown"),
@@ -173,10 +172,7 @@ async def index_tagged_snippet(
         temp_path = Path(temp_file.name)
 
     try:
-        # Index the snippet
-        if provider is None:
-            provider = OpenAIProvider()
-
+        # Index the snippet (provider can be None, run_index will handle it)
         await run_index(
             input_path=str(temp_path),
             output_path=str(graph_path),

@@ -527,7 +527,7 @@ api_docs = knowgraph_batch_query(
 7. LLM response generation
 8. Explanation generation (if enabled) via `ExplanationObject`
 
-#### SmartGraphBuilder (`application/indexing/smart_graph_builder.py`)
+#### SmartGraphBuilder (`application/indexing/graph_builder.py`)
 **Purpose**: Hybrid indexing engine
 
 **Pipeline**:

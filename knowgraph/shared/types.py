@@ -8,7 +8,7 @@ NodeType: TypeAlias = Literal[
 ]
 
 # Edge types
-EdgeType: TypeAlias = Literal["semantic"]
+EdgeType: TypeAlias = Literal["semantic", "reference"]
 
 
 # LLM providers

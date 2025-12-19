@@ -95,3 +95,5 @@ graphstore/
 .pypirc
 
 .agent/
+
+test_suite/
