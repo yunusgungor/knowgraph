@@ -195,7 +195,11 @@ def _collect_code_files_from_directory(
     Returns:
         List of file paths to process
     """
-    from knowgraph.adapters.cli.index_command import CODE_PATTERNS
+    # Import LANGUAGE_MAP to derive CODE_PATTERNS
+    from knowgraph.adapters.cli.index_command import LANGUAGE_MAP
+
+    # Generate CODE_PATTERNS from LANGUAGE_MAP
+    CODE_PATTERNS = [f"**/*.{ext}" for ext in LANGUAGE_MAP.keys()]
 
     files_to_process = []
 
@@ -278,14 +282,15 @@ def cleanup_temp_files() -> None:
 
 import time
 
+
 async def prepare_files_and_hashes(files, base_path, verbose):
     from knowgraph.adapters.cli.index_command import EXT_MAP
     from knowgraph.application.indexing.graph_builder import normalize_markdown_content
     from knowgraph.infrastructure.parsing.hasher import hash_content
-    
+
     current_hashes, files_ready = {}, []
     _log_verbose(verbose, "Analysing file states...")
-    
+
     for file_path in files:
         try:
             try:
@@ -295,27 +300,28 @@ async def prepare_files_and_hashes(files, base_path, verbose):
                     content = file_path.read_text(encoding="latin-1")
                 except:
                     continue
-            
+
             try:
                 relative_path = file_path.relative_to(base_path)
             except ValueError:
                 relative_path = Path(file_path.name)
-            
+
             lang = EXT_MAP.get(file_path.suffix, "text")
             markdown_wrapper = f"# {relative_path.as_posix()}\n\n```{lang}\n{content}\n```"
             normalized = normalize_markdown_content(markdown_wrapper)
             file_hash = hash_content(normalized)
-            
+
             current_hashes[str(relative_path.as_posix())] = file_hash
             files_ready.append((file_path, normalized, relative_path))
         except Exception as e:
             _log_verbose(verbose, f"Warning: {file_path}: {e}")
-    
+
     return current_hashes, files_ready
 
 
 def load_existing_manifest(output_path, verbose):
     from knowgraph.infrastructure.storage.manifest import read_manifest
+
     manifest_path = Path(output_path) / "metadata" / "manifest.json"
     if not manifest_path.exists():
         return None
@@ -341,12 +347,13 @@ def should_skip_indexing(existing_manifest, current_hashes, verbose):
 # File Chunking
 # ============================================================================
 
+
 async def chunk_files(files_ready, verbose):
     """Chunk all prepared files."""
     from knowgraph.infrastructure.parsing.chunker import chunk_markdown
-    
+
     all_chunks = []
-    
+
     for file_path, normalized_content, relative_path in files_ready:
         try:
             _log_verbose(verbose, f"✓ Processing {relative_path} ({len(normalized_content)} chars)")
@@ -355,7 +362,7 @@ async def chunk_files(files_ready, verbose):
         except Exception as e:
             _log_verbose(verbose, f"Error processing {file_path}: {e}")
             continue
-    
+
     _log_verbose(verbose, f"✓ Created {len(all_chunks)} chunks from {len(files_ready)} files")
     return all_chunks
 
@@ -364,40 +371,47 @@ async def chunk_files(files_ready, verbose):
 # Graph Building
 # ============================================================================
 
+
 async def build_knowledge_graph(chunks, input_path, graph_store_path, provider, verbose):
     """Build knowledge graph from chunks."""
     from knowgraph.application.indexing.graph_builder import SmartGraphBuilder
-    
+
     if not provider:
         try:
             from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
+
             provider = OpenAIProvider()
         except Exception as e:
             _log_verbose(verbose, f"AI features disabled: {e}")
             provider = None
-    
+
     builder = SmartGraphBuilder(provider)
     nodes, edges = await builder.build(chunks, str(input_path), "", str(graph_store_path))
-    
+
     _log_verbose(verbose, f"✓ Created {len(nodes)} nodes")
     _log_verbose(verbose, f"✓ Created {len(edges)} edges")
-    
+
     return nodes, edges
 
 
-# ============================================================================  
+# ============================================================================
 # Storage Operations
 # ============================================================================
+
 
 async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_path, verbose):
     """Write graph to storage and build search index."""
     from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
     from knowgraph.infrastructure.search.sparse_index import SparseIndex
-    from knowgraph.infrastructure.storage.filesystem import write_node_json, write_all_edges, read_all_edges
-    
+    from knowgraph.infrastructure.storage.filesystem import (
+        write_node_json,
+        write_all_edges,
+        read_all_edges,
+    )
+
     sparse_embedder = SparseEmbedder()
     sparse_embeddings = {node.id: sparse_embedder.embed_text(node.content) for node in nodes}
-    
+
     _log_verbose(verbose, "Building Sparse Index...")
     index = SparseIndex()
     for node in nodes:
@@ -405,21 +419,28 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
             index.add(node.id, sparse_embeddings[node.id])
     index.build()
     index.save(graph_store_path / "index")
-    
+
     for node in nodes:
         write_node_json(node, graph_store_path)
-    
+
     merged_edges = edges
     if existing_manifest:
         try:
             old_edges = read_all_edges(graph_store_path)
             new_node_ids = {n.id for n in nodes}
-            filtered_old_edges = [e for e in old_edges if e.source not in new_node_ids and e.target not in new_node_ids]
+            filtered_old_edges = [
+                e
+                for e in old_edges
+                if e.source not in new_node_ids and e.target not in new_node_ids
+            ]
             merged_edges = filtered_old_edges + edges
-            _log_verbose(verbose, f"✓ Merged {len(edges)} new edges with {len(filtered_old_edges)} existing edges")
+            _log_verbose(
+                verbose,
+                f"✓ Merged {len(edges)} new edges with {len(filtered_old_edges)} existing edges",
+            )
         except Exception as e:
             _log_verbose(verbose, f"Warning: Could not merge existing edges: {e}")
-    
+
     write_all_edges(merged_edges, graph_store_path)
     return sparse_embeddings
 
@@ -428,13 +449,15 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
 # Manifest Creation
 # ============================================================================
 
+
 async def create_and_save_manifest(nodes, edges, file_hashes, graph_store_path, verbose):
     """Create and save manifest with automatic backup."""
     from knowgraph.config import EDGES_FILENAME
     from knowgraph.infrastructure.storage.manifest import Manifest, write_manifest
-    
+
     try:
         from knowgraph.infrastructure.storage.manifest_backup import ManifestBackupManager
+
         metadata_dir = Path(graph_store_path) / "metadata"
         if metadata_dir.exists():
             backup_manager = ManifestBackupManager(metadata_dir)
@@ -443,14 +466,14 @@ async def create_and_save_manifest(nodes, edges, file_hashes, graph_store_path, 
                 _log_verbose(verbose, f"Manifest backed up to {backup_path}")
     except Exception as e:
         _log_verbose(verbose, f"Warning: Could not create manifest backup: {e}")
-    
+
     manifest = Manifest.create_new(edges_filename=EDGES_FILENAME, sparse_index_filename="index")
     manifest.node_count = len(nodes)
     manifest.edge_count = len(edges)
     manifest.file_hashes = file_hashes
     manifest.semantic_edge_count = len(edges)
     manifest.finalized = True
-    
+
     write_manifest(manifest, graph_store_path)
     _log_verbose(verbose, f"✓ Saved manifest (v{manifest.version})")
 
@@ -459,22 +482,26 @@ async def create_and_save_manifest(nodes, edges, file_hashes, graph_store_path, 
 # Post-Index Hooks
 # ============================================================================
 
-async def run_post_index_hooks(link_conversations, input_path, source_type, graph_store_path, verbose):
+
+async def run_post_index_hooks(
+    link_conversations, input_path, source_type, graph_store_path, verbose
+):
     """Run post-indexing hooks (conversation linking, stats)."""
     if not (link_conversations or verbose):
         return
-    
+
     _log_verbose(verbose, "\n" + "=" * 60)
     _log_verbose(verbose, "POST-INDEX PROCESSING")
     _log_verbose(verbose, "=" * 60)
-    
+
     if link_conversations:
         _log_verbose(verbose, "\n🔗 Auto-linking conversations...")
         try:
             from knowgraph.application.indexing.post_index_hooks import auto_link_conversations
+
             conv_stats = await auto_link_conversations(
                 Path(graph_store_path),
-                workspace_path=Path(input_path) if source_type != "repository" else None
+                workspace_path=Path(input_path) if source_type != "repository" else None,
             )
             _log_verbose(verbose, f"  Conversations found: {conv_stats['conversations_found']}")
             _log_verbose(verbose, f"  Conversations linked: {conv_stats['conversations_linked']}")
@@ -483,13 +510,14 @@ async def run_post_index_hooks(link_conversations, input_path, source_type, grap
                 _log_verbose(verbose, f"  Errors: {conv_stats['errors']}")
         except Exception as e:
             _log_verbose(verbose, f"  ⚠️  Conversation linking failed: {e}")
-    
+
     if verbose:
         _log_verbose(verbose, "\n" + "=" * 60)
         _log_verbose(verbose, "INDEXING STATISTICS")
         _log_verbose(verbose, "=" * 60)
         try:
             from knowgraph.application.indexing.post_index_hooks import collect_index_stats
+
             stats = collect_index_stats(Path(graph_store_path))
             click.echo(f"\n📊 Nodes by Type:")
             click.echo(f"  Code nodes: {stats['code_nodes']}")
