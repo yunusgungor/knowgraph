@@ -455,7 +455,7 @@ async def handle_analyze_conversations(
         try:
             # Optional arguments
             topic = arguments.get("topic")
-            time_window_days = arguments.get("time_window_days", 7)
+            time_window_days = int(arguments.get("time_window_days", 7))
             graph_path_arg = arguments.get("graph_path")
 
             # Resolve graph path

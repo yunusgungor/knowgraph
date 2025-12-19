@@ -99,6 +99,20 @@ class Node:
         """Deserialize node from dictionary."""
         from typing import cast
         from uuid import UUID
+        from datetime import datetime
+
+        # Parse created_at (can be int timestamp or ISO string)
+        created_at_raw = data["created_at"]
+        if isinstance(created_at_raw, str):
+            # ISO format string -> convert to timestamp
+            try:
+                dt = datetime.fromisoformat(created_at_raw)
+                created_at_value = int(dt.timestamp())
+            except (ValueError, AttributeError):
+                # Fallback: try to parse as int string
+                created_at_value = int(created_at_raw)
+        else:
+            created_at_value = cast(int, created_at_raw)
 
         return cls(
             id=UUID(cast(str, data["id"])),
@@ -108,7 +122,7 @@ class Node:
             path=cast(str, data["path"]),
             type=cast(NodeType, data["type"]),
             token_count=cast(int, data["token_count"]),
-            created_at=cast(int, data["created_at"]),
+            created_at=created_at_value,
             header_depth=(
                 cast(int, data.get("header_depth"))
                 if data.get("header_depth") is not None
