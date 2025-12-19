@@ -9,7 +9,7 @@ __author__ = "Yunus Güngör"
 __license__ = "MIT"
 
 # Import cleanup utilities to ensure atexit handlers are registered
-from knowgraph.shared.cleanup import cleanup_all_resources, register_cleanup_handlers
+from knowgraph.shared.cleanup import cleanup_all_resources
 
 # Public API will be defined as components are implemented
-__all__: list[str] = ["cleanup_all_resources", "register_cleanup_handlers"]
+__all__: list[str] = ["cleanup_all_resources"]

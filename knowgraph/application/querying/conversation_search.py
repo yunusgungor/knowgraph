@@ -7,7 +7,8 @@ across both code and conversation history.
 from pathlib import Path
 
 from knowgraph.application.linking.conversation_linker import link_conversation_to_code
-from knowgraph.application.querying.hierarchical_lifting import lift_conversation_artifacts
+
+
 from knowgraph.domain.models.node import Node
 
 

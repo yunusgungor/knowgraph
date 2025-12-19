@@ -3,21 +3,6 @@
 Provides centralized cleanup functions for ProcessPoolExecutors and other resources.
 """
 
-import atexit
-
-
-def register_cleanup_handlers() -> None:
-    """Register all cleanup handlers at module initialization.
-
-    This ensures proper resource cleanup on application exit.
-    """
-    from knowgraph.application.querying.centrality_mp import shutdown_process_pool
-    from knowgraph.domain.algorithms.centrality import _shutdown_process_pool
-
-    # Register cleanup for both process pools
-    atexit.register(_shutdown_process_pool)
-    atexit.register(shutdown_process_pool)
-
 
 def cleanup_all_resources() -> None:
     """Manually cleanup all resources.

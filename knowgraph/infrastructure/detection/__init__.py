@@ -1,7 +1,6 @@
 """Project root detection infrastructure."""
 
 from knowgraph.infrastructure.detection.project_detector import (
-    ProjectDetectionError,
     detect_git_root,
     detect_project_markers,
     detect_project_root,
@@ -9,7 +8,6 @@ from knowgraph.infrastructure.detection.project_detector import (
 )
 
 __all__ = [
-    "ProjectDetectionError",
     "detect_git_root",
     "detect_project_markers",
     "detect_project_root",

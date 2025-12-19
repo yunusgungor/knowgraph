@@ -34,10 +34,6 @@ PROJECT_MARKERS = [
 ]
 
 
-class ProjectDetectionError(Exception):
-    """Base exception for project detection errors."""
-
-
 def detect_git_root(start_path: Path | None = None) -> Path | None:
     """Detect Git repository root directory.
 
