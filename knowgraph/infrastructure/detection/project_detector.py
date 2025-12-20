@@ -252,24 +252,24 @@ def detect_project_root(start_path: Path | None = None, use_llm: bool = True) ->
     if start_path is None:
         start_path = Path.cwd()
 
-    logger.info(f"🔍 Detecting project root from: {start_path}")
+    logger.debug(f"🔍 Detecting project root from: {start_path}")
 
     # Strategy 1: Git root
     git_root = detect_git_root(start_path)
     if git_root:
-        logger.info(f"✓ Using git root: {git_root}")
+        logger.debug(f"✓ Using git root: {git_root}")
         return git_root
 
     # Strategy 2: Project markers
     marker_root = detect_project_markers(start_path)
     if marker_root:
-        logger.info(f"✓ Using marker-detected root: {marker_root}")
+        logger.debug(f"✓ Using marker-detected root: {marker_root}")
         return marker_root
 
     # Strategy 3: LLM analysis (async, so we'll skip in sync context)
     # This will be called from async context in server.py
     if use_llm:
-        logger.info("ℹ️ LLM-based detection requires async context, will run in background")
+        logger.debug("ℹ️ LLM-based detection requires async context, will run in background")
 
     # Strategy 4: Fallback to current working directory
     # IMPORTANT: Never fall back to home directory, use cwd instead
@@ -278,18 +278,18 @@ def detect_project_root(start_path: Path | None = None, use_llm: bool = True) ->
     # If start_path is root directory, use cwd
     if fallback == fallback.parent:  # This means we're at root (/)
         fallback = Path.cwd().resolve()
-        logger.warning(
+        logger.debug(
             f"⚠️ Start path was root directory, using cwd instead: {fallback}",
         )
 
     # If cwd is also root or home, use a sensible default
     if fallback == fallback.parent or fallback == Path.home():
-        # Create a default workspace directory in home
-        fallback = Path.home() / "workspace"
+        # Create a default graphstore directory in home
+        fallback = Path.home()
         fallback.mkdir(exist_ok=True)
-        logger.warning(
-            f"⚠️ No valid project root found, using default workspace: {fallback}",
+        logger.debug(
+            f"⚠️ No valid project root found, using default graphstore: {fallback}",
         )
 
-    logger.info(f"→ Fallback to: {fallback}")
+    logger.debug(f"→ Fallback to: {fallback}")
     return fallback

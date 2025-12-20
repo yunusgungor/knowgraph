@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2025-12-20
+
+### 🏥 Major Feature: System Health & Diagnostics
+Complete self-healing and diagnostic subsystem (`Logic: e49f7c1`).
+- **Unified Diagnostic Tool**: `knowgraph_diagnostic` MCP tool performs comprehensive system health checks.
+- **Component Checks**:
+  - **Storage**: Verifies filesystem permissions and graph integrity.
+  - **LLM Provider**: Validates API connectivity and model access (OpenAI/Anthropic).
+  - **Configuration**: Audits environment variables and dependency versions.
+- **Safe Mode**: Automatic fallback to safe operations when critical failures are detected.
+- **Files Added**: `knowgraph/adapters/mcp/diagnostic_handler.py`.
+
+### ⚡ Enhanced Search & Indexing
+- **FTS5 Bookmark Search**: Implemented SQLite FTS5 virtual tables for <5ms full-text search of tagged snippets (`Logic: dd75e52`).
+- **Smart Indexing Cache**: Intelligent caching mechanism that avoids re-indexing unchanged files, responding in milliseconds (`Logic: 86de510`).
+- **Real-Time Progress**: MCP tools now report detailed progress (0-100%) for long-running operations like indexing and batch queries via `server.request_context.session.send_progress`.
+
+### 🛠️ Refactoring & Improvements
+- **Code Patterns**: Dynamic `CODE_PATTERNS` generation from `LANGUAGE_MAP` for better maintainability (`Logic: 5b4039a`).
+- **Cleanups**: Removed unused `ImpactAnalyzer` form `QueryEngine` to decouple dependencies (`Logic: f50b81c`).
+- **Performance Config**: Moved memory profiler thresholds to external configuration (`Logic: 6c932ce`).
+
 ## [0.6.1] - 2025-12-19
 
 ### ⚡ Performance Overhaul: Async I/O & Parallelization

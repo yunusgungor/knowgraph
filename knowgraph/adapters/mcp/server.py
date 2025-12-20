@@ -75,7 +75,7 @@ def _register_api_versions():
         ],
     )
 
-    logger.info(f"Registered API versions, current: {get_current_version()}")
+    logger.debug(f"Registered API versions, current: {get_current_version()}")
 
 
 _register_api_versions()
@@ -126,7 +126,7 @@ def _detect_project_root_sync() -> Path:
 
     # Use sync detection (no LLM)
     detected = detect_project_root(use_llm=False)
-    logger.info(f"Initial project root detected (sync): {detected}")
+    logger.debug(f"Initial project root detected (sync): {detected}")
     return detected
 
 
@@ -147,7 +147,7 @@ async def _detect_project_root_with_llm_async(start_path: Path | None = None) ->
             detect_project_root_with_llm,
         )
 
-        logger.info("Starting background LLM-based project root detection...")
+        logger.debug("Starting background LLM-based project root detection...")
         llm_detected = await detect_project_root_with_llm(start_path)
 
         if llm_detected:
@@ -159,9 +159,9 @@ async def _detect_project_root_with_llm_async(start_path: Path | None = None) ->
                 )
                 _cache_project_root(llm_detected)
             else:
-                logger.info(f"LLM confirmed project root: {llm_detected}")
+                logger.debug(f"LLM confirmed project root: {llm_detected}")
         else:
-            logger.info("LLM detection completed but no better root found")
+            logger.debug("LLM detection completed but no better root found")
 
         _PROJECT_ROOT_CACHE["llm_detection_done"] = True
         return llm_detected
@@ -670,7 +670,17 @@ async def list_tools() -> list[types.Tool]:
     ]
 
 
+def _configure_logging():
+    """Configure logging to suppress noisy libraries."""
+    # Suppress mcp internal logs
+    logging.getLogger("mcp").setLevel(logging.WARNING)
+    # Suppress httpx/httpcore logs (used by OpenAI/LLM providers)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
 async def main() -> None:
+    _configure_logging()
     async with stdio_server() as (read_stream, write_stream):
         # Start background LLM detection task (fire and forget)
         _ = asyncio.create_task(_initialize_llm_detection())  # noqa: RUF006
