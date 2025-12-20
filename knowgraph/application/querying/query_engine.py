@@ -38,6 +38,7 @@ from knowgraph.infrastructure.storage.filesystem import (
 )
 from knowgraph.shared.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from knowgraph.shared.exceptions import QueryError
+from knowgraph.shared.memory_profiler import memory_guard
 from knowgraph.shared.metrics import get_metrics
 from knowgraph.shared.refactoring import (
     filter_active_edges,
@@ -45,6 +46,7 @@ from knowgraph.shared.refactoring import (
 )
 from knowgraph.shared.retry import BackoffStrategy, RetryConfig, RetryContext
 from knowgraph.shared.throttle import RequestThrottle
+from knowgraph.shared.tracing import trace_operation
 
 # Context variable for request tracking
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
@@ -303,99 +305,110 @@ class QueryEngine:
         lift_levels: int,
     ) -> QueryResult:
         """Internal query execution with retry support."""
-        start_time = time.time()
-        timings = {}
+        with memory_guard(
+            operation_name=f"query_sync[{query_text[:30]}]",
+            warning_threshold_mb=100,
+            critical_threshold_mb=250,
+        ):
+            with trace_operation(
+                "query_engine.query_sync",
+                query_length=len(query_text),
+                top_k=top_k,
+                max_hops=max_hops,
+            ):
+                start_time = time.time()
+                timings = {}
 
-        try:
-            # Step 1: Sparse search + graph expansion
-            retrieval_start = time.time()
-            nodes, seed_node_ids = self.retriever.retrieve(
-                query_text, self._get_edges(), top_k, max_hops
-            )
-            timings["sparse_search"] = time.time() - retrieval_start
-            timings["graph_expansion"] = 0.0  # Included in retrieval
+                try:
+                    # Step 1: Sparse search + graph expansion
+                    retrieval_start = time.time()
+                    nodes, seed_node_ids = self.retriever.retrieve(
+                        query_text, self._get_edges(), top_k, max_hops
+                    )
+                    timings["sparse_search"] = time.time() - retrieval_start
+                    timings["graph_expansion"] = 0.0  # Included in retrieval
 
-            if not nodes:
-                raise QueryError("No relevant nodes found")
+                    if not nodes:
+                        raise QueryError("No relevant nodes found")
 
-            # Step 1.5: Hierarchical Context Lifting (if enabled)
-            if enable_hierarchical_lifting:
-                from knowgraph.application.querying.hierarchical_lifting import (
-                    lift_hierarchical_context,
-                )
+                    # Step 1.5: Hierarchical Context Lifting (if enabled)
+                    if enable_hierarchical_lifting:
+                        from knowgraph.application.querying.hierarchical_lifting import (
+                            lift_hierarchical_context,
+                        )
 
-                original_count = len(nodes)
-                nodes = lift_hierarchical_context(
-                    nodes, self.graph_store_path, lift_levels=lift_levels, max_additional_nodes=5
-                )
-                if len(nodes) > original_count:
-                    # Update seed_node_ids to not include lifted nodes as seeds
-                    # (they're context, not direct matches)
-                    pass  # seed_node_ids stays the same
+                        original_count = len(nodes)
+                        nodes = lift_hierarchical_context(
+                            nodes, self.graph_store_path, lift_levels=lift_levels, max_additional_nodes=5
+                        )
+                        if len(nodes) > original_count:
+                            # Update seed_node_ids to not include lifted nodes as seeds
+                            # (they're context, not direct matches)
+                            pass  # seed_node_ids stays the same
 
-            # Step 2: Compute centrality on active subgraph
-            centrality_start = time.time()
-            active_node_ids = {node.id for node in nodes}
-            active_edges = filter_active_edges(self._get_edges(), active_node_ids)
-            centrality_scores = compute_centrality_metrics(nodes, active_edges)
-            timings["centrality"] = time.time() - centrality_start
+                    # Step 2: Compute centrality on active subgraph
+                    centrality_start = time.time()
+                    active_node_ids = {node.id for node in nodes}
+                    active_edges = filter_active_edges(self._get_edges(), active_node_ids)
+                    centrality_scores = compute_centrality_metrics(nodes, active_edges)
+                    timings["centrality"] = time.time() - centrality_start
 
-            # Step 3: Get similarity scores from retriever results
-            retrieval_results = self.retriever.retrieve_by_similarity(query_text, top_k)
-            similarity_scores = {node.id: score for node, score in retrieval_results}
+                    # Step 3: Get similarity scores from retriever results
+                    retrieval_results = self.retriever.retrieve_by_similarity(query_text, top_k)
+                    similarity_scores = {node.id: score for node, score in retrieval_results}
 
-            # Step 4: Assemble context (REFERENCE-AWARE IMPORTANCE!)
-            context, _context_blocks = assemble_context(
-                nodes,
-                seed_node_ids,
-                similarity_scores,
-                centrality_scores,
-                max_tokens,
-                edges=active_edges,
-            )
+                    # Step 4: Assemble context (REFERENCE-AWARE IMPORTANCE!)
+                    context, _context_blocks = assemble_context(
+                        nodes,
+                        seed_node_ids,
+                        similarity_scores,
+                        centrality_scores,
+                        max_tokens,
+                        edges=active_edges,
+                    )
 
-            # Step 5: Return context
-            answer = context
+                    # Step 5: Return context
+                    answer = context
 
-            # Step 6: Generate explanation (if requested, now context-based only)
-            explanation = None
-            if with_explanation:
-                context_nodes = [n for n in nodes if n.id in {n.id for n in nodes}][:30]
-                flat_centralities = flatten_centrality_scores(
-                    centrality_scores, "degree", DEFAULT_CENTRALITY_SCORE
-                )
-                explanation = generate_explanation(
-                    context_nodes,
-                    active_edges,
-                    similarity_scores,
-                    flat_centralities,
-                    set(seed_node_ids),
-                    answer,
-                )
+                    # Step 6: Generate explanation (if requested, now context-based only)
+                    explanation = None
+                    if with_explanation:
+                        context_nodes = [n for n in nodes if n.id in {n.id for n in nodes}][:30]
+                        flat_centralities = flatten_centrality_scores(
+                            centrality_scores, "degree", DEFAULT_CENTRALITY_SCORE
+                        )
+                        explanation = generate_explanation(
+                            context_nodes,
+                            active_edges,
+                            similarity_scores,
+                            flat_centralities,
+                            set(seed_node_ids),
+                            answer,
+                        )
 
-            # Build result
-            total_time = time.time() - start_time
+                    # Build result
+                    total_time = time.time() - start_time
 
-            return QueryResult(
-                query=query_text,
-                answer=answer,
-                context=context,
-                seed_nodes=seed_node_ids,
-                active_subgraph_size=len(nodes),
-                execution_time=total_time,
-                sparse_search_time=timings["sparse_search"],
-                graph_expansion_time=timings["graph_expansion"],
-                centrality_time=timings["centrality"],
-                explanation=explanation,
-            )
+                    return QueryResult(
+                        query=query_text,
+                        answer=answer,
+                        context=context,
+                        seed_nodes=seed_node_ids,
+                        active_subgraph_size=len(nodes),
+                        execution_time=total_time,
+                        sparse_search_time=timings["sparse_search"],
+                        graph_expansion_time=timings["graph_expansion"],
+                        centrality_time=timings["centrality"],
+                        explanation=explanation,
+                    )
 
-        except QueryError:
-            raise
-        except Exception as error:
-            raise QueryError(
-                "Query execution failed",
-                {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
-            ) from error
+                except QueryError:
+                    raise
+                except Exception as error:
+                    raise QueryError(
+                        "Query execution failed",
+                        {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
+                    ) from error
 
     async def query_async(
         self: "QueryEngine",
@@ -557,94 +570,105 @@ class QueryEngine:
         with_explanation: bool,
     ) -> QueryResult:
         """Internal async implementation without timeout wrapper."""
-        start_time = time.time()
-        timings = {}
+        with memory_guard(
+            operation_name=f"query_async[{query_text[:30]}]",
+            warning_threshold_mb=100,
+            critical_threshold_mb=250,
+        ):
+            with trace_operation(
+                "query_engine.query_async",
+                query_length=len(query_text),
+                top_k=top_k,
+                max_hops=max_hops,
+            ):
+                start_time = time.time()
+                timings = {}
 
-        try:
-            # Step 1: Sparse search + graph expansion (async)
-            retrieval_start = time.time()
-            nodes, seed_node_ids = await self.retriever.retrieve_async(
-                query_text, self._get_edges(), top_k, max_hops
-            )
-            timings["sparse_search"] = time.time() - retrieval_start
-            timings["graph_expansion"] = 0.0  # Included in retrieval
+                try:
+                    # Step 1: Sparse search + graph expansion (async)
+                    retrieval_start = time.time()
+                    nodes, seed_node_ids = await self.retriever.retrieve_async(
+                        query_text, self._get_edges(), top_k, max_hops
+                    )
+                    timings["sparse_search"] = time.time() - retrieval_start
+                    timings["graph_expansion"] = 0.0  # Included in retrieval
 
-            if not nodes:
-                raise QueryError("No relevant nodes found")
+                    if not nodes:
+                        raise QueryError("No relevant nodes found")
 
-            # Allow cancellation
-            await asyncio.sleep(0)
+                    # Allow cancellation
+                    await asyncio.sleep(0)
 
-            # Step 2: Compute centrality on active subgraph (ASYNC with multiprocessing)
-            centrality_start = time.time()
-            active_node_ids = {node.id for node in nodes}
-            active_edges = filter_active_edges(self._get_edges(), active_node_ids)
-            centrality_scores = await compute_centrality_metrics_async(nodes, active_edges)
-            timings["centrality"] = time.time() - centrality_start
+                    # Step 2: Compute centrality on active subgraph (ASYNC with multiprocessing)
+                    centrality_start = time.time()
+                    active_node_ids = {node.id for node in nodes}
+                    active_edges = filter_active_edges(self._get_edges(), active_node_ids)
+                    centrality_scores = await compute_centrality_metrics_async(nodes, active_edges)
+                    timings["centrality"] = time.time() - centrality_start
 
-            # Allow cancellation
-            await asyncio.sleep(0)
+                    # Allow cancellation
+                    await asyncio.sleep(0)
 
-            # Step 3: Get similarity scores from retriever results
-            retrieval_results = await self.retriever.retrieve_by_similarity_async(query_text, top_k)
-            similarity_scores = {node.id: score for node, score in retrieval_results}
+                    # Step 3: Get similarity scores from retriever results
+                    retrieval_results = await self.retriever.retrieve_by_similarity_async(query_text, top_k)
+                    similarity_scores = {node.id: score for node, score in retrieval_results}
 
-            # Step 4: Assemble context with hierarchical lifting
-            context, _context_blocks = assemble_context(
-                nodes,
-                seed_node_ids,
-                similarity_scores,
-                centrality_scores,
-                max_tokens,
-                enable_hierarchical_lifting=enable_hierarchical_lifting,
-                lift_levels=lift_levels,
-            )
+                    # Step 4: Assemble context with hierarchical lifting
+                    context, _context_blocks = assemble_context(
+                        nodes,
+                        seed_node_ids,
+                        similarity_scores,
+                        centrality_scores,
+                        max_tokens,
+                        enable_hierarchical_lifting=enable_hierarchical_lifting,
+                        lift_levels=lift_levels,
+                    )
 
-            # Step 5: Return context
-            answer = context
+                    # Step 5: Return context
+                    answer = context
 
-            # Step 6: Generate explanation (if requested)
-            explanation = None
-            if with_explanation:
-                context_nodes = [n for n in nodes if n.id in {n.id for n in nodes}][:30]
-                flat_centralities = flatten_centrality_scores(
-                    centrality_scores, "degree", DEFAULT_CENTRALITY_SCORE
-                )
-                explanation = generate_explanation(
-                    context_nodes,
-                    active_edges,
-                    similarity_scores,
-                    flat_centralities,
-                    set(seed_node_ids),
-                    answer,
-                )
+                    # Step 6: Generate explanation (if requested)
+                    explanation = None
+                    if with_explanation:
+                        context_nodes = [n for n in nodes if n.id in {n.id for n in nodes}][:30]
+                        flat_centralities = flatten_centrality_scores(
+                            centrality_scores, "degree", DEFAULT_CENTRALITY_SCORE
+                        )
+                        explanation = generate_explanation(
+                            context_nodes,
+                            active_edges,
+                            similarity_scores,
+                            flat_centralities,
+                            set(seed_node_ids),
+                            answer,
+                        )
 
-            # Build result
-            total_time = time.time() - start_time
+                    # Build result
+                    total_time = time.time() - start_time
 
-            return QueryResult(
-                query=query_text,
-                answer=answer,
-                context=context,
-                seed_nodes=seed_node_ids,
-                active_subgraph_size=len(nodes),
-                execution_time=total_time,
-                sparse_search_time=timings["sparse_search"],
-                graph_expansion_time=timings["graph_expansion"],
-                centrality_time=timings["centrality"],
-                explanation=explanation,
-            )
+                    return QueryResult(
+                        query=query_text,
+                        answer=answer,
+                        context=context,
+                        seed_nodes=seed_node_ids,
+                        active_subgraph_size=len(nodes),
+                        execution_time=total_time,
+                        sparse_search_time=timings["sparse_search"],
+                        graph_expansion_time=timings["graph_expansion"],
+                        centrality_time=timings["centrality"],
+                        explanation=explanation,
+                    )
 
-        except QueryError:
-            raise
-        except asyncio.CancelledError:
-            # Log cancellation and re-raise
-            raise
-        except Exception as error:
-            raise QueryError(
-                "Query execution failed",
-                {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
-            ) from error
+                except QueryError:
+                    raise
+                except asyncio.CancelledError:
+                    # Log cancellation and re-raise
+                    raise
+                except Exception as error:
+                    raise QueryError(
+                        "Query execution failed",
+                        {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
+                    ) from error
 
     async def analyze_impact_async(
         self: "QueryEngine",

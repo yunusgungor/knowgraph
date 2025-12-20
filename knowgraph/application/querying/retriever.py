@@ -26,6 +26,8 @@ from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
 from knowgraph.infrastructure.search.sparse_index import SparseIndex
 from knowgraph.infrastructure.storage.filesystem import read_node_json
 from knowgraph.shared.exceptions import QueryError
+from knowgraph.shared.memory_profiler import memory_guard
+from knowgraph.shared.tracing import trace_operation
 
 
 class QueryRetriever:
@@ -98,53 +100,64 @@ class QueryRetriever:
             QueryError: If retrieval fails
 
         """
-        try:
-            # Step 1: Generate query embedding & Search
-            # Sparse Retrieval
-            search_text = query_text
+        with memory_guard(
+            operation_name=f"retrieve[{query_text[:30]}]",
+            warning_threshold_mb=80,
+            critical_threshold_mb=200,
+        ):
+            with trace_operation(
+                "query_retriever.retrieve",
+                query_length=len(query_text),
+                top_k=top_k,
+                max_hops=max_hops,
+            ):
+                try:
+                    # Step 1: Generate query embedding & Search
+                    # Sparse Retrieval
+                    search_text = query_text
 
-            if hasattr(self, "expander") and self.expander:
-                expansion_terms = self.expander.expand_query(query_text)
-                if expansion_terms:
-                    # Append expansion terms to original query for broader token match
-                    search_text = f"{query_text} {' '.join(expansion_terms)}"
+                    if hasattr(self, "expander") and self.expander:
+                        expansion_terms = self.expander.expand_query(query_text)
+                        if expansion_terms:
+                            # Append expansion terms to original query for broader token match
+                            search_text = f"{query_text} {' '.join(expansion_terms)}"
 
-            if use_code_search:
-                query_tokens = self.sparse_embedder.embed_code(search_text)
-            else:
-                query_tokens = self.sparse_embedder.embed_text(search_text)
+                    if use_code_search:
+                        query_tokens = self.sparse_embedder.embed_code(search_text)
+                    else:
+                        query_tokens = self.sparse_embedder.embed_text(search_text)
 
-            results = self.sparse_index.search(query_tokens, top_k)
-            # results is list of (doc_id, score) where doc_id is str
-            seed_node_ids = [UUID(node_id) for node_id, _ in results]
+                    results = self.sparse_index.search(query_tokens, top_k)
+                    # results is list of (doc_id, score) where doc_id is str
+                    seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
-            # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
-            expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
+                    # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
+                    expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
 
-            # Step 3: Load nodes CONCURRENTLY (using thread pool for I/O)
-            from concurrent.futures import ThreadPoolExecutor, as_completed
+                    # Step 3: Load nodes CONCURRENTLY (using thread pool for I/O)
+                    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-            nodes = []
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                # Submit all node loading tasks
-                future_to_id = {
-                    executor.submit(read_node_json, node_id, self.graph_store_path): node_id
-                    for node_id in expanded_node_ids
-                }
+                    nodes = []
+                    with ThreadPoolExecutor(max_workers=10) as executor:
+                        # Submit all node loading tasks
+                        future_to_id = {
+                            executor.submit(read_node_json, node_id, self.graph_store_path): node_id
+                            for node_id in expanded_node_ids
+                        }
 
-                # Collect results as they complete
-                for future in as_completed(future_to_id):
-                    node = future.result()
-                    if node:
-                        nodes.append(node)
+                        # Collect results as they complete
+                        for future in as_completed(future_to_id):
+                            node = future.result()
+                            if node:
+                                nodes.append(node)
 
-            return nodes, seed_node_ids
+                    return nodes, seed_node_ids
 
-        except QueryError:
-            raise
-        except Exception as error:
-            raise QueryError(
-                f"Failed to retrieve nodes: {error!s}",
+                except QueryError:
+                    raise
+                except Exception as error:
+                    raise QueryError(
+                        f"Failed to retrieve nodes: {error!s}",
                 {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
             ) from error
 
@@ -228,41 +241,52 @@ class QueryRetriever:
             QueryError: If retrieval fails after retries
 
         """
-        try:
-            # Step 1: Generate query embedding & Search
-            search_text = query_text
+        with memory_guard(
+            operation_name=f"retrieve_async[{query_text[:30]}]",
+            warning_threshold_mb=80,
+            critical_threshold_mb=200,
+        ):
+            with trace_operation(
+                "query_retriever.retrieve_async",
+                query_length=len(query_text),
+                top_k=top_k,
+                max_hops=max_hops,
+            ):
+                try:
+                    # Step 1: Generate query embedding & Search
+                    search_text = query_text
 
-            # Async query expansion if available
-            if hasattr(self, "expander") and self.expander:
-                expansion_terms = await self.expander.expand_query_async(query_text)
-                if expansion_terms:
-                    search_text = f"{query_text} {' '.join(expansion_terms)}"
+                    # Async query expansion if available
+                    if hasattr(self, "expander") and self.expander:
+                        expansion_terms = await self.expander.expand_query_async(query_text)
+                        if expansion_terms:
+                            search_text = f"{query_text} {' '.join(expansion_terms)}"
 
-            # Embedding generation (sync - fast enough)
-            if use_code_search:
-                query_tokens = self.sparse_embedder.embed_code(search_text)
-            else:
-                query_tokens = self.sparse_embedder.embed_text(search_text)
+                    # Embedding generation (sync - fast enough)
+                    if use_code_search:
+                        query_tokens = self.sparse_embedder.embed_code(search_text)
+                    else:
+                        query_tokens = self.sparse_embedder.embed_text(search_text)
 
-            # Search ASYNC for better performance with parallel term processing
-            results = await self.sparse_index.search_async(query_tokens, top_k)
-            seed_node_ids = [UUID(node_id) for node_id, _ in results]
+                    # Search ASYNC for better performance with parallel term processing
+                    results = await self.sparse_index.search_async(query_tokens, top_k)
+                    seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
-            # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
-            expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
+                    # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
+                    expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
 
-            # Step 3: Load nodes CONCURRENTLY
-            nodes = await self._load_nodes_async(expanded_node_ids)
+                    # Step 3: Load nodes CONCURRENTLY
+                    nodes = await self._load_nodes_async(expanded_node_ids)
 
-            return nodes, seed_node_ids
+                    return nodes, seed_node_ids
 
-        except QueryError:
-            raise
-        except Exception as error:
-            raise QueryError(
-                f"Failed to retrieve nodes: {error!s}",
-                {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
-            ) from error
+                except QueryError:
+                    raise
+                except Exception as error:
+                    raise QueryError(
+                        f"Failed to retrieve nodes: {error!s}",
+                        {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
+                    ) from error
 
     async def _load_nodes_async(self: "QueryRetriever", node_ids: list[UUID]) -> list[Node]:
         """Load multiple nodes concurrently.

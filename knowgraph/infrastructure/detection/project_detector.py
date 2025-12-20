@@ -50,6 +50,15 @@ def detect_git_root(start_path: Path | None = None) -> Path | None:
         start_path = Path.cwd()
 
     try:
+        # Ensure start_path exists and is a directory
+        if not start_path.exists():
+            logger.warning(f"Start path does not exist: {start_path}")
+            return None
+            
+        if not start_path.is_dir():
+            start_path = start_path.parent
+            logger.debug(f"Start path is not a directory, using parent: {start_path}")
+
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             cwd=str(start_path),
@@ -61,8 +70,19 @@ def detect_git_root(start_path: Path | None = None) -> Path | None:
 
         if result.returncode == 0:
             git_root = Path(result.stdout.strip())
-            logger.info(f"Detected git root: {git_root}")
-            return git_root
+            # Validate that the detected git root is reasonable
+            if git_root.exists() and git_root.is_dir():
+                logger.info(f"✓ Git root detected: {git_root}")
+                return git_root
+            else:
+                logger.warning(f"Git returned invalid root: {git_root}")
+                return None
+        else:
+            logger.debug(
+                f"Not in a git repository (returncode={result.returncode}): {start_path}"
+            )
+            if result.stderr:
+                logger.debug(f"Git error: {result.stderr.strip()}")
 
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
         logger.debug(f"Git root detection failed: {e}")
@@ -88,19 +108,27 @@ def detect_project_markers(start_path: Path | None = None) -> Path | None:
         start_path = Path.cwd()
 
     current = start_path.resolve()
+    searched_paths = []
 
     # Search upward through parent directories
     while current != current.parent:
+        searched_paths.append(str(current))
+        
         # Check for any marker file in current directory
         for marker in PROJECT_MARKERS:
             marker_path = current / marker
             if marker_path.exists():
-                logger.info(f"Detected project root via marker '{marker}': {current}")
+                logger.info(f"✓ Project marker '{marker}' found at: {current}")
                 return current
 
         # Move to parent directory
         current = current.parent
 
+    logger.debug(
+        f"No project markers found in paths: {', '.join(searched_paths[:3])}..."
+        if len(searched_paths) > 3
+        else f"No project markers found in paths: {', '.join(searched_paths)}"
+    )
     return None
 
 
@@ -224,43 +252,44 @@ def detect_project_root(start_path: Path | None = None, use_llm: bool = True) ->
     if start_path is None:
         start_path = Path.cwd()
 
-    logger.info(f"Detecting project root from: {start_path}")
+    logger.info(f"🔍 Detecting project root from: {start_path}")
 
     # Strategy 1: Git root
     git_root = detect_git_root(start_path)
     if git_root:
+        logger.info(f"✓ Using git root: {git_root}")
         return git_root
 
     # Strategy 2: Project markers
     marker_root = detect_project_markers(start_path)
     if marker_root:
+        logger.info(f"✓ Using marker-detected root: {marker_root}")
         return marker_root
 
     # Strategy 3: LLM analysis (async, so we'll skip in sync context)
     # This will be called from async context in server.py
     if use_llm:
-        logger.info("LLM-based detection requires async context, skipping in sync detection")
+        logger.info("ℹ️ LLM-based detection requires async context, will run in background")
 
     # Strategy 4: Fallback to current working directory
-    # Ensure we never use root directory as project root
+    # IMPORTANT: Never fall back to home directory, use cwd instead
     fallback = start_path.resolve()
 
+    # If start_path is root directory, use cwd
     if fallback == fallback.parent:  # This means we're at root (/)
-        # Try cwd first
-        cwd = Path.cwd().resolve()
-        if cwd != cwd.parent:  # cwd is not root
-            fallback = cwd
-            logger.warning(
-                "Detected root directory as project root, falling back to cwd: %s",
-                fallback,
-            )
-        else:
-            # cwd is also root, use home directory
-            fallback = Path.home()
-            logger.warning(
-                "Both start_path and cwd are root directory, falling back to home: %s",
-                fallback,
-            )
+        fallback = Path.cwd().resolve()
+        logger.warning(
+            f"⚠️ Start path was root directory, using cwd instead: {fallback}",
+        )
+        
+    # If cwd is also root or home, use a sensible default
+    if fallback == fallback.parent or fallback == Path.home():
+        # Create a default workspace directory in home
+        fallback = Path.home() / "workspace"
+        fallback.mkdir(exist_ok=True)
+        logger.warning(
+            f"⚠️ No valid project root found, using default workspace: {fallback}",
+        )
 
-    logger.info(f"No project root detected, using fallback: {fallback}")
+    logger.info(f"→ Fallback to: {fallback}")
     return fallback

@@ -18,8 +18,14 @@ Bu belge, yapay zeka ajanlarının ve geliştiricilerin KnowGraph MCP Sunucusunu
 
 #### 🚀 1. Temel Prensipler
 ##### 1.1 Varsayılan Davranış
-*   **Varsayılan graph_path** : `/Users/yunusgungor/knowrag/graphstore` yolunu kullanır.
+*   **Akıllı Proje Root Tespiti**: KnowGraph server başlatıldığında otomatik olarak proje root dizinini tespit eder:
+    1. **Git Root Detection**: En hızlı ve güvenilir - git repository root'u tespit eder
+    2. **Project Marker Detection**: pyproject.toml, package.json, Cargo.toml gibi marker dosyaları arar
+    3. **LLM-Based Detection** (Background): Server başladıktan sonra, LLM kullanarak proje yapısını analiz eder ve tespiti iyileştirir
+    4. **Fallback**: Tüm yöntemler başarısız olursa, current working directory kullanılır
+*   **Varsayılan graph_path** : Tespit edilen proje root'una göre `./graphstore` yolunu kullanır.
 *   **Geçersiz Kılma** : Farklı bir konum kullanmak için `graph_path` parametresini açıkça ayarlayın.
+*   **Cache Mekanizması**: Tespit edilen proje root 1 saat boyunca cache'lenir, tekrarlı tespit maliyetini ortadan kaldırır.
 ##### 1.2 Uçuş Öncesi Kontroller
 *   Karmaşık işlemlerden önce **daima doğrulama yapın**: `knowgraph_validate`.
 *   Grafik boyutunu anlamak için **istatistikleri kontrol edin**: `knowgraph_get_stats`.
