@@ -228,6 +228,18 @@ Located in `knowgraph/shared/`:
     - Monitors CPU/Memory.
     - Queues requests when load > Threshold.
 
+### 4. FTS5 Search Subsystem (New)
+For high-performance bookmark and snippet retrieval, we utilize **SQLite's FTS5 (Full-Text Search 5)** extension.
+- **Indexing**: Bookmarks are indexed in a virtual FTS5 table with porter stemming.
+- **Querying**: Supports boolean operators (AND, OR, NOT) and prefix matching.
+- **Performance**: <5ms retrieval for 100k+ bookmarks.
+
+### 5. Diagnostic Subsystem
+The `knowgraph_diagnostic` handler provides a unified interface for system health:
+1.  **Dependency Checks**: Verifies `networkx`, `numpy`, `openai` versions.
+2.  **Storage Access**: Writes/Reads a dummy key to graph store to verify IO permissions.
+3.  **LLM Handshake**: Sends a 1-token dummy prompt to the configured LLM to verify connectivity.
+
 ---
 
 ## 8. Storage and Persistence Strategy

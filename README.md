@@ -95,6 +95,12 @@ KnowGraph is built for production with enterprise-grade resilience patterns:
 *   **🔄 Retry Logic:** Exponential backoff with jitter.
 *   **🚦 Request Throttling:** Adaptive concurrency control.
 *   **📋 API Versioning:** Semantic versioning with automatic negotiation.
+*   **🏥 Safe Mode & Diagnostics:** Self-healing system capabilities with `knowgraph_diagnostic`.
+
+### 5. ⚡ Enhanced Search & Indexing (v0.6.2)
+*   **📚 FTS5 Bookmark Search:** Lightning-fast full-text search for your tagged snippets and bookmarks.
+*   **🏎️ Smart Caching:** Intelligent caching for indexing results, dramatically reducing re-indexing times.
+*   **🔄 Progress Notifications:** Real-time feedback for long-running operations via MCP.
 
 ### Core Capabilities
 

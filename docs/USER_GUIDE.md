@@ -197,6 +197,7 @@ KnowGraph exposes a comprehensive suite of tools to your AI assistant. Here is t
 | `knowgraph_version_info` | Get detailed metadata for a specific version ID. |
 | `knowgraph_diff_versions` | Compare nodes/edges between two commits. |
 | `knowgraph_rollback` | Revert graph state to a previous snapshot. |
+| `knowgraph_diagnostic` | Run system health checks (Graph Store, LLM, Config). |
 
 ---
 
@@ -336,6 +337,19 @@ The server exposes Prometheus-compatible metrics. You can monitor:
 - **Indexing Speed**: `knowgraph_indexing_duration_seconds`
 - **Query Latency**: `knowgraph_query_latency_seconds`
 - **Error Rates**: `knowgraph_request_errors_total`
+
+### 12.3 System Health (Diagnostics)
+You can run a comprehensive health check of the KnowGraph system using the `knowgraph_diagnostic` tool or command.
+
+This checks:
+- **Graph Store**: Integrity and accessibility of the database.
+- **LLM Provider**: Connection status and API key validity (OpenAI/Anthropic).
+- **Configuration**: Validity of the current environment setup.
+
+```bash
+# Run via MCP
+knowgraph_diagnostic()
+```
 
 ---
 
