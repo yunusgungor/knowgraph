@@ -25,31 +25,43 @@ def sample_code_nodes():
     return [
         Node(
             id="node-1",
+            hash="a" * 40,
+            title="getUserById",
             type="code",
             content='def getUserById(user_id):\n    """Fetch user by ID."""\n    return db.query(user_id)',
             path="src/api/auth.py",
-            created_at=datetime.now(timezone.utc),
+            token_count=50,
+            created_at=int(datetime.now(timezone.utc).timestamp()),
         ),
         Node(
             id="node-2",
+            hash="b" * 40,
+            title="UserClass",
             type="code",
             content='class UserClass:\n    """User model."""\n    def __init__(self, name):\n        self.name = name',
             path="src/models/user.py",
-            created_at=datetime.now(timezone.utc),
+            token_count=40,
+            created_at=int(datetime.now(timezone.utc).timestamp()),
         ),
         Node(
             id="node-3",
+            hash="c" * 40,
+            title="authenticate",
             type="code",
             content='function authenticate(token) {\n    return verifyJWT(token);\n}',
             path="src/utils/auth.js",
-            created_at=datetime.now(timezone.utc),
+            token_count=30,
+            created_at=int(datetime.now(timezone.utc).timestamp()),
         ),
         Node(
             id="node-4",
+            hash="d" * 40,
+            title="Database Config",
             type="code",
             content="# Database configuration\nDB_HOST = 'localhost'\nDB_PORT = 5432",
             path="config/database.py",
-            created_at=datetime.now(timezone.utc),
+            token_count=20,
+            created_at=int(datetime.now(timezone.utc).timestamp()),
         ),
     ]
 
@@ -66,10 +78,13 @@ def sample_conversation_node():
 
     return Node(
         id="conv-1",
+        hash="e" * 40,
+        title="Conversation about auth",
         type="conversation",
         content=conversation_content,
         path="conversations/conv-001.md",
-        created_at=datetime.now(timezone.utc),
+        token_count=100,
+        created_at=int(datetime.now(timezone.utc).timestamp()),
     )
 
 
@@ -235,10 +250,13 @@ def test_create_conversation_reference_edges_no_references(sample_code_nodes):
     """Test creating edges when conversation has no code references."""
     conv_node = Node(
         id="conv-no-refs",
+        hash="f" * 40,
+        title="General discussion",
         type="conversation",
         content="Just a general discussion without any code references.",
         path="conversations/general.md",
-        created_at=datetime.now(timezone.utc),
+        token_count=50,
+        created_at=int(datetime.now(timezone.utc).timestamp()),
     )
 
     edges = create_conversation_reference_edges(conv_node, sample_code_nodes)
@@ -363,10 +381,13 @@ def test_link_with_bookmark_node(sample_code_nodes):
     """Test linking with a bookmark node instead of conversation."""
     bookmark_node = Node(
         id="bookmark-1",
+        hash="g" * 40,
+        title="Important bookmark",
         type="tagged_snippet",
         content="Important: Check `getUserById` in auth.py for authentication logic",
         path="bookmarks/important.md",
-        created_at=datetime.now(timezone.utc),
+        token_count=60,
+        created_at=int(datetime.now(timezone.utc).timestamp()),
         metadata={"tag": "authentication", "importance": "high"},
     )
 
@@ -404,18 +425,24 @@ def test_edge_score_confidence():
     """Test that reference edges have high confidence scores."""
     conv_node = Node(
         id="conv-test",
+        hash="h" * 40,
+        title="Test conversation",
         type="conversation",
         content="Modified `test.py` file",
         path="conv.md",
-        created_at=datetime.now(timezone.utc),
+        token_count=20,
+        created_at=int(datetime.now(timezone.utc).timestamp()),
     )
 
     code_node = Node(
         id="code-test",
+        hash="i" * 40,
+        title="test function",
         type="code",
         content="def test(): pass",
         path="test.py",
-        created_at=datetime.now(timezone.utc),
+        token_count=15,
+        created_at=int(datetime.now(timezone.utc).timestamp()),
     )
 
     edges = create_conversation_reference_edges(conv_node, [code_node])

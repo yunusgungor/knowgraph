@@ -37,9 +37,9 @@ def extract_code_references(conversation_content: str) -> list[str]:
     backtick_matches = re.findall(backtick_pattern, conversation_content)
     references.extend(backtick_matches)
 
-    # 2. Extract file paths
-    # src/auth.py, ./utils/helper.js, /absolute/path.py
-    file_pattern = r"(?:^|[\s(])((?:\.?\.?/)?[a-zA-Z0-9_\-\/]+\.[a-zA-Z]{1,4})(?:[\s),]|$)"
+    # 2. Extract file paths (with optional line numbers)
+    # src/auth.py, ./utils/helper.js, auth.py:45, user.py:123
+    file_pattern = r"(?:^|[\s(])((?:\.?\.?/)?[a-zA-Z0-9_\-\/]+\.[a-zA-Z]{1,4})(?::\d+)?(?:[\s),]|$)"
     file_matches = re.findall(file_pattern, conversation_content)
     references.extend(file_matches)
 
