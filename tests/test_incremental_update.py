@@ -43,7 +43,7 @@ def mock_storage():
         patch(
             "knowgraph.application.evolution.incremental_update.write_manifest"
         ) as mock_write_manifest,
-        patch("knowgraph.infrastructure.storage.filesystem.write_all_edges") as mock_write_edges,
+        patch("knowgraph.infrastructure.storage.filesystem.write_all_edges"),
     ):  # Mocking conditional import? No, it's imported at top (no, inside func).
         # Ah, import inside function: from knowgraph.infrastructure.storage.filesystem import write_all_edges
         # This mocks the module level if patched correctly.

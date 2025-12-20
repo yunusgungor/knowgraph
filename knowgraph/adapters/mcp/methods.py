@@ -1,13 +1,13 @@
 import asyncio
 import contextlib
 import sys
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from pathlib import Path
 
 import mcp.types as types
 
 from knowgraph.adapters.cli.index_command import run_index
-from knowgraph.adapters.cli.update_command import run_update
 from knowgraph.application.evolution.incremental_update import (
     apply_incremental_update,
     detect_delta,
@@ -34,6 +34,7 @@ async def index_graph(
     include_patterns: list[str] | None = None,
     exclude_patterns: list[str] | None = None,
     access_token: str | None = None,
+    progress_callback: Callable[[str, int, int, str], Awaitable[None]] | None = None,
 ) -> list[types.TextContent]:
     """Handles the indexing process for markdown files, repositories, and code directories.
 
@@ -42,6 +43,9 @@ async def index_graph(
     - Git repository URLs (GitHub, GitLab, Bitbucket)
     - Code directories (with automatic conversion to markdown)
     - Resume mode and incremental updates
+
+    Args:
+        progress_callback: Optional callback for progress updates (stage, current, total, message)
     """
     from knowgraph.infrastructure.parsing.repo_ingestor import detect_source_type
 
@@ -63,7 +67,7 @@ async def index_graph(
     # Redirect stdout to stderr to prevent polluting the MCP JSON-RPC stream
     with contextlib.redirect_stdout(sys.stderr):
         try:
-            manifest_path = graph_path / "metadata" / "manifest.json"
+            graph_path / "metadata" / "manifest.json"
 
             if resume_mode and source_type != "repository":
                 # Resume mode only works for local files/directories
@@ -113,43 +117,38 @@ async def index_graph(
                         )
                     ]
 
-            # Standard indexing or update
-            if manifest_path.exists() and source_type != "repository":
-                await run_update(
-                    input_path=input_path,
-                    graph_store=str(graph_path),
-                    gc=gc,
-                    provider=provider,
-                )
-                return [
-                    types.TextContent(
-                        type="text",
-                        text=f"Successfully added/updated {input_path} in knowledge graph.",
-                    )
-                ]
-            else:
-                # Full indexing (supports repositories, code directories, and markdown)
-                await run_index(
-                    input_path=input_path,
-                    output_path=str(graph_path),
-                    provider=provider,
-                    include_patterns=include_patterns,
-                    exclude_patterns=exclude_patterns,
-                    access_token=access_token,
-                )
+            # Use run_index for all cases - it has efficient hash checking
+            # and only processes changed files at manifest level
+            await run_index(
+                input_path=input_path,
+                output_path=str(graph_path),
+                progress_callback=progress_callback,
+                provider=provider,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns,
+                access_token=access_token,
+            )
 
-                source_desc = (
-                    "repository"
-                    if source_type == "repository"
-                    else "code directory" if source_type == "directory" else "markdown files"
-                )
-
-                return [
-                    types.TextContent(
-                        type="text",
-                        text=f"Successfully initialized knowledge graph from {source_desc}: {input_path}.",
+            source_desc = (
+                "repository"
+                if source_type == "repository"
+                else (
+                    "code directory"
+                    if source_type == "directory"
+                    else (
+                        "conversation history"
+                        if source_type == "conversation"
+                        else "markdown files"
                     )
-                ]
+                )
+            )
+
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"Successfully indexed/updated {source_desc}: {input_path}.",
+                ),
+            ]
 
         except Exception as e:
             import traceback
@@ -163,8 +162,7 @@ async def index_graph(
 def analyze_path_impact_report(
     element: str, graph_path: Path, max_hops: int
 ) -> list[types.TextContent]:
-    """Performs impact analysis based on file paths.
-    """
+    """Performs impact analysis based on file paths."""
     with contextlib.redirect_stdout(sys.stderr):
         all_node_ids = list_all_nodes(graph_path)
         all_nodes = []

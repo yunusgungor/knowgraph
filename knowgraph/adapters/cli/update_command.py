@@ -1,25 +1,16 @@
-"""CLI command for incremental graph updates."""
+"""CLI command for incremental graph updates.
+
+Note: This now delegates to run_index() for better performance.
+"""
 
 import asyncio
 import sys
-import time
-from dataclasses import replace
 from pathlib import Path
 
 import click
 
-from knowgraph.application.evolution.incremental_update import (
-    apply_incremental_update,
-    detect_delta,
-)
-from knowgraph.application.indexing.graph_builder import normalize_markdown_content
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.domain.intelligence.provider import IntelligenceProvider
-from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
-from knowgraph.infrastructure.parsing.hasher import hash_content
-from knowgraph.infrastructure.storage.manifest import (
-    read_manifest as load_manifest,
-)
 from knowgraph.shared.security import validate_path
 
 
@@ -29,18 +20,23 @@ async def run_update(
     gc: bool = False,
     verbose: bool = False,
     provider: IntelligenceProvider | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> None:
-    """Incrementally update graph with changes (AI-Driven)."""
-    start_time = time.time()
+    """Incrementally update graph with changes (AI-Driven).
 
-    # Validate and resolve paths
-    # Allow directory or file input for update
+    Note: This now uses run_index() which has efficient manifest-level
+    hash checking and only processes changed files.
+    """
+    # Import run_index here to avoid circular imports
+    from knowgraph.adapters.cli.index_command import run_index
+
+    # Validate path first
     input_path_obj = validate_path(input_path, must_exist=True, must_be_file=False)
     graph_store_path = Path(graph_store)
 
-    # Load manifest
-    manifest = load_manifest(graph_store_path)
-    if not manifest:
+    # Check if graph exists
+    manifest_path = graph_store_path / "metadata" / "manifest.json"
+    if not manifest_path.exists():
         click.echo(
             f"Error: No existing graph found at {graph_store_path}. "
             "Run 'knowgraph index' first.",
@@ -48,92 +44,22 @@ async def run_update(
         )
         sys.exit(2)
 
-    files_to_process = []
-    if input_path_obj.is_dir():
-        import glob
+    if verbose:
+        click.echo(f"Updating graph from {input_path}...")
+        click.echo("Note: Using efficient manifest-level hash checking.")
 
-        files_to_process = sorted(
-            [Path(p) for p in glob.glob(str(input_path_obj / "**/*.md"), recursive=True)]
-        )
-    else:
-        files_to_process = [input_path_obj]
-
-    if not files_to_process:
-        if verbose:
-            click.echo("No files to update.")
-        return
+    # Use run_index which has efficient hash checking
+    # It will automatically skip unchanged files at manifest level
+    await run_index(
+        input_path=str(input_path_obj),
+        output_path=graph_store,
+        verbose=verbose,
+        provider=provider,
+        exclude_patterns=exclude_patterns or [],
+    )
 
     if verbose:
-        click.echo(f"Updating graph from {input_path_obj} ({len(files_to_process)} files)...")
-
-    # Initialize stats
-    total_added = 0
-    total_modified = 0
-    total_deleted = 0
-
-    # Smart/AI Mode (Default)
-    if not provider:
-        provider = OpenAIProvider()
-
-    for input_file in files_to_process:
-        try:
-            # Load new content
-            with open(input_file, encoding="utf-8") as file:
-                new_content = file.read()
-
-            normalized_content = normalize_markdown_content(new_content)
-            file_hash = hash_content(normalized_content)
-
-            # Detect changes
-            delta = detect_delta(manifest, new_content, str(input_file), graph_store_path)
-
-            if not delta.added_nodes and not delta.deleted_node_ids and not delta.modified_nodes:
-                continue
-
-            if verbose:
-                click.echo(
-                    f"✓ {input_file.name}: "
-                    f"{len(delta.added_nodes)} added, "
-                    f"{len(delta.deleted_node_ids)} deleted"
-                )
-
-            # Process added nodes with AI
-            if delta.added_nodes:
-                tasks = []
-                for node in delta.added_nodes:
-                    tasks.append(provider.extract_entities(node.content))
-
-                results = await asyncio.gather(*tasks)
-
-                enriched_nodes = []
-                for node, entities in zip(delta.added_nodes, results):
-                    new_node = replace(node, metadata={"entities": [e._asdict() for e in entities]})
-                    enriched_nodes.append(new_node)
-
-                delta.added_nodes = enriched_nodes
-                # For now assume modified = added logic
-                delta.modified_nodes = enriched_nodes
-
-            # Apply update with Smart support
-            manifest = apply_incremental_update(
-                delta, manifest, file_hash, str(input_file), graph_store_path, gc
-            )
-
-            total_added += len(delta.added_nodes)
-            total_deleted += len(delta.deleted_node_ids)
-            # track total_modified if needed
-
-        except Exception as e:
-            click.echo(f"Error updating file {input_file}: {e}", err=True)
-            if verbose:
-                import traceback
-
-                traceback.print_exc()
-            continue
-
-    elapsed = time.time() - start_time
-    click.echo(f"\nUpdate completed in {elapsed:.1f}s")
-    click.echo(f"Total: {total_added} added, {total_deleted} deleted nodes")
+        click.echo("✓ Update completed using manifest-level incremental indexing.")
 
 
 @click.command()

@@ -31,20 +31,21 @@ class RateLimiter:
                 if wait_seconds > 0:
                     await asyncio.sleep(wait_seconds)
 
-            # Check if we are close to limits
-            # Threshold: < 2 requests or < 1000 tokens
-            # Check if we are close to limits
-            # Threshold: < 2 requests or < 1000 tokens
+            # More conservative thresholds to avoid rate limits
+            # Wait if: < 5 requests remaining OR < 5000 tokens remaining
             if (
-                self._remaining_requests < 2 or self._remaining_tokens < 1000
+                self._remaining_requests < 5 or self._remaining_tokens < 5000
             ) and self._reset_time > now:
                 # If we have a reset time, wait for it
                 # Wait slightly more than needed to be safe
-                wait_seconds = (self._reset_time - now) + 1.0
+                wait_seconds = (self._reset_time - now) + 2.0
                 # Cap max wait to avoid hanging forever on bad headers
-                wait_seconds = min(wait_seconds, 20.0)
+                wait_seconds = min(wait_seconds, 30.0)
                 if wait_seconds > 0:
                     await asyncio.sleep(wait_seconds)
+
+            # Add small delay between all requests (rate smoothing)
+            await asyncio.sleep(0.1)
 
     async def update(self, headers: Any) -> None:
         """Update limits from response headers."""
@@ -97,4 +98,5 @@ class RateLimiter:
     async def trigger_backoff(self) -> None:
         """Manually trigger a backoff (e.g. on 429)."""
         async with self._lock:
-            self._backoff_time = time.time() + 5.0  # 5 seconds penalty
+            # Longer backoff for 429 errors (10 seconds)
+            self._backoff_time = time.time() + 10.0

@@ -5,7 +5,12 @@ from pathlib import Path
 from typing import Any
 
 
-def validate_path(path: str | Path, must_exist: bool = False, must_be_file: bool = False) -> Path:
+def validate_path(
+    path: str | Path,
+    must_exist: bool = False,
+    must_be_file: bool = False,
+    allowed_parent: Path | None = None,
+) -> Path:
     """Validate and sanitize file system path.
 
     Prevents directory traversal attacks and validates path constraints.
@@ -15,6 +20,7 @@ def validate_path(path: str | Path, must_exist: bool = False, must_be_file: bool
         path: Path to validate
         must_exist: Require path to exist
         must_be_file: Require path to be a file (not directory)
+        allowed_parent: Optional parent directory to restrict paths to (security boundary)
 
     Returns:
     -------
@@ -27,15 +33,19 @@ def validate_path(path: str | Path, must_exist: bool = False, must_be_file: bool
 
     """
     try:
-        # Convert to Path object
+        # Convert to Path object and resolve (follows symlinks, normalizes)
         validated_path = Path(path).resolve()
 
-        # Check for directory traversal attempts
-        if ".." in str(path):
-            raise ValueError("Path contains directory traversal (..) - potential security risk")
-
-        # Check for absolute paths outside allowed scope (implementation-specific)
-        # This can be customized based on deployment environment
+        # Security: Check if resolved path escapes allowed boundary
+        if allowed_parent:
+            allowed_parent_resolved = Path(allowed_parent).resolve()
+            try:
+                # Check if validated_path is within allowed_parent
+                validated_path.relative_to(allowed_parent_resolved)
+            except ValueError:
+                raise ValueError(
+                    f"Path escapes allowed directory: {validated_path} is not under {allowed_parent_resolved}"
+                )
 
         # Validate existence if required
         if must_exist and not validated_path.exists():
@@ -47,6 +57,8 @@ def validate_path(path: str | Path, must_exist: bool = False, must_be_file: bool
 
         return validated_path
 
+    except (ValueError, FileNotFoundError):
+        raise
     except Exception as error:
         raise ValueError(f"Invalid path: {path}") from error
 

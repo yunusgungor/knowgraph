@@ -13,10 +13,6 @@ class KnowGraphError(Exception):
         self.details = details or {}
 
 
-class ValidationError(KnowGraphError):
-    """Raised when input validation fails."""
-
-
 class StorageError(KnowGraphError):
     """Raised when storage operations fail."""
 
@@ -31,15 +27,3 @@ class QueryError(KnowGraphError):
 
 class EmbeddingError(KnowGraphError):
     """Raised when embedding generation fails."""
-
-
-class ConfigurationError(KnowGraphError):
-    """Raised when configuration is invalid."""
-
-
-class GraphConstructionError(KnowGraphError):
-    """Raised when graph construction fails."""
-
-
-class ExportError(KnowGraphError):
-    """Raised when export operations fail."""

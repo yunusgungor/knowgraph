@@ -76,12 +76,12 @@ async def test_index_graph_standard_update():
     # Simulate manifest exists -> run_update
     with (
         patch("pathlib.Path.exists", return_value=True),
-        patch("knowgraph.adapters.mcp.methods.run_update", new_callable=AsyncMock) as mock_run,
+        patch("knowgraph.adapters.mcp.methods.run_index", new_callable=AsyncMock) as mock_run,
         patch("knowgraph.adapters.mcp.methods.validate_path", side_effect=lambda p, **k: Path(p)),
     ):
 
         result = await index_graph("input.md", graph_path, provider, resume_mode=False, gc=False)
-        assert "Successfully added/updated" in result[0].text
+        assert "Successfully indexed/updated" in result[0].text
         mock_run.assert_called_once()
 
 
@@ -98,7 +98,7 @@ async def test_index_graph_standard_init():
     ):
 
         result = await index_graph("input.md", graph_path, provider, resume_mode=False, gc=False)
-        assert "Successfully initialized" in result[0].text
+        assert "Successfully indexed/updated" in result[0].text
         mock_run.assert_called_once()
 
 
@@ -106,7 +106,10 @@ async def test_index_graph_standard_init():
 async def test_index_graph_error():
     # Simulate exception during indexing
     with (
-        patch("knowgraph.infrastructure.parsing.repo_ingestor.detect_source_type", return_value="markdown"),
+        patch(
+            "knowgraph.infrastructure.parsing.repo_ingestor.detect_source_type",
+            return_value="markdown",
+        ),
         patch("knowgraph.adapters.mcp.methods.validate_path", return_value=Path("input.md")),
         patch("knowgraph.adapters.mcp.methods.run_index", side_effect=Exception("Boom")),
     ):

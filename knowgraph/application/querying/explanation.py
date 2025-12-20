@@ -271,7 +271,7 @@ def extract_reasoning_paths(
 def _generate_path_narrative(nodes: list[Node], edges: list[Edge]) -> str:
     """Generate human-readable narrative for reasoning path.
 
-    Example: "README.md → main.py [reference] → auth.py [hierarchy]"
+    Example: "README.md → main.py [reference: `authenticate`] → auth.py [hierarchy]"
 
     Args:
     ----
@@ -290,7 +290,15 @@ def _generate_path_narrative(nodes: list[Node], edges: list[Edge]) -> str:
 
     for i, edge in enumerate(edges):
         next_node = nodes[i + 1]
-        parts.append(f" → {next_node.title or next_node.path} [{edge.type}]")
+
+        # Enrich reference edges with symbol information
+        if edge.type == "reference" and edge.metadata and "symbol" in edge.metadata:
+            symbol = edge.metadata["symbol"]
+            edge_label = f"reference: `{symbol}`"
+        else:
+            edge_label = edge.type
+
+        parts.append(f" → {next_node.title or next_node.path} [{edge_label}]")
 
     return "".join(parts)
 

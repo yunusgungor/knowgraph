@@ -1,5 +1,7 @@
 import asyncio
-import json
+import logging
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -7,284 +9,196 @@ import mcp.types as types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
-from knowgraph.adapters.mcp.methods import analyze_path_impact_report, index_graph
+from knowgraph.adapters.mcp.diagnostic_handler import handle_diagnostic
+from knowgraph.adapters.mcp.handlers import (
+    handle_analyze_conversations,
+    handle_analyze_impact,
+    handle_batch_query,
+    handle_discover_conversations,
+    handle_get_stats,
+    handle_index,
+    handle_query,
+    handle_search_bookmarks,
+    handle_tag_snippet,
+    handle_validate,
+)
 from knowgraph.adapters.mcp.utils import get_llm_provider, resolve_graph_path
-from knowgraph.application.querying.query_engine import QueryEngine
-from knowgraph.application.querying.query_expansion import QueryExpander
+from knowgraph.adapters.mcp.version_handlers import (
+    handle_diff_versions,
+    handle_list_versions,
+    handle_rollback,
+    handle_version_info,
+)
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
-from knowgraph.domain.algorithms.graph_validator import validate_graph_consistency
-from knowgraph.infrastructure.storage.manifest import Manifest
+from knowgraph.shared.versioning import (
+    VersionStatus,
+    get_current_version,
+    register_version,
+)
 
 app = Server("knowgraph-mcp")
+logger = logging.getLogger(__name__)
 
-# Path to project root for resolving relative paths (defaults to current working directory)
-PROJECT_ROOT = Path.cwd()
+
+# Register API versions on module load
+def _register_api_versions():
+    """Register all KnowGraph API versions."""
+    now = datetime.now()
+
+    # Version 1.0.0 - Initial stable release
+    register_version(
+        version="1.0.0",
+        status=VersionStatus.STABLE,
+        release_date=now - timedelta(days=180),
+        features=[
+            "Basic query support",
+            "Graph indexing",
+            "Impact analysis",
+            "Graph validation",
+        ],
+    )
+
+    # Version 1.1.0 - Current stable with resilience patterns
+    register_version(
+        version="1.1.0",
+        status=VersionStatus.STABLE,
+        release_date=now,
+        features=[
+            "All 1.0.0 features",
+            "Circuit breaker pattern",
+            "Rate limiting",
+            "Request throttling",
+            "Retry logic with backoff",
+            "API versioning support",
+            "Batch query support",
+            "Conversation discovery",
+        ],
+    )
+
+    logger.info(f"Registered API versions, current: {get_current_version()}")
+
+
+_register_api_versions()
+
+# Cache for detected project root
+_PROJECT_ROOT_CACHE: dict[str, Any] = {
+    "root": None,
+    "timestamp": None,
+    "ttl": 3600,  # 1 hour cache
+}
+
+
+def _get_cached_project_root() -> Path | None:
+    """Get cached project root if still valid."""
+    if _PROJECT_ROOT_CACHE["root"] is None:
+        return None
+
+    elapsed = time.time() - _PROJECT_ROOT_CACHE["timestamp"]
+    if elapsed > _PROJECT_ROOT_CACHE["ttl"]:
+        logger.debug("Project root cache expired")
+        return None
+
+    logger.debug(f"Using cached project root: {_PROJECT_ROOT_CACHE['root']}")
+    return _PROJECT_ROOT_CACHE["root"]
+
+
+def _cache_project_root(root: Path) -> None:
+    """Cache the detected project root."""
+    _PROJECT_ROOT_CACHE["root"] = root
+    _PROJECT_ROOT_CACHE["timestamp"] = time.time()
+    logger.debug(f"Cached project root: {root}")
+
+
+def _detect_project_root_sync() -> Path:
+    """Detect project root synchronously (without LLM).
+
+    Uses fast heuristic methods:
+    1. Git repository root
+    2. Project marker files
+    3. Fallback to cwd
+    """
+    from knowgraph.infrastructure.detection.project_detector import detect_project_root
+
+    # Use sync detection (no LLM)
+    detected = detect_project_root(use_llm=False)
+    logger.info(f"Auto-detected project root: {detected}")
+    return detected
+
+
+def _get_project_root() -> Path:
+    """Get project root with auto-detection and caching.
+
+    Priority:
+    1. Cached detection result
+    2. Auto-detection (git root, marker files)
+    3. Fallback to current working directory
+    """
+    # 1. Check cache
+    cached_root = _get_cached_project_root()
+    if cached_root:
+        return cached_root
+
+    # 2. Auto-detect
+    detected_root = _detect_project_root_sync()
+    _cache_project_root(detected_root)
+    return detected_root
+
+
+# Path to project root for resolving relative paths
+# Automatically detected using git root, project markers, or falls back to cwd
+# Cached for 1 hour to avoid repeated detection
+PROJECT_ROOT = _get_project_root()
 
 
 @app.call_tool()  # type: ignore
 async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
+    """Route tool calls to appropriate handlers."""
+    provider = get_llm_provider(app)
+
     if name == "knowgraph_query":
-        query = arguments.get("query")
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-
-        provider = get_llm_provider(app)
-
-        if not query:
-            return [types.TextContent(type="text", text="Error: Query is required.")]
-
-        try:
-            # Initialize engine (retrieval + generation)
-            engine = QueryEngine(graph_path)
-
-            # Execute retrieval
-            top_k = arguments.get("top_k", 20)
-            max_hops = arguments.get("max_hops", 4)
-            with_explanation = arguments.get("with_explanation", False)
-            expand_query = arguments.get("expand_query", False)
-            max_tokens = arguments.get("max_tokens", 3000)
-            enable_hierarchical_lifting = arguments.get("enable_hierarchical_lifting", True)
-            lift_levels = arguments.get("lift_levels", 2)
-            system_prompt = arguments.get("system_prompt", None)
-
-            # Query Expansion (now supports generic provider)
-            if expand_query:
-                try:
-                    if provider:
-                        # Use generic provider for expansion
-                        expander = QueryExpander(intelligence_provider=provider)
-                        expansion_terms = await expander.expand_query_async(query)
-                        if expansion_terms:
-                            query = f"{query} {' '.join(expansion_terms)}"
-                    else:
-                        # Fall back to OpenAI env vars
-                        import os
-
-                        if os.getenv("KNOWGRAPH_API_KEY"):
-                            llm_model = os.getenv(
-                                "KNOWGRAPH_LLM_MODEL", "amazon/nova-2-lite-v1:free"
-                            )
-                            expander = QueryExpander(provider="openai", model=llm_model)
-                            expansion_terms = expander.expand_query(query)
-                            if expansion_terms:
-                                query = f"{query} {' '.join(expansion_terms)}"
-                except Exception:
-                    pass
-
-            result = await engine.query_async(
-                query,
-                top_k=top_k,
-                max_hops=max_hops,
-                max_tokens=max_tokens,
-                with_explanation=with_explanation,
-                enable_hierarchical_lifting=enable_hierarchical_lifting,
-                lift_levels=lift_levels,
-            )
-
-            # Generate Answer using LLM Delegation
-            answer = result.context
-
-            if provider:
-                base_system_prompt = (
-                    system_prompt
-                    if system_prompt
-                    else "You are a helpful assistant. Use the following context to answer the user's question."
-                )
-
-                prompt = (
-                    f"{base_system_prompt}\n\n"
-                    f"Context:\n{result.context}\n\n"
-                    f"Question: {query}\n\n"
-                    f"Answer:"
-                )
-                if with_explanation and result.explanation:
-                    prompt += f"\n\nExplanation Data:\n{json.dumps(result.explanation.to_dict(), indent=2, default=str)}"
-
-                try:
-                    generated_answer = await provider.generate_text(prompt)
-                    if generated_answer:
-                        answer = generated_answer
-                except Exception as e:
-                    answer = f"{result.context}\n\n[Generation Error: {e!s}]"
-
-            return [types.TextContent(type="text", text=answer)]
-
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error executing query: {e!s}")]
+        return await handle_query(arguments, provider, PROJECT_ROOT, server=app)
 
     elif name == "knowgraph_index":
-        input_path = arguments.get("input_path")
-        resume_mode = arguments.get("resume", False)
-        output_path = arguments.get("output_path", DEFAULT_GRAPH_STORE_PATH)
-        gc = arguments.get("gc", False)
-
-        if not input_path:
-            return [types.TextContent(type="text", text="Error: input_path is required.")]
-
-        # Resolve paths
-        graph_path = resolve_graph_path(output_path, PROJECT_ROOT)
-
-        # Determine provider
-        provider = get_llm_provider(app)
-
-        # Extract additional parameters for repository/code directory indexing
-        include_patterns = arguments.get("include_patterns")
-        exclude_patterns = arguments.get("exclude_patterns")
-        access_token = arguments.get("access_token")
-
-        return await index_graph(
-            input_path,
-            graph_path,
-            provider,
-            resume_mode,
-            gc,
-            include_patterns=include_patterns,
-            exclude_patterns=exclude_patterns,
-            access_token=access_token,
-        )
+        return await handle_index(arguments, provider, PROJECT_ROOT, server=app)
 
     elif name == "knowgraph_analyze_impact":
-        element = arguments.get("element")
-        max_hops = arguments.get("max_hops", 4)
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        mode = arguments.get("mode", "semantic")
-
-        if not element:
-            return [types.TextContent(type="text", text="Error: element is required.")]
-
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-
-        try:
-            if mode == "path":
-                return analyze_path_impact_report(element, graph_path, max_hops)
-            else:
-                # Semantic impact analysis
-                engine = QueryEngine(graph_path)
-                result = await engine.analyze_impact_async(element, max_hops=max_hops)
-                return [types.TextContent(type="text", text=result.answer)]
-
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error executing impact analysis: {e!s}")]
+        return await handle_analyze_impact(arguments, PROJECT_ROOT)
 
     elif name == "knowgraph_validate":
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
-
-        try:
-            result = validate_graph_consistency(graph_path)
-            status = "VALID" if result.valid else "INVALID"
-            message = f"Graph Validation Status: {status}\n"
-            if not result.valid:
-                message += f"\nErrors:\n{result.get_error_summary()}"
-            else:
-                message += "\nGraph is consistent and ready for queries."
-
-            return [types.TextContent(type="text", text=message)]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Validation failed: {e!s}")]
+        return await handle_validate(arguments, PROJECT_ROOT)
 
     elif name == "knowgraph_get_stats":
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+        return await handle_get_stats(arguments, PROJECT_ROOT)
 
-        manifest_path = graph_path / "metadata" / "manifest.json"
+    elif name == "knowgraph_discover_conversations":
+        return await handle_discover_conversations(arguments, provider, PROJECT_ROOT)
 
-        if not manifest_path.exists():
-            return [types.TextContent(type="text", text="No manifest found. Graph might be empty.")]
-
-        try:
-            with open(manifest_path, encoding="utf-8") as f:
-                data = json.load(f)
-
-            manifest = Manifest.from_dict(data)
-            stats = (
-                f"Graph Stats (v{manifest.version})\n"
-                f"Nodes: {manifest.node_count}\n"
-                f"Edges: {manifest.edge_count}\n"
-                f"Semantic Edges: {manifest.semantic_edge_count}\n"
-                f"Files Indexed: {len(manifest.file_hashes)}"
-            )
-            return [types.TextContent(type="text", text=stats)]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error reading stats: {e!s}")]
+    elif name == "knowgraph_tag_snippet":
+        return await handle_tag_snippet(arguments, PROJECT_ROOT)
 
     elif name == "knowgraph_batch_query":
-        queries = arguments.get("queries", [])
-        graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-        graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+        return await handle_batch_query(arguments, provider, PROJECT_ROOT)
 
-        if not queries or not isinstance(queries, list):
-            return [types.TextContent(type="text", text="Error: queries must be a non-empty list.")]
+    elif name == "knowgraph_search_bookmarks":
+        return await handle_search_bookmarks(arguments, PROJECT_ROOT)
 
-        provider = get_llm_provider(app)
+    elif name == "knowgraph_analyze_conversations":
+        return await handle_analyze_conversations(arguments, PROJECT_ROOT)
 
-        try:
-            # Shared parameters for all queries
-            top_k = arguments.get("top_k", 20)
-            max_hops = arguments.get("max_hops", 4)
-            max_tokens = arguments.get("max_tokens", 3000)
-            enable_hierarchical_lifting = arguments.get("enable_hierarchical_lifting", True)
-            lift_levels = arguments.get("lift_levels", 2)
+    elif name == "knowgraph_list_versions":
+        return await handle_list_versions(arguments, PROJECT_ROOT)
 
-            engine = QueryEngine(graph_path)
+    elif name == "knowgraph_version_info":
+        return await handle_version_info(arguments, PROJECT_ROOT)
 
-            # Use async batch query for better performance
-            try:
-                results_list = await engine.batch_query_async(
-                    queries=queries,
-                    top_k=top_k,
-                    max_hops=max_hops,
-                    max_tokens=max_tokens,
-                    enable_hierarchical_lifting=enable_hierarchical_lifting,
-                    lift_levels=lift_levels,
-                )
+    elif name == "knowgraph_diff_versions":
+        return await handle_diff_versions(arguments, PROJECT_ROOT)
 
-                # Format results with LLM generation if provider available
-                results = []
-                for query, result in zip(queries, results_list):
-                    # Generate answer with LLM if provider available
-                    answer = result.context
-                    if provider and result.answer:  # Only if we have context
-                        try:
-                            prompt = (
-                                f"You are a helpful assistant. Use the following context to answer the user's question.\n\n"
-                                f"Context:\n{result.context}\n\n"
-                                f"Question: {query}\n\n"
-                                f"Answer:"
-                            )
-                            generated_answer = await provider.generate_text(prompt)
-                            if generated_answer:
-                                answer = generated_answer
-                        except Exception:
-                            pass
+    elif name == "knowgraph_rollback":
+        return await handle_rollback(arguments, PROJECT_ROOT)
 
-                    results.append(
-                        {
-                            "query": query,
-                            "answer": answer,
-                            "nodes_retrieved": len(result.seed_nodes),
-                            "execution_time": result.execution_time,
-                        }
-                    )
-
-            except Exception as e:
-                return [types.TextContent(type="text", text=f"Error executing batch query: {e!s}")]
-
-            # Format results as text
-            output = f"Batch Query Results ({len(queries)} queries)\n" + "=" * 50 + "\n\n"
-            for i, res in enumerate(results, 1):
-                output += f"Query {i}: {res.get('query', 'N/A')}\n"
-                if "error" in res:
-                    output += f"Error: {res['error']}\n"
-                else:
-                    output += f"Answer: {res.get('answer', 'N/A')}\n"
-                    output += f"Nodes: {res.get('nodes_retrieved', 0)}, Time: {res.get('execution_time', 0):.2f}s\n"
-                output += "\n"
-
-            return [types.TextContent(type="text", text=output)]
-
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Error executing batch query: {e!s}")]
+    elif name == "knowgraph_diagnostic":
+        return await handle_diagnostic(arguments, PROJECT_ROOT)
 
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -500,6 +414,193 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["queries"],
             },
         ),
+        types.Tool(
+            name="knowgraph_discover_conversations",
+            description="Auto-discover and index conversations from AI code editors (Antigravity, Cursor, GitHub Copilot). No manual export required!",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                    "editor": {
+                        "type": "string",
+                        "enum": ["all", "antigravity", "cursor", "github_copilot"],
+                        "description": "Which editor's conversations to index (default: all).",
+                    },
+                },
+            },
+        ),
+        types.Tool(
+            name="knowgraph_tag_snippet",
+            description="Tag and index an important snippet for later retrieval. Use this to bookmark important AI responses or code examples.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tag": {
+                        "type": "string",
+                        "description": "Tag for the snippet (e.g., 'fastapi jwt detayı', 'important config')",
+                    },
+                    "snippet": {
+                        "type": "string",
+                        "description": "The content to tag and index",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Optional conversation ID for context",
+                    },
+                    "user_question": {
+                        "type": "string",
+                        "description": "Optional user question that prompted this response",
+                    },
+                },
+                "required": ["tag", "snippet"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_search_bookmarks",
+            description="Search tagged bookmarks/snippets with semantic matching. Find previously saved code snippets, examples, and important notes.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query for finding bookmarks",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of bookmarks to return (default: 10)",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_analyze_conversations",
+            description="Analyze conversation patterns for topics and trends. Discover what topics are trending, when they were discussed, and knowledge evolution over time.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Optional specific topic to analyze (omit for trending topics)",
+                    },
+                    "time_window_days": {
+                        "type": "integer",
+                        "description": "Number of days to analyze (default: 7)",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
+            },
+        ),
+        types.Tool(
+            name="knowgraph_list_versions",
+            description="List all versions in the knowledge graph history.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of versions to return (default: 50)",
+                    },
+                },
+            },
+        ),
+        types.Tool(
+            name="knowgraph_version_info",
+            description="Get detailed information about a specific version.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "version_id": {
+                        "type": "string",
+                        "description": "Version identifier (e.g., 'v1', 'v2', 'v3')",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
+                "required": ["version_id"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_diff_versions",
+            description="Compare two versions and show differences in nodes, edges, and files.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "version1": {
+                        "type": "string",
+                        "description": "First version ID (e.g., 'v1')",
+                    },
+                    "version2": {
+                        "type": "string",
+                        "description": "Second version ID (e.g., 'v3')",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
+                "required": ["version1", "version2"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_rollback",
+            description="Rollback manifest to a previous version (metadata only). Creates backup and requires confirmation.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "version_id": {
+                        "type": "string",
+                        "description": "Version to rollback to (e.g., 'v3')",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                    "create_backup": {
+                        "type": "boolean",
+                        "description": "Create backup before rollback (default: true)",
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "Skip validation checks (default: false)",
+                    },
+                },
+                "required": ["version_id"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_diagnostic",
+            description="Run diagnostic checks on the KnowGraph system. Check graph store status, LLM provider configuration, and get recommendations.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
+                    },
+                },
+            },
+        ),
     ]
 
 
@@ -511,3 +612,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+# Version management tools added below

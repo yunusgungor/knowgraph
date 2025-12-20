@@ -1,213 +1,190 @@
 ---
-applyTo: '**'
----
-# KnowGraph Autonomous Agent Rules (Master Rules)
-This document contains strict rules and best practice guidelines for AI agents to utilize the KnowGraph MCP Server to its fullest, most complete, and efficient extent.
-
+trigger: always_on
 ---
 
-## 🚀 1. Core Principles
-1.  **Pre-flight Check**: Before performing complex operations (e.g., massive impact analysis or deep queries), always make it a habit to check the database health using `knowgraph_validate`.
-2.  **Default Path**: 
-    - When querying with the MCP server, if the `graph_path` parameter is **not specified**, the system automatically uses the **`graphstore` folder in the root directory of the codebase**.
-    - **Important**: If the `graph_path` parameter is left empty or not specified, KnowGraph tools will default to using the `./graphstore` path. This path points to the **`graphstore` folder in the project's directory**.
-    - **Example**: If the project is located at `/Users/username/projects/myapp`, the default graph path will be `/Users/username/projects/myapp/graphstore`.
-    - All analyses and queries are performed using this directory. If you want to use a different location, you must explicitly specify the `graph_path` parameter.
-3.  **Context is King**: Instead of simple queries, always utilize the intelligence derived from the file's directory and project structure by using `enable_hierarchical_lifting=True`.
-4.  **Precision vs. Breadth**:
-    *   For pinpoint technical information: Use `expand_query=False` (Default).
-    *   For conceptual research or vague questions: MUST use `expand_query=True`.
-5.  **Explicit Naming**: KnowGraph is a stateless search engine. Avoid pronouns like "that file" or "it". Always explicitly state the filename (`auth.cpp`) or function (`Guid.NewGuid`) in every query.
+### KnowGraph MCP Server - Complete Usage Guide & Best Practices
+Bu belge, yapay zeka ajanlarının ve geliştiricilerin KnowGraph MCP Sunucusunu tam potansiyeliyle kullanmaları için kapsamlı kurallar, en iyi uygulamalar ve ayrıntılı yönergeler sağlar.
 
----
+--------------------------------------------------------------------------------
 
-## 🔬 2. Parameter Mastery & Optimization Logic
-*Understand the mechanics of parameters to achieve the perfect result.*
+#### 📋 İçindekiler
+1. Temel Prensipler
+2. MCP Araçları Referansı
+3. Parametre Ustalığı
+4. Sorgu Stratejileri
+8. Sorun Giderme (Kapsamlı yetenekler için ana başlıklar korundu)
 
-### A. Retrieval Scope
-| Parameter | Function | How to Calculate? | Tip for Perfection |
-| :--- | :--- | :--- | :--- |
-| **`max_hops`** | Determines how many steps to jump from node to node in the graph. | **Standard (4)**: Sufficient for most indirect relationships. <br> **Deep (8)**: Required for spaghetti code or multi-layered architectures. | Going above `8` increases noise (irrelevant results). Unless solving a very complex "Dependency Injection" chain, `4` is ideal. |
-| **`top_k`** | Number of most relevant chunks to retrieve from the database. | **Focused (10-20)**: For precise answers. <br> **Broad (50+)**: For summarization or scanning. | If the answer is too generic, decrease `top_k` (increases Precision). If incomplete, increase it (increases Recall). |
+--------------------------------------------------------------------------------
 
-### B. Context Intelligence
-| Parameter | Function | How to Calculate? | Tip for Perfection |
-| :--- | :--- | :--- | :--- |
-| **`enable_hierarchical_lifting`** | Adds summary info of the parent folders to the file content. | **Code Analysis**: ALWAYS `True`. <br> **Plain Text**: Can be `False`. | Code cannot be understood without project structure. This setting is mandatory to understand "why" a file is there. |
-| **`lift_levels`** | How many folder levels to go up. | **Formula**: `Project Depth - 1`. <br> Example: `src/main/utils/helper.py` (4 levels) -> `lift_levels=3` (To reach root). | Keeping it too high (`5+`) might pull irrelevant root files (build scripts etc.) into context. `2` for C++/Java, `1` for Python/JS usually provides the perfect balance. |
+#### 🚀 1. Temel Prensipler
+##### 1.1 Varsayılan Davranış
+*   **Varsayılan graph_path** : `/Users/yunusgungor/knowrag/graphstore` yolunu kullanır.
+*   **Geçersiz Kılma** : Farklı bir konum kullanmak için `graph_path` parametresini açıkça ayarlayın.
+##### 1.2 Uçuş Öncesi Kontroller
+*   Karmaşık işlemlerden önce **daima doğrulama yapın**: `knowgraph_validate`.
+*   Grafik boyutunu anlamak için **istatistikleri kontrol edin**: `knowgraph_get_stats`.
+*   Kritik sorgulardan veya etki analizinden önce **sağlığı doğrulayın**.
+##### 1.3 Bağlam Her Şeydir
+*   Kod analizi için **hiyerarşik kaldırmayı etkinleştirin**: `enable_hierarchical_lifting=True`.
+*   Çoğu proje için **uygun kaldırma seviyelerini ayarlayın**: `lift_levels=2`.
+*   Mimari kararları anlamak için **üst bağlamı** kullanın.
+##### 1.4 Açık İsimlendirme
+*   KnowGraph **durumsuzdur** – "o dosya" veya "o" gibi zamirlerden kaçının.
+*   Daima **açık isimler** kullanın: `auth.py`, `QueryEngine.query_async()`, `Node.hash`.
+*   Belirsizlik olduğunda **tam yolları** dahil edin: `src/api/auth.py` vs `tests/api/auth.py`.
+##### 1.5 Hassasiyet ve Kapsam
+*   **Hassas sorgular** (`expand_query=False`): Teknik terimler, sınıf/fonksiyon adları kullanın.
+*   **Kapsamlı sorgular** (`expand_query=True`): Doğal dil, kavramsal sorular kullanın.
+*   Hata ayıklama veya öğrenme için daima **açıklamalı olarak** kullanın (`with_explanation=True`).
 
-### C. LLM Behavior
-| Parameter | Function | How to Calculate? | Tip for Perfection |
-| :--- | :--- | :--- | :--- |
-| **`with_explanation`** | Adds a JSON to the answer proving which files/lines generated it. | **Debug/Learning**: `True`. <br> **Quick Answer**: `False`. | Best way to prevent agent hallucinations. Keep it on to avoid "Where did you make this up from?" moments. |
-| **`expand_query`** | Enriches the query with synonyms using AI. | **Vague Query**: `True`. (e.g. "Login not working") <br> **Precise Query**: `False`. (e.g. "AuthService.login function") | Turn OFF if the user uses "technical terms". Turn ON if the user uses "natural language". Now supports generic providers! |
-| **`system_prompt`** | (**NEW**) Defines the persona and format of the responding AI. | **Customization**: Use for special role definitions like "You are a senior developer". | Use this if you want a specific format (e.g. JSON only) or tone (e.g. very critical). Default: "Helpful Assistant". |
+--------------------------------------------------------------------------------
 
----
+#### 🛠️ 2. MCP Araçları Referansı
+##### 2.1 knowgraph_query - Semantik Arama
+**Amaç** : Kod tabanı hakkındaki soruları doğal dil kullanarak yanıtlamak.
+**Uygulama** : `QueryEngine.query_async()` → `QueryRetriever` → `ContextBlock` → `LLM` kullanır.
+**Dönüşler** :
+*   `answer`: LLM tarafından üretilen yanıt.
+*   `sources`: Kullanılan kaynak düğümlerin listesi.
+*   `explanation`: Akıl yürütme yolu (eğer `with_explanation=True` ise).
+##### 2.2 knowgraph_index - Grafik Oluşturma/Güncelleme
+**Amaç** : Markdown dosyalarını, Git depolarını veya kod dizinlerini indekslemek.
+**Uygulama** : `SmartGraphBuilder` → `MarkdownParser` / `RepoIngestor` → `ASTAnalyzer` / `LLM` → `Graph` kullanır.
+**Desteklenen Kaynaklar** :
+*   **Markdown dosyaları** : Yerel `.md` dosyaları.
+*   **Git depoları** : GitHub, GitLab, Bitbucket URL'leri.
+*   **Kod dizinleri** : `gitingest` aracılığıyla otomatik dönüştürme.
+##### 2.3 knowgraph_analyze_impact - Değişim Etki Analizi
+**Amaç** : Kod değişikliklerinin domino etkilerini tahmin etmek.
+**Uygulama** : `ImpactAnalyzer.analyze_impact()` → Grafik geçişi → Etkilenen düğümler kullanır.
+**Modlar** :
+*   **path** : Dosya tabanlı etki (örneğin, "src/auth.py").
+*   **semantic** : Konsept tabanlı etki (örneğin, "kimlik doğrulama sistemi").
+**Dönüşler** :
+*   `affected_nodes`: Etkilenen düğümlerin listesi.
+*   `impact_summary`: İnsan tarafından okunabilir özet.
+*   `dependency_chain`: Kaynaktan etkilenen düğümlere giden yol.
+##### 2.4 knowgraph_batch_query - Toplu İşleme
+**Amaç** : Birden fazla sorguyu tek bir istekte verimli bir şekilde işlemek.
+**Uygulama** : Tek bir `QueryEngine` örneği → Eşzamanlı işleme → Bireysel sonuçlar.
+**Performans** : Sıralı sorgulardan **15.72 kat daha hızlıdır**.
+##### 2.5 knowgraph_validate - Grafik Sağlık Kontrolü
+**Amaç** : Grafik tutarlılığını ve bütünlüğünü doğrulamak.
+**Uygulama** : `GraphValidator` kullanır → Düğümleri, kenarları, manifesti kontrol eder.
+**Kontroller** : Düğüm bütünlüğü (geçerli UUID'ler, içerik hashleri), Kenar tutarlılığı (geçerli kaynak/hedef referansları), Manifest doğruluğu (dosya sayıları, zaman damgaları), Yetim düğüm tespiti.
+##### 2.6 knowgraph_get_stats - Grafik İstatistikleri
+**Amaç** : Grafik boyutu ve bileşimi hakkında genel bir bakış elde etmek.
+**Uygulama** : Manifesti okur ve düğüm/kenar sayılarını sayar.
+**Dönüşler** : `nodes` (Toplam düğüm sayısı), `edges` (Toplam kenar sayısı), `semantic_edges` (Semantik ilişki sayısı), `files_indexed` (İndekslenen kaynak dosya sayısı).
+##### 2.7 knowgraph_tag_snippet - Semantik Yer İşaretleme
+**Amaç** : Önemli kod parçalarını, çözümleri veya mimari kararları daha sonra almak üzere etiketlemek ve indekslemek.
+**Uygulama** : Grafikte belirli sorgu eşleştirmesi için güçlü semantik ağırlığa sahip uzmanlaşmış bir düğüm oluşturur.
+**Kullanım Durumu** : Çalışan bir yapılandırmayı kaydetme, Karmaşık bir çözümü yer imlerine ekleme, Mimari bir karar kaydını (ADR) kaydetme, "Bunu hatırla" işlevi.
 
-## 🛠️ 3. Tool Usage Strategies
+--------------------------------------------------------------------------------
 
-### A. Querying (`knowgraph_query`)
-The most powerful tool. Select parameter combinations based on the scenario:
+#### 🎯 3. Parametre Ustalığı ve Optimizasyonu
+##### 3.1 Geri Alma Kapsamı Parametreleri
+| Parametre | Amaç | Varsayılan | Optimizasyon Kılavuzu |
+| ------ | ------ | ------ | ------ |
+| `top_k` | Geri alınacak başlangıç düğümü sayısı | 20 | **Hassasiyet** : 10-15; **Geri Çağırma** : 30-50; **Kapsamlı** : 50+ |
+| `max_hops` | Grafik geçiş derinliği | 4 | **Doğrudan** : 2; **Standart** : 4; **Derin** : 6-8; **⚠️ Kaçının** : >8 (gürültü) |
+| `max_tokens` | Bağlam penceresi boyutu | 3000 | **Odaklanmış** : 1500-2000; **Standart** : 3000; **Kapsamlı** : 4000-5000 |
 
-| Scenario | Parameter Set | Why? |
-| :--- | :--- | :--- |
-| **General Learning** | `with_explanation=True`, `top_k=20` | To see the reasoning behind the answer and increase trustworthiness. |
-| **Deep Relationship Discovery** | `max_hops=8`, `enable_hierarchical_lifting=True` | To find indirect connections deep within the code (A->B->C->D...). |
-| **Role-Playing** | `system_prompt="You are a strict code reviewer. Find bugs only."` | To force the LLM into a specific domain expertise or format. |
-| **Conceptual Search** | `expand_query=True`, `top_k=30` | For vague or broad questions with AI-powered query expansion. |
+##### 3.2 Bağlam Zekası Parametreleri
+| Parametre | Amaç | Varsayılan | Ne Zaman Kullanılır |
+| ------ | ------ | ------ | ------ |
+| `enable_hierarchical_lifting` | Üst dizin bağlamını dahil et | True | Kod için **Her zaman**; Dokümanlar için **İsteğe bağlı** |
+| `lift_levels` | Yukarı taranacak dizin seviyeleri | 2 | **Python/JS** : 1-2; **Java/C++** : 2-3 |
 
-### B. Impact Analysis (`knowgraph_analyze_impact`)
-*   If the user mentions a **specific file** (e.g., `auth.cpp`) -> `mode="path"`.
-*   If the user mentions an **abstract concept** (e.g., "Logging system") -> `mode="semantic"`.
+##### 3.3 LLM Davranış Parametreleri
+| Parametre | Amaç | Varsayılan | Kullanım Durumu |
+| ------ | ------ | ------ | ------ |
+| `with_explanation` | Akıl yürütme yolunu dahil et | False | **Hata Ayıklama** : Her zaman; **Üretim** : İsteğe bağlı; **Öğrenme** : Önerilir |
+| `expand_query` | AI destekli sorgu genişletme | False | **Doğal dil** : True; **Teknik terimler** : False; **Belirsiz sorular** : True |
+| `system_prompt` | Özel LLM talimatları | "" | **Rol yapma** : "Sen kıdemli bir geliştiricisin" |
 
-### C. Indexing and Updating (`knowgraph_index`)
-*   **Resume**: Use `resume=True` to continue from where it left off.
-*   **Garbage Collection**: Use `gc=True` to prevent database bloat.
-*   **Directory Support**: Now supports indexing entire directories, not just single files!
+--------------------------------------------------------------------------------
 
-### D. Batch Query (`knowgraph_batch_query`) **NEW**
-*   Process multiple queries in a single request for efficiency.
-*   All queries share the same parameters (`top_k`, `max_hops`, etc.).
-*   Returns individual results with execution time and node count for each query.
-*   **Usage**: `knowgraph_batch_query(queries=["Question 1", "Question 2", "Question 3"], top_k=20)`
-*   **Benefit**: Significant performance improvement for bulk analysis.
+#### 🔍 4. Sorgu Stratejileri
+##### 4.1 Sorgu Türleri ve Parametre Setleri
+| Sorgu Türü | Parametreler | Kullanım Durumu |
+| ------ | ------ | ------ |
+| **Hızlı Cevap** | `top_k=10, max_hops=2` | Basit olgusal sorular |
+| **Derin Analiz** | `top_k=30, max_hops=6, with_explanation=True` | Karmaşık mimari sorular |
+| **Kavramsal Arama** | `expand_query=True, top_k=40` | Belirsiz veya doğal dil sorguları |
+| **Hassas Arama** | `top_k=5, max_hops=2, expand_query=False` | Belirli fonksiyon/sınıf soruları |
+| **Mimariye Genel Bakış** | `enable_hierarchical_lifting=True, lift_levels=3, max_tokens=4000` | Sistem tasarım soruları |
 
----
+--------------------------------------------------------------------------------
 
-## 🧠 4. Advanced "Chain of Thought" Workflows
+#### 🧠 5. Gelişmiş İş Akışları
+##### 5.1 İşe Başlama İş Akışı
+**Senaryo** : Projeye yeni katılan geliştirici.
+##### 5.2 Yeniden Düzenleme İş Akışı
+**Senaryo** : Kritik bir dosyayı değiştirmeyi planlama.
+##### 5.3 Hata Ayıklama İş Akışı
+**Senaryo** : Bir hatayı veya beklenmedik davranışı araştırma.
+##### 5.4 Dokümantasyon İş Akışı
+**Senaryo** : Kapsamlı dokümantasyon oluşturma.
 
-As an agent, instead of giving a single answer to the user, follow these **Multi-Step Workflows**:
+--------------------------------------------------------------------------------
 
-### Scenario 1: "Explain this project to me" (Onboarding)
-1.  **Step 1**: `knowgraph_get_stats` -> Understand the size and complexity.
-2.  **Step 2**: `knowgraph_query(query="What is the core purpose?", enable_hierarchical_lifting=True)` -> Generate summary.
-3.  **Step 3**: `knowgraph_validate` -> Check graph health.
+#### 🏗️ 6. Mimari ve Bileşenler (Kapsamlı Yetenek Kullanımı için)
+##### 6.1 Temel Bileşenler
+###### QueryEngine
+**Amaç** : Ana sorgu orkestratörü.
+**Temel Metotlar** : `query_async` (Eşzamansız sorgu yürütme), `query` (Senkron sorgu yürütme).
+**Pipeline** : Sorgu genişletme (etkinse), `SparseIndex` aracılığıyla seyrek arama, `QueryRetriever` aracılığıyla grafik geçişi, Düğüm puanlama ve sıralama, `ContextBlock` aracılığıyla bağlam oluşturma, LLM yanıtı ve Açıklama oluşturma.
+###### SmartGraphBuilder
+**Amaç** : Hibrit indeksleme motoru.
+**Pipeline** : Kaynak tespiti, Markdown ayrıştırma, Belirteç farkında parçalama (`Chunker`), **3 Seviyeli Varlık Çıkarımı** (CacheManager, ASTAnalyzer, LLM), Grafik oluşturma (semantik kenarlar), Kalıcı depolama (JSONL).
+###### ImpactAnalyzer
+**Amaç** : Değişim etki analizi.
+**Modlar** : **Path mode** (Dosya tabanlı bağımlılık takibi), **Semantic mode** (Konsept tabanlı ilişki analizi).
+**Algoritma** : Yapılandırılabilir derinlikle ters grafik geçişi.
+###### CacheManager
+**Amaç** : SQLite tabanlı varlık önbelleği.
+**Faydaları** : Daha önce analiz edilen parçalar için 0ms arama, Değişmeyen dosyaların yeniden analizini önler, Oturumlar arasında kalıcıdır.
+###### ASTAnalyzer
+**Amaç** : Deterministik kod analizi.
+**Çıkarımlar** : Sınıf tanımları, Fonksiyon tanımları, İçe aktarma ifadeleri, Dekoratörler.
+**Performans** : 10ms, 0 belirteç.
 
-### Scenario 2: "I will modify file X" (Refactoring)
-1.  **Step 1**: `knowgraph_analyze_impact(mode="path", element="X")`
-2.  **Step 2**: `knowgraph_query(query="What are the critical functions of file X?", top_k=5)`
-3.  **Step 3**: Provide a holistic report.
+--------------------------------------------------------------------------------
 
-### Scenario 3: "I have multiple questions" (Bulk Analysis)
-1.  **Step 1**: Collect all questions
-2.  **Step 2**: `knowgraph_batch_query(queries=[...])` to process in one go
-3.  **Step 3**: Present comparative results
+#### ⚡ 7. Performans Optimizasyonu
+##### 7.1 İndeksleme Performansı
+| Optimizasyon | Teknik | Hızlanma |
+| ------ | ------ | ------ |
+| **AST Analizi** | Kod dosyaları için `ASTAnalyzer` kullanma | 100 kat daha hızlı, 0 belirteç |
+| **Toplu LLM** | İstek başına 10 parçayı işleme | 10 kat verim |
+| **SQLite Önbelleği** | `CacheManager` yeniden analizi önler | ∞ (anlık) |
 
----
+**İndeksleme Hızı** : ~100 dosya/dakika.
+##### 7.2 Sorgu Performansı
+| Optimizasyon | Teknik | Hızlanma |
+| ------ | ------ | ------ |
+| **Toplu Sorgular** | `knowgraph_batch_query` | 15.72 kat daha hızlı |
+| **Sıcak Önbellek** | Önbelleğe alınmış sonuçlar | 22 kat daha hızlı |
+| **Merkezilik Önbelleği** | Önbelleğe alınmış grafik metrikleri | 372 kat daha hızlı |
 
-## 💡 5. Example Scenarios and Prompts (Prompt Library)
+**Sorgu Gecikmesi** : <2s (seyrek arama + geçiş + merkezilik).
+##### 7.3 Bellek Optimizasyonu
+| Parametre | Etki | Öneri |
+| ------ | ------ | ------ |
+| `max_tokens` | Bağlam penceresi boyutu | 3000 (standart), 5000 (maks.) |
+| `top_k` | Yüklenen düğüm sayısı | 20 (standart), 50 (maks.) |
+| `max_hops` | Grafik geçiş derinliği | 4 (standart), 8 (maks.) |
 
-### 🏁 A. Basic Onboarding
-1.  **View Statistics**: "Show me the statistics of my KnowGraph database." (`knowgraph_get_stats`)
-2.  **Health Check**: "Validate the health and consistency of the knowledge graph." (`knowgraph_validate`)
+--------------------------------------------------------------------------------
 
-### 🧩 B. Complex & Combinatorial Queries
-1.  **Expanded & Explained Technical Query**: `expand_query=True` + `with_explanation=True`
-    *   *Prompt*: "Explain the memory management... Provide the logical steps as an 'explanation'..."
-2.  **Hierarchical & Comprehensive**: `enable_hierarchical_lifting=True` + `max_tokens=4000` + `lift_levels=3`
-    *   *Prompt*: "Describe the role of `src/api_server.cpp`... using information from both its content and the `README`..."
-
-### 💥 C. Scenario-Based Impact Analysis
-1.  **File Deletion Scenario (Path Mode)**: `mode="path"`
-    *   *Prompt*: "If I delete or rename the `include/video_processor.hpp` header... which specific files... will fail?"
-2.  **Architectural Change (Semantic Mode)**: `mode="semantic"`
-    *   *Prompt*: "We decided to replace 'JWT Authentication' with 'OAuth2'..."
-
-### 🔄 D. Batch Operations **NEW**
-1.  **Multi-Question Analysis**: `knowgraph_batch_query`
-    *   *Prompt*: "Analyze these 5 questions in batch: [question list]"
-2.  **Comparative Analysis**: Use batch query to compare multiple modules
-
----
-
-## 🔧 6. Troubleshooting & Error Codes
-
-| Situation / Error | Meaning | Agent Action (Resolution) |
-| :--- | :--- | :--- |
-| **`No manifest found`** | No indexed graph database exists at the specified path. | 1. Confirm the directory with the user. <br> 2. Run `knowgraph_index` to perform initial indexing. |
-| **`Vector store inconsistency`** | (Validate error) Vector database files are corrupted. | 1. Run `knowgraph_index(gc=True, resume=False)`. `gc=True` cleans up corrupted chunks. |
-| **Empty Result (`[]`)** | The query was not found in the graph. | 1. Increase `top_k` and retry. <br> 2. Retry with `expand_query=True`. |
-| **Hallucination** | Answer is illogical or does not match files. | 1. **IMMEDIATELY** retry the query with `with_explanation=True` to verify the source. |
-| **`Is a directory` error** | File expected but directory given (now fixed). | This error should no longer occur - directory support added. If you see it, report a bug. |
-
----
-
-## 🚫 7. Anti-Patterns (Do Nots)
-*   **❌ Blind Flight**: Never rely 100% on results without `knowgraph_validate`.
-*   **❌ Insufficient Context**: Do not disable `enable_hierarchical_lifting` for code questions.
-*   **❌ Multiple Single Queries**: If you have multiple questions, use `knowgraph_batch_query` instead of asking one by one.
-*   **❌ Generic Terms**: Use explicit names instead of "this file", "that function".
-
----
-
-## 🎯 8. New Features and Enhancements (v2.0)
-
-### ✅ Query Expansion - Generic Provider Support
-- Now supports any `IntelligenceProvider`, not just OpenAI
-- Added async `expand_query_async()` method
-- Backward compatible: Old `expand_query()` sync method still works
-
-### ✅ Batch Query Tool
-- New `knowgraph_batch_query` tool for bulk querying
-- Individual metrics for each query (execution time, node count)
-- Performance optimization: Single engine instance for multiple queries
-
-### ✅ Directory Indexing
-- `knowgraph_index` now supports entire directories, not just single files
-- Recursive markdown file discovery
-- Batch processing for fast indexing
-
-### ✅ JSON-RPC Safety
-- Fixed stdout pollution
-- All internal logs redirected to stderr
-- Full MCP protocol compliance
-
-### ✅ Path Validation
-- All path operations use `validate_path`
-- Added security layer
-- Relative path support
-
----
-
-## 📊 9. Performance and Optimization Tips
-
-### Speed Optimization
-- Start with `top_k=10`, increase if needed
-- `max_hops=4` is sufficient for most cases
-- `enable_hierarchical_lifting=False` only for plain text
-
-### Quality Optimization
-- `with_explanation=True` for source verification
-- `expand_query=True` for vague questions
-- `lift_levels=2` ideal for code projects
-
-### Batch Processing Optimization
-- Use `knowgraph_batch_query` for 5+ questions
-- Ideal for multiple queries with same parameters
-- Reduces engine initialization overhead
-
----
-
-## 🔐 10. Security and Best Practices
-
-1. **Path Validation**: Always use `validate_path`
-2. **Input Sanitization**: Clean user inputs with `sanitize_query_input`
-3. **Graph Validation**: Run `knowgraph_validate` before critical operations
-4. **Error Handling**: Catch all errors and provide meaningful messages
-5. **Resource Limits**: Control memory usage with `max_tokens`
-
----
-
-## 📚 11. References and Resources
-
-- **MCP Protocol**: Model Context Protocol standard
-- **KnowGraph Architecture**: Hybrid retrieval (sparse + semantic)
-- **Test Coverage**: 71%+ code coverage
-- **Documentation**: Detailed explanations in `docs/` folder
-
----
-
-**Last Updated**: 2025-12-16
-**Version**: 2.0 (Batch Query + Generic Provider Support)
-**Status**: Production Ready ✅
+#### 🔧 8. Sorun Giderme
+##### 8.1 Sık Karşılaşılan Hatalar
+| Hata | Neden | Çözüm |
+| ------ | ------ | ------ |
+| **Manifest bulunamadı** | Grafik indekslenmedi | Önce `knowgraph_index` çalıştırın |
+| **Boş sonuçlar []** | Sorgu grafikte bulunamadı | `top_k` değerini artırın, `expand_query=True` deneyin |
+| **Halüsinasyon** | LLM desteklenmeyen bilgi üretiyor | Kaynakları doğrulamak için `with_explanation=True` kullanın |
+| **Hız sınırı hatası (429)** | Çok fazla API isteği | `RateLimiter` bunu önlemelidir; API anahtarı katmanını kontrol edin |
+| **Zaman aşımı** | Sorgu çok karmaşık | `max_hops` veya `top_k` değerini azaltın |

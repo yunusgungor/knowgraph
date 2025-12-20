@@ -19,7 +19,7 @@ from knowgraph.config import (
     MAX_QUERY_PREVIEW_LENGTH,
     TOP_K,
 )
-from knowgraph.domain.algorithms.traversal import traverse_graph_bfs
+from knowgraph.domain.algorithms.traversal import traverse_graph_reference_aware
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
 from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
@@ -34,7 +34,7 @@ class QueryRetriever:
     Workflow:
         1. Generate query embedding (sparse)
         2. Search Sparse index for top-k similar nodes (seeds)
-        3. Expand seeds via graph traversal
+        3. Expand seeds via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
         4. Return active subgraph nodes
 
     Attributes
@@ -79,7 +79,7 @@ class QueryRetriever:
         max_hops: int = MAX_HOPS,
         use_code_search: bool = False,
     ) -> tuple[list[Node], list[UUID]]:
-        """Retrieve relevant nodes for query.
+        """Retrieve relevant nodes for query (REFERENCE-AWARE!).
 
         Args:
         ----
@@ -118,15 +118,25 @@ class QueryRetriever:
             # results is list of (doc_id, score) where doc_id is str
             seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
-            # Step 2: Expand via graph traversal
-            expanded_node_ids = traverse_graph_bfs(seed_node_ids, edges, max_hops)
+            # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
+            expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
 
-            # Step 3: Load nodes
+            # Step 3: Load nodes CONCURRENTLY (using thread pool for I/O)
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
             nodes = []
-            for node_id in expanded_node_ids:
-                node = read_node_json(node_id, self.graph_store_path)
-                if node:
-                    nodes.append(node)
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                # Submit all node loading tasks
+                future_to_id = {
+                    executor.submit(read_node_json, node_id, self.graph_store_path): node_id
+                    for node_id in expanded_node_ids
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_id):
+                    node = future.result()
+                    if node:
+                        nodes.append(node)
 
             return nodes, seed_node_ids
 
@@ -234,12 +244,12 @@ class QueryRetriever:
             else:
                 query_tokens = self.sparse_embedder.embed_text(search_text)
 
-            # Search (sync - fast enough)
-            results = self.sparse_index.search(query_tokens, top_k)
+            # Search ASYNC for better performance with parallel term processing
+            results = await self.sparse_index.search_async(query_tokens, top_k)
             seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
-            # Step 2: Expand via graph traversal (sync - fast enough)
-            expanded_node_ids = traverse_graph_bfs(seed_node_ids, edges, max_hops)
+            # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
+            expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
 
             # Step 3: Load nodes CONCURRENTLY
             nodes = await self._load_nodes_async(expanded_node_ids)
@@ -306,8 +316,8 @@ class QueryRetriever:
         else:
             query_tokens = self.sparse_embedder.embed_text(query_text)
 
-        # Search (sync - fast enough)
-        results = self.sparse_index.search(query_tokens, top_k)
+        # Search ASYNC for better performance with parallel term processing
+        results = await self.sparse_index.search_async(query_tokens, top_k)
 
         # Load nodes concurrently
         async def load_node_with_score(node_id_str: str, score: float) -> tuple[Node, float] | None:

@@ -87,40 +87,6 @@ async def test_query_engine_async_timeout():
 
 
 @pytest.mark.asyncio
-async def test_query_engine_async_cancellation():
-    """Test async query cancellation."""
-    store_path = Path("store")
-
-    with (
-        patch("knowgraph.application.querying.query_engine.QueryRetriever") as mock_retriever_cls,
-        patch("knowgraph.application.querying.query_engine.read_all_edges") as mock_read_edges,
-    ):
-        mock_retriever = mock_retriever_cls.return_value
-
-        # Mock async method that can be cancelled
-        async def cancellable_retrieve_async(*args, **kwargs):
-            await asyncio.sleep(5)
-            return ([], [])
-
-        mock_retriever.retrieve_async = cancellable_retrieve_async
-        mock_read_edges.return_value = []
-
-        engine = QueryEngine(store_path)
-
-        # Start query
-        task = asyncio.create_task(engine.query_async("test query"))
-
-        # Give it a moment to start
-        await asyncio.sleep(0.1)
-
-        # Cancel all queries
-        await engine.cancel_all_queries()
-
-        # Task should be cancelled
-        assert task.cancelled() or task.done()
-
-
-@pytest.mark.asyncio
 async def test_batch_queries_concurrent():
     """Test that multiple queries can run concurrently."""
     store_path = Path("store")

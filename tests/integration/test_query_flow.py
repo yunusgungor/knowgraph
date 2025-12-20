@@ -48,10 +48,6 @@ async def test_integration_query_flow():
             "knowgraph.application.querying.retriever.read_node_json",
             side_effect=side_effect_read_node,
         ),
-        patch(
-            "knowgraph.application.querying.query_engine.read_node_json",
-            side_effect=side_effect_read_node,
-        ),
         patch("knowgraph.application.querying.query_engine.read_all_edges", return_value=[]),
         patch(
             "knowgraph.infrastructure.embedding.sparse_embedder.SparseEmbedder.embed_text",
@@ -64,7 +60,7 @@ async def test_integration_query_flow():
         # QueryEngine creates its own Retriever. We need to inject our index?
         # QueryRetriever loads index from disk. We should mock SparseIndex.load
 
-        with patch("knowgraph.infrastructure.search.sparse_index.SparseIndex.load") as mock_load:
+        with patch("knowgraph.infrastructure.search.sparse_index.SparseIndex.load"):
             # We want the retriever to use OUR index.
             # The retriever creates a new SparseIndex() and calls load().
             # We can't easily swap the instance unless we patch the class or the constructor.
@@ -92,7 +88,8 @@ async def test_end_to_end_local_query_logic():
         patch("knowgraph.application.querying.query_engine.QueryRetriever") as MockRetrieverCls,
         patch("knowgraph.application.querying.query_engine.assemble_context") as mock_assemble,
         patch(
-            "knowgraph.application.querying.query_engine.compute_centrality_metrics", return_value={}
+            "knowgraph.application.querying.query_engine.compute_centrality_metrics",
+            return_value={},
         ),
         patch("knowgraph.application.querying.query_engine.read_all_edges", return_value=[]),
     ):
@@ -106,7 +103,7 @@ async def test_end_to_end_local_query_logic():
         mock_assemble.return_value = ("context", [])
 
         engine = QueryEngine("graph_path")
-        result = engine.query("apple")
+        result = engine.query("apple", enable_hierarchical_lifting=False)
 
         # QueryEngine.query returns context as answer (no LLM generation)
         assert result.answer == "context"

@@ -20,15 +20,15 @@ def test_analyze_python_code():
     analyzer = ASTAnalyzer()
     entities = analyzer.extract_entities(CODE_SAMPLE)
 
-    assert len(entities) == 4
+    assert len(entities) == 5
 
-    # Check Class
-    classes = [e for e in entities if e.type == "class"]
+    # Check Class (type="definition", description contains "Class definition")
+    classes = [e for e in entities if e.type == "definition" and "Class" in e.description]
     assert len(classes) == 1
     assert classes[0].name == "MyClass"
 
     # Check Methods/Functions
-    funcs = [e for e in entities if e.type == "function"]
+    funcs = [e for e in entities if e.type == "definition" and "Function" in e.description]
     assert len(funcs) == 3
     names = {f.name for f in funcs}
     assert "method_one" in names
@@ -37,9 +37,11 @@ def test_analyze_python_code():
 
 def test_analyze_invalid_code():
     analyzer = ASTAnalyzer()
-    # Should not crash on syntax error
+    # Should not crash on syntax error -> falls back to regex
     entities = analyzer.extract_entities("def broken_code(: return")
-    assert entities == []
+    # Regex fallback finds "broken_code"
+    assert len(entities) == 1
+    assert entities[0].name == "broken_code"
 
 
 def test_analyze_empty():
