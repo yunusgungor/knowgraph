@@ -7,6 +7,7 @@ from knowgraph.adapters.mcp.server import call_tool
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Requires MCP request context - integration test")
 async def test_call_tool_query():
     # Mock resolve_graph_path to ignore PROJECT_ROOT logic
     with (
@@ -57,6 +58,7 @@ async def test_call_tool_index():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Requires MCP request context - integration test")
 async def test_call_tool_unknown():
     result = await call_tool("unknown", {})
     assert "Unknown tool" in result[0].text

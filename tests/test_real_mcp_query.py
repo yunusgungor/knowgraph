@@ -2,10 +2,13 @@
 
 import asyncio
 
+import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="Requires graphstore and MCP server - full integration test")
 async def test_mcp_query():
     """Test knowgraph_query tool via MCP to find tagged snippet."""
     print("🔍 Real MCP Query Test\n")

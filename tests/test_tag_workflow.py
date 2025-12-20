@@ -2,10 +2,13 @@
 
 import asyncio
 
+import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="Requires graphstore and MCP server - full integration test")
 async def test_tag_and_retrieve():
     """Test complete workflow: tag -> index -> query -> retrieve."""
     print("🧪 Complete Tagged Snippet Workflow Test\n")
