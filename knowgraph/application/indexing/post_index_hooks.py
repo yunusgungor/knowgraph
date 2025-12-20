@@ -30,7 +30,7 @@ async def auto_link_conversations(
 
     """
     from knowgraph.application.linking.conversation_linker import link_conversation_to_code
-    from knowgraph.infrastructure.parsing.conversation_discovery import discover_conversations
+    from knowgraph.infrastructure.detection.conversation_discovery import discover_conversations
 
     stats = {
         "conversations_found": 0,

@@ -85,6 +85,8 @@ _PROJECT_ROOT_CACHE: dict[str, Any] = {
     "root": None,
     "timestamp": None,
     "ttl": 3600,  # 1 hour cache
+    "llm_detection_done": False,
+    "llm_detection_running": False,
 }
 
 
@@ -116,13 +118,59 @@ def _detect_project_root_sync() -> Path:
     1. Git repository root
     2. Project marker files
     3. Fallback to cwd
+
+    Note: This provides a quick initial detection.
+    Background LLM detection will refine this if needed.
     """
     from knowgraph.infrastructure.detection.project_detector import detect_project_root
 
     # Use sync detection (no LLM)
     detected = detect_project_root(use_llm=False)
-    logger.info(f"Auto-detected project root: {detected}")
+    logger.info(f"Initial project root detected (sync): {detected}")
     return detected
+
+
+async def _detect_project_root_with_llm_async(start_path: Path | None = None) -> Path | None:
+    """Detect project root using LLM in background.
+
+    This runs after server initialization to refine the project root
+    detection using LLM analysis.
+    """
+    if _PROJECT_ROOT_CACHE.get("llm_detection_running"):
+        logger.debug("LLM detection already running, skipping")
+        return None
+
+    _PROJECT_ROOT_CACHE["llm_detection_running"] = True
+
+    try:
+        from knowgraph.infrastructure.detection.project_detector import (
+            detect_project_root_with_llm,
+        )
+
+        logger.info("Starting background LLM-based project root detection...")
+        llm_detected = await detect_project_root_with_llm(start_path)
+
+        if llm_detected:
+            # Update cache with LLM-detected root
+            current_root = _PROJECT_ROOT_CACHE.get("root")
+            if current_root != llm_detected:
+                logger.info(
+                    f"LLM refined project root: {current_root} -> {llm_detected}"
+                )
+                _cache_project_root(llm_detected)
+            else:
+                logger.info(f"LLM confirmed project root: {llm_detected}")
+        else:
+            logger.info("LLM detection completed but no better root found")
+
+        _PROJECT_ROOT_CACHE["llm_detection_done"] = True
+        return llm_detected
+
+    except Exception as e:
+        logger.warning(f"Background LLM detection failed: {e}", exc_info=True)
+        return None
+    finally:
+        _PROJECT_ROOT_CACHE["llm_detection_running"] = False
 
 
 def _get_project_root() -> Path:
@@ -146,8 +194,26 @@ def _get_project_root() -> Path:
 
 # Path to project root for resolving relative paths
 # Automatically detected using git root, project markers, or falls back to cwd
+# Initially detected synchronously, then refined by LLM in background
 # Cached for 1 hour to avoid repeated detection
 PROJECT_ROOT = _get_project_root()
+
+
+async def _initialize_llm_detection():
+    """Initialize LLM-based project root detection in background.
+
+    This is called after server initialization to refine the project root
+    without blocking the server startup.
+    """
+    try:
+        # Give server time to fully initialize
+        await asyncio.sleep(2)
+
+        current_root = _PROJECT_ROOT_CACHE.get("root")
+        if current_root:
+            await _detect_project_root_with_llm_async(current_root)
+    except Exception as e:
+        logger.warning(f"Failed to initialize LLM detection: {e}", exc_info=True)
 
 
 @app.call_tool()  # type: ignore
@@ -606,6 +672,9 @@ async def list_tools() -> list[types.Tool]:
 
 async def main() -> None:
     async with stdio_server() as (read_stream, write_stream):
+        # Start background LLM detection task (fire and forget)
+        _ = asyncio.create_task(_initialize_llm_detection())  # noqa: RUF006
+
         init_options = app.create_initialization_options()
         await app.run(read_stream, write_stream, init_options)
 

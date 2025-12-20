@@ -7,6 +7,9 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
+from knowgraph.shared.memory_profiler import memory_guard
+from knowgraph.shared.tracing import trace_operation
+
 try:
     from gitingest import ingest
 
@@ -125,27 +128,36 @@ async def ingest_repository(
         RepositoryIngestorError: If ingestion fails
 
     """
-    if ingest_async is None:
-        msg = "gitingest is not installed. Install it with: pip install gitingest>=0.3.1"
-        raise GitingestNotInstalledError(msg)
+    with memory_guard(
+        operation_name=f"ingest_repo[{repo_url_or_path[:50]}]",
+        warning_threshold_mb=150,
+        critical_threshold_mb=400,
+    ):
+        with trace_operation(
+            "repo_ingestor.ingest_repository",
+            source=repo_url_or_path,
+        ):
+            if ingest_async is None:
+                msg = "gitingest is not installed. Install it with: pip install gitingest>=0.3.1"
+                raise GitingestNotInstalledError(msg)
 
-    try:
-        # Call gitingest async with parameters directly
-        # Build kwargs only with non-None values
-        kwargs = {}
-        if include_patterns is not None:
-            kwargs["include_patterns"] = include_patterns
-        if exclude_patterns is not None:
-            kwargs["exclude_patterns"] = exclude_patterns
-        if max_file_size is not None:
-            kwargs["max_file_size"] = max_file_size
-        if access_token is not None:
-            kwargs["token"] = access_token
+            try:
+                # Call gitingest async with parameters directly
+                # Build kwargs only with non-None values
+                kwargs = {}
+                if include_patterns is not None:
+                    kwargs["include_patterns"] = include_patterns
+                if exclude_patterns is not None:
+                    kwargs["exclude_patterns"] = exclude_patterns
+                if max_file_size is not None:
+                    kwargs["max_file_size"] = max_file_size
+                if access_token is not None:
+                    kwargs["token"] = access_token
 
-        summary, tree, content = await ingest_async(repo_url_or_path, **kwargs)
+                summary, tree, content = await ingest_async(repo_url_or_path, **kwargs)
 
-        # Build complete markdown document
-        markdown_content = f"""# Repository Digest
+                # Build complete markdown document
+                markdown_content = f"""# Repository Digest
 
 {summary}
 
@@ -160,29 +172,29 @@ async def ingest_repository(
 {content}
 """
 
-        # Save to file
-        if output_path is None:
-            # Create temporary file
-            with tempfile.NamedTemporaryFile(  # noqa: SIM115
-                mode="w",
-                suffix=".md",
-                prefix="repo_digest_",
-                delete=False,
-                encoding="utf-8",
-            ) as temp_file:
-                output_path = Path(temp_file.name)
-                temp_file.write(markdown_content)
-        else:
-            output_path = Path(output_path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(markdown_content)
+                # Save to file
+                if output_path is None:
+                    # Create temporary file
+                    with tempfile.NamedTemporaryFile(  # noqa: SIM115
+                        mode="w",
+                        suffix=".md",
+                        prefix="repo_digest_",
+                        delete=False,
+                        encoding="utf-8",
+                    ) as temp_file:
+                        output_path = Path(temp_file.name)
+                        temp_file.write(markdown_content)
+                else:
+                    output_path = Path(output_path)
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(output_path, "w", encoding="utf-8") as f:
+                        f.write(markdown_content)
 
-        return markdown_content, output_path
+                return markdown_content, output_path
 
-    except Exception as e:
-        msg = f"Failed to ingest repository: {e}"
-        raise RepositoryIngestorError(msg) from e
+            except Exception as e:
+                msg = f"Failed to ingest repository: {e}"
+                raise RepositoryIngestorError(msg) from e
 
 
 async def ingest_source(

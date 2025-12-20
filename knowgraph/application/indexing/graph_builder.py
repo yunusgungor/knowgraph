@@ -23,7 +23,9 @@ from knowgraph.infrastructure.cache.cache_manager import CacheManager
 from knowgraph.infrastructure.parsing.chunker import Chunk
 from knowgraph.infrastructure.parsing.hasher import hash_content
 from knowgraph.shared.error_metrics import IndexingMetrics
+from knowgraph.shared.memory_profiler import memory_guard
 from knowgraph.shared.performance import PerformanceTracker
+from knowgraph.shared.tracing import trace_operation
 
 logger = logging.getLogger(__name__)
 
@@ -365,10 +367,20 @@ class SmartGraphBuilder:
         self, chunks: list[Chunk], file_path: str, file_hash: str, graph_path: str
     ) -> tuple[list[Node], list[Edge]]:
         """Build graph nodes and edges from chunks using AI analysis."""
-        with self.perf_tracker.track("total_build"):
-            # 1. Create Nodes (Initial)
-            with self.perf_tracker.track("node_creation"):
-                initial_nodes = create_nodes_from_chunks(chunks, file_path)
+        with memory_guard(
+            operation_name=f"graph_build[{file_path}]",
+            warning_threshold_mb=200,
+            critical_threshold_mb=500,
+        ):
+            with trace_operation(
+                "smart_graph_builder.build",
+                file_path=file_path,
+                num_chunks=len(chunks),
+            ):
+                with self.perf_tracker.track("total_build"):
+                    # 1. Create Nodes (Initial)
+                    with self.perf_tracker.track("node_creation"):
+                        initial_nodes = create_nodes_from_chunks(chunks, file_path)
 
             # Initialize Cache Manager in the output directory
             cache_dir = Path(graph_path) / ".cache"
@@ -554,22 +566,22 @@ class SmartGraphBuilder:
 
                 all_edges = semantic_edges + relevant_reference_edges
 
-            # Auto-validate graph before returning
-            with self.perf_tracker.track("validation"):
-                validation_warnings = self._validate_build_results(final_nodes, all_edges)
-                if validation_warnings:
-                    logger.warning(
-                        f"Graph validation warnings: {len(validation_warnings)} issues detected"
-                    )
-                    for warning in validation_warnings[:5]:  # Show first 5
-                        logger.warning(f"  - {warning}")
+                # Auto-validate graph before returning
+                with self.perf_tracker.track("validation"):
+                    validation_warnings = self._validate_build_results(final_nodes, all_edges)
+                    if validation_warnings:
+                        logger.warning(
+                            f"Graph validation warnings: {len(validation_warnings)} issues detected"
+                        )
+                        for warning in validation_warnings[:5]:  # Show first 5
+                            logger.warning(f"  - {warning}")
 
-        # Log performance summary
-        perf_summary = self.perf_tracker.get_summary()
-        if perf_summary:
-            logger.info(f"\nBuild Performance Summary: {perf_summary}")
+                # Log performance summary
+                perf_summary = self.perf_tracker.get_summary()
+                if perf_summary:
+                    logger.info(f"\nBuild Performance Summary: {perf_summary}")
 
-        return final_nodes, all_edges
+                return final_nodes, all_edges
 
     def _validate_build_results(self, nodes: list[Node], edges: list[Edge]) -> list[str]:
         """Validate build results for common issues.

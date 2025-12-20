@@ -56,7 +56,8 @@ def get_knowledge_timeline(
         elif conv.metadata and "timestamp" in conv.metadata:
             try:
                 conv_time = datetime.fromisoformat(conv.metadata["timestamp"])
-            except:
+            except (ValueError, TypeError):
+                # Skip conversations with invalid timestamps
                 continue
         else:
             continue
@@ -123,7 +124,8 @@ def analyze_knowledge_accumulation(
             try:
                 ts = datetime.fromisoformat(node.metadata["timestamp"]).timestamp()
                 timestamps.append(ts)
-            except:
+            except (ValueError, TypeError):
+                # Skip nodes with invalid timestamps
                 continue
 
     if not timestamps:

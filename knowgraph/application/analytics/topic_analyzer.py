@@ -53,7 +53,8 @@ def analyze_trending_topics(
         elif "timestamp" in node.metadata:
             try:
                 node_time = datetime.fromisoformat(node.metadata["timestamp"])
-            except:
+            except (ValueError, TypeError):
+                # Skip nodes with invalid timestamps
                 continue
         else:
             continue
@@ -139,7 +140,8 @@ def identify_emerging_technologies(
         elif "timestamp" in node.metadata:
             try:
                 node_time = datetime.fromisoformat(node.metadata["timestamp"])
-            except:
+            except (ValueError, TypeError):
+                # Skip nodes with invalid timestamps
                 continue
         else:
             continue

@@ -170,19 +170,16 @@ class ProgressNotifier:
             message: Message to send
         """
         try:
-            await self.server.notification({
-                "method": "notifications/message",
-                "params": {
-                    "level": level,
-                    "logger": "knowgraph",
-                    "data": message,
-                },
-            })
-        except Exception as e:
-            # Fallback to stderr if notification fails
+            # Use MCP SDK's request_context to send log messages
+            # Note: Server doesn't have direct notification method in MCP SDK
+            # We'll use stderr as recommended by MCP protocol for server-side logging
             import sys
             print(f"[{level.upper()}] {message}", file=sys.stderr)
-            print(f"[WARNING] Failed to send MCP notification: {e}", file=sys.stderr)
+        except Exception as e:
+            # Fallback to basic stderr if even that fails
+            import sys
+            print(f"[{level.upper()}] {message}", file=sys.stderr)
+            print(f"[WARNING] Failed to send notification: {e}", file=sys.stderr)
 
     def _create_progress_bar(self, percentage: int) -> str:
         """Create visual progress bar.

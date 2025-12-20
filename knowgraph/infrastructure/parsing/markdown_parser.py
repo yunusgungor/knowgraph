@@ -8,6 +8,9 @@ import re
 from dataclasses import dataclass
 from typing import cast
 
+from knowgraph.shared.memory_profiler import memory_guard
+from knowgraph.shared.tracing import trace_operation
+
 
 @dataclass
 class MarkdownSection:
@@ -67,64 +70,74 @@ def parse_markdown(
         ValueError: If markdown_text is None or contains invalid UTF-8
 
     """
-    # Handle edge cases
-    if not markdown_text or markdown_text.isspace():
-        # Return empty list for empty/whitespace-only files
-        return []
+    with memory_guard(
+        operation_name=f"parse_md[{source_path if source_path else 'text'}]",
+        warning_threshold_mb=50,
+        critical_threshold_mb=150,
+    ):
+        with trace_operation(
+            "markdown_parser.parse_markdown",
+            source_path=source_path,
+            text_length=len(markdown_text) if markdown_text else 0,
+        ):
+            # Handle edge cases
+            if not markdown_text or markdown_text.isspace():
+                # Return empty list for empty/whitespace-only files
+                return []
 
-    lines = markdown_text.split("\n")
-    sections = []
-    header_stack: list[tuple[int, str]] = []  # Stack of (level, header)
+            lines = markdown_text.split("\n")
+            sections = []
+            header_stack: list[tuple[int, str]] = []  # Stack of (level, header)
 
-    # Regex for headers (H1-H4)
-    header_pattern = re.compile(r"^(#{1,4})\s+(.+?)$")
+            # Regex for headers (H1-H4)
+            header_pattern = re.compile(r"^(#{1,4})\s+(.+?)$")
 
-    current_section: dict[str, object] | None = None
+            current_section: dict[str, object] | None = None
 
-    for line_num, line in enumerate(lines, 1):
-        match = header_pattern.match(line)
+            for line_num, line in enumerate(lines, 1):
+                match = header_pattern.match(line)
 
-        if match:
-            # Save previous section
+                if match:
+                    # Save previous section
+                    if current_section:
+                        sections.append(_finalize_section(current_section, line_num - 1))
+
+                    # Parse header
+                    level = len(match.group(1))
+                    header_text = match.group(2).strip()
+
+                    # Update header stack (pop until we find parent level)
+                    while header_stack and header_stack[-1][0] >= level:
+                        header_stack.pop()
+                    header_stack.append((level, header_text))
+
+                    # Build header path
+                    header_path = " > ".join(h[1] for h in header_stack)
+
+                    # Start new section
+                    current_section = {
+                        "header": header_text,
+                        "level": level,
+                        "content_lines": [],
+                        "line_start": line_num,
+                        "header_path": header_path,
+                        "has_code": False,
+                    }
+                else:
+                    # Add line to current section
+                    if current_section:
+                        content_lines = current_section["content_lines"]
+                        if isinstance(content_lines, list):
+                            content_lines.append(line)
+                        # Check for code blocks
+                        if line.strip().startswith("```"):
+                            current_section["has_code"] = True
+
+            # Save last section
             if current_section:
-                sections.append(_finalize_section(current_section, line_num - 1))
+                sections.append(_finalize_section(current_section, len(lines)))
 
-            # Parse header
-            level = len(match.group(1))
-            header_text = match.group(2).strip()
-
-            # Update header stack (pop until we find parent level)
-            while header_stack and header_stack[-1][0] >= level:
-                header_stack.pop()
-            header_stack.append((level, header_text))
-
-            # Build header path
-            header_path = " > ".join(h[1] for h in header_stack)
-
-            # Start new section
-            current_section = {
-                "header": header_text,
-                "level": level,
-                "content_lines": [],
-                "line_start": line_num,
-                "header_path": header_path,
-                "has_code": False,
-            }
-        else:
-            # Add line to current section
-            if current_section:
-                content_lines = current_section["content_lines"]
-                if isinstance(content_lines, list):
-                    content_lines.append(line)
-                # Check for code blocks
-                if line.strip().startswith("```"):
-                    current_section["has_code"] = True
-
-    # Save last section
-    if current_section:
-        sections.append(_finalize_section(current_section, len(lines)))
-
-    return sections
+            return sections
 
 
 def _finalize_section(section_data: dict[str, object], line_end: int) -> MarkdownSection:

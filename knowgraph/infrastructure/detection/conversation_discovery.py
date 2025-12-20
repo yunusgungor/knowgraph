@@ -156,3 +156,21 @@ def get_conversation_count_by_editor() -> dict[str, int]:
     """
     discovered = discover_all_conversations()
     return {editor: len(files) for editor, files in discovered.items()}
+
+def discover_conversations(workspace_path: Path) -> list[Path]:
+    """Discover all conversation files, optionally filtered by workspace.
+
+    Args:
+    ----
+        workspace_path: Workspace root path (currently unused, discovers all)
+
+    Returns:
+    -------
+        List of all conversation file paths from all editors
+
+    """
+    all_conversations = discover_all_conversations()
+    result = []
+    for editor_files in all_conversations.values():
+        result.extend(editor_files)
+    return result
