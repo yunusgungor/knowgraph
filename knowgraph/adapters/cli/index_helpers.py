@@ -3,10 +3,12 @@
 Extracted from run_index to reduce complexity and improve maintainability.
 """
 
+import asyncio
 import glob
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 import click
@@ -46,7 +48,7 @@ async def _handle_repository_source(
     # Try git clone first
     if shutil.which("git") is not None:
         _log_verbose(verbose, "Cloning repository (git)...")
-        subprocess.run(
+        subprocess.run(  # noqa: S603
             ["git", "clone", "--depth", "1", input_path, str(temp_path)],
             check=True,
             capture_output=True,
@@ -86,7 +88,7 @@ async def _download_repository_zip(
         try:
             _log_verbose(verbose, f"  Trying {branch} branch...")
 
-            with urllib.request.urlopen(zip_url, timeout=30) as response:
+            with urllib.request.urlopen(zip_url, timeout=30) as response:  # noqa: S310
                 if response.status == 200:
                     zip_content = response.read()
                     with zipfile.ZipFile(io.BytesIO(zip_content)) as zip_ref:
@@ -282,9 +284,6 @@ def cleanup_temp_files() -> None:
 
 # Hash Preparation & File Processing
 
-import asyncio
-import time
-
 
 async def prepare_files_and_hashes(files, base_path, verbose):
     from knowgraph.adapters.cli.index_command import EXT_MAP
@@ -324,7 +323,7 @@ async def prepare_files_and_hashes(files, base_path, verbose):
             except UnicodeDecodeError:
                 try:
                     content = await loop.run_in_executor(None, file_path.read_text, "latin-1")
-                except:
+                except Exception:  # noqa: S110
                     return None
 
             try:
@@ -379,7 +378,7 @@ def load_existing_manifest(output_path, verbose):
         manifest = read_manifest(manifest_path)
         _log_verbose(verbose, f"Loaded manifest (v{manifest.version})")  # type: ignore[union-attr]
         return manifest
-    except:
+    except Exception:  # noqa: S110
         return None
 
 

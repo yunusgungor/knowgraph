@@ -79,7 +79,7 @@ def _get_query_cache_key(
     import hashlib
 
     key_parts = f"{query_text}|{top_k}|{max_hops}|{max_tokens}|{enable_hierarchical_lifting}|{lift_levels}|{with_explanation}"
-    return hashlib.md5(key_parts.encode()).hexdigest()
+    return hashlib.md5(key_parts.encode()).hexdigest()  # noqa: S324
 
 
 @dataclass

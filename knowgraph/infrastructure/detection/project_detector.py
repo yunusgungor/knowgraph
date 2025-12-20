@@ -54,7 +54,7 @@ def detect_git_root(start_path: Path | None = None) -> Path | None:
         if not start_path.exists():
             logger.warning(f"Start path does not exist: {start_path}")
             return None
-            
+
         if not start_path.is_dir():
             start_path = start_path.parent
             logger.debug(f"Start path is not a directory, using parent: {start_path}")
@@ -113,7 +113,7 @@ def detect_project_markers(start_path: Path | None = None) -> Path | None:
     # Search upward through parent directories
     while current != current.parent:
         searched_paths.append(str(current))
-        
+
         # Check for any marker file in current directory
         for marker in PROJECT_MARKERS:
             marker_path = current / marker
@@ -281,7 +281,7 @@ def detect_project_root(start_path: Path | None = None, use_llm: bool = True) ->
         logger.warning(
             f"⚠️ Start path was root directory, using cwd instead: {fallback}",
         )
-        
+
     # If cwd is also root or home, use a sensible default
     if fallback == fallback.parent or fallback == Path.home():
         # Create a default workspace directory in home
