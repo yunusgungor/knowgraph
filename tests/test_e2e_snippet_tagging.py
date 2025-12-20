@@ -4,12 +4,15 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from knowgraph.application.tagging.snippet_tagger import (
     create_tagged_snippet,
     index_tagged_snippet,
 )
 
 
+@pytest.mark.asyncio
 async def test_snippet_tagging():
     """Test the complete snippet tagging workflow."""
     print("🧪 Testing Snippet Tagging Feature\n")
