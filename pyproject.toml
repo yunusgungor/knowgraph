@@ -2,9 +2,16 @@
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+include-package-data = true
+
+# Post-install hook for Joern setup
+[tool.setuptools.cmdclass]
+install = "setup_joern.PostInstallCommand"
+
 [project]
 name = "knowgraph"
-version = "0.6.2"
+version = "1.0.0"
 description = "Knowledge Graph-Powered RAG system with enterprise resilience patterns"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -62,6 +69,7 @@ dev = [
 
 [project.scripts]
 knowgraph = "knowgraph.adapters.cli.main:cli"
+knowgraph-setup-joern = "setup_joern:install_joern"
 
 [project.urls]
 Homepage = "https://github.com/yunusgungor/knowgraph"

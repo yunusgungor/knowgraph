@@ -393,12 +393,7 @@ class QueryEngine:
                         query=query_text,
                         answer=answer,
                         context=context,
-                        seed_nodes=seed_node_ids,
-                        active_subgraph_size=len(nodes),
-                        execution_time=total_time,
-                        sparse_search_time=timings["sparse_search"],
-                        graph_expansion_time=timings["graph_expansion"],
-                        centrality_time=timings["centrality"],
+        centrality_time=timings["centrality"],
                         explanation=explanation,
                     )
 
@@ -409,6 +404,137 @@ class QueryEngine:
                         "Query execution failed",
                         {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
                     ) from error
+
+    async def query_dataflow(
+        self,
+        source_pattern: str,
+        sink_pattern: str,
+        max_path_length: int = 10,
+        edge_types: list[str] | None = None,
+    ) -> "DataFlowResult":
+        """Find all dataflow paths from source to sink.
+
+        Uses natural language to find source and sink nodes, then traces
+        data flow paths using Joern's data_flow edges.
+
+        Example:
+        -------
+            # Find how user input flows to database queries
+            result = await engine.query_dataflow(
+                source_pattern="user input from HTTP request",
+                sink_pattern="SQL query execution",
+                max_path_length=10,
+            )
+
+            # Visualize the flow
+            print(result.to_mermaid())
+
+        Args:
+        ----
+            source_pattern: Natural language description of source (e.g., "user input")
+            sink_pattern: Natural language description of sink (e.g., "database query")
+            max_path_length: Maximum path length to search
+            edge_types: Edge types to traverse (default: ["data_flow"])
+
+        Returns:
+        -------
+            DataFlowResult with paths, nodes, and visualization
+
+        """
+        from knowgraph.application.security.dataflow_result import DataFlowResult
+        import networkx as nx
+
+        if edge_types is None:
+            edge_types = ["data_flow"]
+
+        with trace_operation(
+            "query_dataflow",
+            metadata={
+                "source": source_pattern[:50],
+                "sink": sink_pattern[:50],
+            },
+        ) as trace:
+            try:
+                # 1. Find source nodes using vector search
+                source_results = await self.retriever.retrieve_by_similarity_async(
+                    source_pattern,
+                    top_k=5,
+                )
+                source_ids = [node.id for node, _ in source_results]
+
+                trace.add_event("sources_found", {"count": len(source_ids)})
+
+                # 2. Find sink nodes
+                sink_results = await self.retriever.retrieve_by_similarity_async(
+                    sink_pattern,
+                    top_k=5,
+                )
+                sink_ids = [node.id for node, _ in sink_results]
+
+                trace.add_event("sinks_found", {"count": len(sink_ids)})
+                
+                # 3. Load edges and build graph
+                from pathlib import Path as PathType
+                graph_path = PathType(self.graph_store_path) if isinstance(self.graph_store_path, str) else self.graph_store_path
+                all_edges = read_all_edges(graph_path)
+
+                # Filter to specified edge types
+                filtered_edges = [
+                    edge for edge in all_edges
+                    if edge.type in edge_types
+                ]
+
+                # Build NetworkX graph
+                G = nx.DiGraph()
+                for edge in filtered_edges:
+                    G.add_edge(edge.source, edge.target, type=edge.type)
+
+                trace.add_event("graph_built", {"edges": len(filtered_edges)})
+
+                # 4. Find all paths from sources to sinks
+                all_paths = []
+                for source_id in source_ids:
+                    for sink_id in sink_ids:
+                        try:
+                            paths = nx.all_simple_paths(
+                                G,
+                                source_id,
+                                sink_id,
+                                cutoff=max_path_length,
+                            )
+                            all_paths.extend(list(paths))
+                        except (nx.NetworkXNoPath, nx.NodeNotFound):
+                            continue
+
+                trace.add_event("paths_found", {"count": len(all_paths)})
+
+                # 5. Load node data for all nodes in paths
+                unique_node_ids = set()
+                for path in all_paths:
+                    unique_node_ids.update(path)
+
+                # Use retriever's _load_nodes_async method
+                nodes_data = await self.retriever._load_nodes_async(list(unique_node_ids))
+
+                # Build nodes dict
+                nodes_dict = {node.id: node for node in nodes_data}
+
+                # 6. Build result
+                result = DataFlowResult(
+                    paths=all_paths,
+                    nodes=nodes_dict,
+                    source_pattern=source_pattern,
+                    sink_pattern=sink_pattern,
+                    path_count=len(all_paths),
+                )
+
+                trace.add_event("dataflow_complete", {"success": True})
+                return result
+
+            except Exception as e:
+                trace.record_exception(e)
+                msg = f"Error executing dataflow query: {e!s}"
+                raise QueryError(msg) from e
 
     async def query_async(
         self: "QueryEngine",

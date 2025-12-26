@@ -21,6 +21,13 @@ from knowgraph.adapters.mcp.handlers import (
     handle_search_bookmarks,
     handle_tag_snippet,
     handle_validate,
+    # Joern-specific handlers
+    handle_analyze_call_graph,
+    handle_export_cpg,
+    handle_find_dead_code,
+    handle_generate_cpg,
+    handle_joern_query,
+    handle_security_scan,
 )
 from knowgraph.adapters.mcp.utils import get_llm_provider, resolve_graph_path
 from knowgraph.adapters.mcp.version_handlers import (
@@ -265,6 +272,25 @@ async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
 
     elif name == "knowgraph_diagnostic":
         return await handle_diagnostic(arguments, PROJECT_ROOT)
+
+    # Joern-specific tools
+    elif name == "knowgraph_joern_query":
+        return await handle_joern_query(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_security_scan":
+        return await handle_security_scan(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_find_dead_code":
+        return await handle_find_dead_code(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_analyze_call_graph":
+        return await handle_analyze_call_graph(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_export_cpg":
+        return await handle_export_cpg(arguments, PROJECT_ROOT)
+
+    elif name == "knowgraph_generate_cpg":
+        return await handle_generate_cpg(arguments, PROJECT_ROOT)
 
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -665,6 +691,163 @@ async def list_tools() -> list[types.Tool]:
                         "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
                     },
                 },
+            },
+        ),
+        # Joern-specific tools
+        types.Tool(
+            name="knowgraph_joern_query",
+            description="Execute native Joern DSL queries for advanced code analysis. Use predefined templates or custom queries.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cpg_path": {
+                        "type": "string",
+                        "description": "Path to CPG binary file (required).",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Native Joern DSL query string (e.g., 'cpg.method.name.l').",
+                    },
+                    "query_name": {
+                        "type": "string",
+                        "description": "Use predefined query template (e.g., 'find_sql_injections', 'find_buffer_overflows').",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Query timeout in seconds (default: 60).",
+                    },
+                },
+                "required": ["cpg_path"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_security_scan",
+            description="Run security policy validation with 10 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cpg_path": {
+                        "type": "string",
+                        "description": "Path to CPG binary file (required).",
+                    },
+                    "severity_filter": {
+                        "type": "string",
+                        "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+                        "description": "Minimum severity level for violations (default: MEDIUM).",
+                    },
+                    "policy_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Specific policies to run (e.g., ['buffer_overflow', 'sql_injection']). Omit to run all.",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to graph storage for automatic CPG detection (optional).",
+                    },
+                },
+                "required": ["cpg_path"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_find_dead_code",
+            description="Detect unreachable methods using dominance analysis. Find methods that have no callers (potential dead code).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cpg_path": {
+                        "type": "string",
+                        "description": "Path to CPG binary file (required).",
+                    },
+                    "include_internal": {
+                        "type": "boolean",
+                        "description": "Include internal methods starting with underscore (default: false).",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to graph storage for automatic CPG detection (optional).",
+                    },
+                },
+                "required": ["cpg_path"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_analyze_call_graph",
+            description="Analyze call graph structure and relationships. Supports validation, recursive call detection, and call chain analysis.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cpg_path": {
+                        "type": "string",
+                        "description": "Path to CPG binary file (required).",
+                    },
+                    "analysis_type": {
+                        "type": "string",
+                        "enum": ["validate", "recursive", "call_chain"],
+                        "description": "Type of analysis: 'validate' (health check), 'recursive' (find recursion), 'call_chain' (paths between methods).",
+                    },
+                    "method_name": {
+                        "type": "string",
+                        "description": "Source method name (required for call_chain analysis).",
+                    },
+                    "target_method": {
+                        "type": "string",
+                        "description": "Target method name (required for call_chain analysis).",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to graph storage for automatic CPG detection (optional).",
+                    },
+                },
+                "required": ["cpg_path"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_export_cpg",
+            description="Export CPG to various formats for visualization and CI/CD integration. Supports JSON, SARIF, Neo4j, DOT, and GraphML.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cpg_path": {
+                        "type": "string",
+                        "description": "Path to source CPG binary file (required).",
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Export destination path (required).",
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": ["json", "sarif", "neo4j", "dot", "graphml"],
+                        "description": "Export format (default: json).",
+                    },
+                    "graph_path": {
+                        "type": "string",
+                        "description": "Path to graph storage for automatic CPG detection (optional).",
+                    },
+                },
+                "required": ["cpg_path", "output_path"],
+            },
+        ),
+        types.Tool(
+            name="knowgraph_generate_cpg",
+            description="Generate Code Property Graph dynamically from source code. Automatically detects language and generates CPG for analysis.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "source_path": {
+                        "type": "string",
+                        "description": "Path to source code directory or file (required).",
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Language hint for CPG generation (optional, auto-detected if not provided).",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Generation timeout in seconds (default: 600).",
+                    },
+                },
+                "required": ["source_path"],
             },
         ),
     ]

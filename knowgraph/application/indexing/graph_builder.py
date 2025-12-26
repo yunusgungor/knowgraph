@@ -15,7 +15,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from knowgraph.config import BATCH_SIZE, MAX_CONCURRENT_REQUESTS
-from knowgraph.domain.intelligence.code_analyzer import ASTAnalyzer
+from knowgraph.domain.intelligence.code_analyzer import CodeAnalyzer
 from knowgraph.domain.intelligence.provider import IntelligenceProvider
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
@@ -348,7 +348,7 @@ class SmartGraphBuilder:
     """Graph builder that uses Intelligence Provider for semantic analysis.
 
     This class provides AI-powered graph building with:
-    - 3-tier hybrid entity extraction (Cache -> AST -> LLM)
+    - 3-tier hybrid entity extraction (Cache -> AST/Joern -> LLM)
     - Async batch processing
     - Performance tracking
     - Automatic validation
@@ -356,10 +356,15 @@ class SmartGraphBuilder:
 
     def __init__(self, provider: IntelligenceProvider | None = None):
         """Initialize builder with optional provider."""
+        from knowgraph.config import CPG_NODES_ENABLED
+        from knowgraph.domain.intelligence.cpg_converter import CPGConverter
+        
         self.provider = provider
         # CacheManager will be initialized in build() when path is known
         self.cache_manager: CacheManager | None = None
-        self.ast_analyzer = ASTAnalyzer()
+        self.code_analyzer = CodeAnalyzer()  # Hybrid AST + Joern analyzer
+        self.cpg_converter = CPGConverter()   # CPG to KnowGraph converter
+        self.enable_cpg_nodes = CPG_NODES_ENABLED  # Feature flag
         self.metrics = IndexingMetrics()
         self.perf_tracker = PerformanceTracker()
 
@@ -377,6 +382,9 @@ class SmartGraphBuilder:
                 file_path=file_path,
                 num_chunks=len(chunks),
             ):
+                # Track CPG edges during entity extraction
+                cpg_edges = []  # Collect CPG edges here
+                
                 with self.perf_tracker.track("total_build"):
                     # 1. Create Nodes (Initial)
                     with self.perf_tracker.track("node_creation"):
@@ -409,20 +417,66 @@ class SmartGraphBuilder:
 
                     self.metrics.record_cache_miss()
 
-                    # Check AST (if code)
-                    # Simple heuristic: ASTAnalyzer handles syntax errors gracefully
+                    # Check CodeAnalyzer (Hybrid AST/Joern strategy)
+                    # CodeAnalyzer intelligently selects backend based on language and file size
                     try:
-                        ast_entities = self.ast_analyzer.extract_entities(node.content)
-                        if ast_entities:
+                        # Extract entities and optionally get CPG
+                        entities, cpg = self.code_analyzer.extract_entities_with_cpg(
+                            node.content,
+                            file_path=file_path  # Pass file path for language detection
+                        )
+                        
+                        if entities:
+                            # Record success (may be AST or Joern depending on strategy)
                             self.metrics.record_ast_success()
-                            self.cache_manager.save_entities(node.hash, ast_entities)
+                            self.cache_manager.save_entities(node.hash, entities)
                             final_nodes_map[node.id] = replace(
-                                node, metadata={"entities": [e._asdict() for e in ast_entities]}
+                                node, metadata={"entities": [e._asdict() for e in entities]}
                             )
+                            
+                            # NEW: If CPG available and CPG nodes enabled, create entity nodes + edges
+                            if cpg and self.enable_cpg_nodes:
+                                logger.info(f"Converting CPG for {file_path}: {cpg.metadata.get('num_nodes')} nodes")
+                                
+                                try:
+                                    cpg_result = self.cpg_converter.convert_cpg_to_graph(
+                                        cpg,
+                                        chunk_node_id=node.id,
+                                        file_path=file_path,
+                                    )
+                                    
+                                    # Add CPG entity nodes to graph
+                                    for entity_node in cpg_result.entity_nodes:
+                                        final_nodes_map[entity_node.id] = entity_node
+                                    
+                                    # Add CPG edges to collection
+                                    cpg_edges.extend(cpg_result.cpg_edges)
+                                    
+                                    # Add hierarchy edges: entity nodes -> chunk node
+                                    for entity_node in cpg_result.entity_nodes:
+                                        hierarchy_edge = Edge(
+                                            source=entity_node.id,
+                                            target=node.id,
+                                            type="hierarchy",
+                                            score=1.0,
+                                            created_at=int(__import__('time').time()),
+                                            metadata={"relation": "child_of_chunk", "source": "cpg"},
+                                        )
+                                        cpg_edges.append(hierarchy_edge)
+                                    
+                                    logger.info(
+                                        f"✅ CPG integration: +{len(cpg_result.entity_nodes)} nodes, "
+                                        f"+{len(cpg_result.cpg_edges)} edges"
+                                    )
+                                    
+                                except Exception as cpg_err:
+                                    logger.warning(f"CPG conversion failed for {file_path}: {cpg_err}")
+                                    # Continue with metadata-only (graceful degradation)
+                            
                             continue
                     except Exception as e:
                         self.metrics.record_ast_failure(str(e), f"node_{node.id}")
-                        logger.debug(f"AST parsing failed for node {node.id}: {e}")
+                        logger.debug(f"Code analysis failed for node {node.id}: {e}")
 
                     # If Cache Miss & AST Miss -> Queue for LLM
                     nodes_needing_llm.append(node)
@@ -491,8 +545,9 @@ class SmartGraphBuilder:
                 for node in nodes_needing_llm:
                     final_nodes_map[node.id] = node
 
-            # Reassemble final nodes in original order
-            final_nodes = [final_nodes_map[node.id] for node in initial_nodes]
+            # Reassemble final nodes
+            # Include ALL nodes from map (chunks + CPG entity nodes)
+            final_nodes = list(final_nodes_map.values())
 
             # Finalize metrics
             self.metrics.finalize()
@@ -564,7 +619,9 @@ class SmartGraphBuilder:
                     if e.source in new_node_ids or e.target in new_node_ids
                 ]
 
-                all_edges = semantic_edges + relevant_reference_edges
+                # Include CPG edges if any were collected
+                all_edges = semantic_edges + relevant_reference_edges + cpg_edges
+
 
                 # Auto-validate graph before returning
                 with self.perf_tracker.track("validation"):

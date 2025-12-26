@@ -1,5 +1,6 @@
-# 🧠 KnowGraph: Graph RAG & MCP Server for Code
+# 🧠 KnowGraph: Graph RAG & MCP Server for Code (v1.0.0 🚀)
 [![CI](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml)
+[![Joern](https://img.shields.io/badge/Powered_by-Joern_CPG-orange?style=flat-square)](https://joern.io)
 
 <div align="center">
 
@@ -35,19 +36,59 @@ KnowGraph leverages **Graph Theory** and **Network Science** principles to offer
 
 ---
 
-## 🚀 Performance Engine (v0.6.0)
+## 🚀 Performance Engine (v1.0.0) 🆕
 
-KnowGraph is built for scale. The **Smart Indexing Engine** processes large repositories efficiently:
+KnowGraph is built for scale with **revolutionary deep code analysis** powered by Joern:
 
-*   **⚡ Hybrid Intelligence:** Code files are analyzed using **AST (Abstract Syntax Tree)** via `ASTAnalyzer` for 100x speed and 0-token cost, while text files use Batch LLM processing through `OpenAIProvider` or `MCPSamplingProvider`.
-*   **🧠 Persistent Memory:** Built-in SQLite Caching via `CacheManager` (`.knowgraph_cache`) ensures you never re-index unchanged files. Resumes instantly after interruptions.
-*   **🛡️ Smart Rate Limiter:** The `RateLimiter` class automatically respects API limits (Free/Pro tiers) by dynamically throttling requests based on headers, preventing 429 errors.
-*   **🏎️ Concurrent Batching:** `SmartGraphBuilder` processes 10 chunks per call with 20 parallel workers, maximizing throughput.
-*   **📊 Graph Algorithms:** Leverages NetworkX for centrality calculations (Betweenness, Degree, Closeness, Eigenvector) to identify architecturally critical components.
+### 🔬 Deep Code Analysis (NEW in v1.0.0)
+
+*   **🧬 Joern CPG Integration:** Leverages [Joern's Code Property Graph](https://joern.io) for industrial-grade static analysis:
+    *   **Data Flow Analysis:** Track how data moves through your code (taint tracking for security)
+    *   **Control Flow Graphs:** Understand execution paths and conditional logic
+    *   **Call Graphs:** Map function dependencies across your entire codebase
+    *   **AST + CFG + PDG:** Multi-layered analysis for comprehensive understanding
+*   **🌍 28+ Language Support:** Python, JavaScript/TypeScript, Java, Go, C/C++, C#, Scala, PHP, Ruby, Kotlin, Swift, and more
+*   **⚡ Intelligent Hybrid Strategy:**
+    *   Small Python files (< 1000 LOC) → Lightning-fast AST analysis
+    *   Large C/C++/Java files → Deep Joern CPG analysis
+    *   **Zero configuration required** - automatic language detection and strategy selection
+
+### ⚙️ Smart Indexing Engine
+
+*   **🧠 Persistent Memory:** Built-in SQLite Caching via `CacheManager` ensures you never re-index unchanged files
+*   **🛡️ Smart Rate Limiter:** Automatically respects API limits with dynamic throttling
+*   **🏎️ Concurrent Batching:** `SmartGraphBuilder` processes 10 chunks with 20 parallel workers
+*   **📊 Graph Algorithms:** NetworkX-powered centrality calculations (PageRank, Betweenness, Closeness)
 
 ---
 
 ## 🎯 Key Features
+
+### 🆕 1. 🔬 Advanced Code Intelligence (v1.0.0)
+
+KnowGraph now includes **Joern-powered deep code analysis** for security and architecture insights:
+
+*   **🔍 Vulnerability Detection:** Trace user input to dangerous sinks (SQL injection, XSS)
+*   **📊 Impact Analysis:** Understand ripple effects of code changes using precise dependency graphs
+*   **🔗 Cross-Language Analysis:** Analyze polyglot codebases with unified CPG representation
+*   **🎯 4 New Edge Types:**
+    *   `call` - Function invocation relationships
+    *   `data_flow` - Variable reaching definitions (taint tracking)
+    *   `control_flow` - Execution paths (branching, loops)
+    *   `ast` - Syntax hierarchy (fine-grained code structure)
+
+```bash
+# Joern features are enabled by default (zero config)
+pip install knowgraph  # Joern auto-installs!
+
+# Analyze a C++ codebase with deep CPG
+knowgraph index ./my-cpp-project
+
+# Disable Joern if needed (uses fast AST only)
+KNOWGRAPH_JOERN_ENABLED=false knowgraph index ./project
+```
+
+---
 
 ### 1. 📊 Time-Travel Debugging (Graph Versioning - v0.6.0)
 
