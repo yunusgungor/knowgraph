@@ -60,15 +60,64 @@ class CodeEntityExtractor:
             method_entities = self._extract_methods(cpg_path, executor)
             entities.extend(method_entities)
             
-            # Extract classes (if applicable)
-            # class_entities = self._extract_classes(cpg_path, executor)
-            # entities.extend(class_entities)
+            # NEW: Extract classes
+            class_entities = self._extract_classes(cpg_path, executor)
+            entities.extend(class_entities)
             
-            logger.info(f"Extracted {len(entities)} code entities from CPG")
+            logger.info(f"Extracted {len(method_entities)} methods and {len(class_entities)} classes ({len(entities)} total)")
             return entities
             
         except Exception as e:
             logger.error(f"Failed to extract entities from CPG: {e}")
+            return []
+    
+    def _extract_classes(self, cpg_path: Path, executor) -> list[CodeEntity]:
+        """Extract class entities from CPG.
+        
+        Args:
+            cpg_path: Path to CPG binary
+            executor: JoernQueryExecutor instance
+            
+        Returns:
+            List of class entities
+        """
+        # Query for all type declarations (classes, interfaces)
+        query = 'cpg.typeDecl.name.l'
+        
+        try:
+            result = executor.execute_query(cpg_path, query, timeout=30)
+            
+            if not result or not result.results:
+                logger.warning("No classes found in CPG")
+                return []
+            
+            entities = []
+            
+            for item in result.results:
+                class_name = item.get('raw', '').strip()
+                
+                # Skip internal/builtin types
+                if not class_name or class_name in ['<module>', 'ANY'] or class_name.startswith('<'):
+                    continue
+                
+                entity = CodeEntity(
+                    name=class_name,
+                    entity_type='class',
+                    file_path=None,
+                    line_number=None,
+                    signature=None,
+                    description=f"Class: {class_name}",
+                    language='unknown',
+                    metadata={}
+                )
+                
+                entities.append(entity)
+            
+            logger.info(f"Extracted {len(entities)} classes from CPG")
+            return entities
+            
+        except Exception as e:
+            logger.error(f"Failed to extract classes: {e}")
             return []
     
     def _extract_methods(self, cpg_path: Path, executor) -> list[CodeEntity]:

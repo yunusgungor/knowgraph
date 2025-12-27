@@ -148,8 +148,48 @@ async def handle_query(
             else:
                 warning_msg = ""
 
+            # NEW: Query Classification for intelligent routing
+            from knowgraph.application.query.query_classifier import QueryClassifier, QueryType
+            from knowgraph.application.query.code_query_handler import CodeQueryHandler
+            
+            classifier = QueryClassifier()
+            query_type = classifier.classify(query)
+            
+            logger.info(f"Query classified as: {query_type.value} - '{query[:50]}'")
+            
+            # Route based on query type
+            if query_type == QueryType.CODE:
+                # CODE-only query → Use Joern tools
+                if progress:
+                    await progress.update(1, f'🔧 Code Analysis: "{query[:50]}..."')
+                
+                code_handler = CodeQueryHandler(graph_path)
+                code_results = await code_handler.handle(query)
+                
+                # Format and return code analysis results
+                output = code_handler.format_results(code_results)
+                
+                return [types.TextContent(type="text", text=output)]
+            
+            elif query_type == QueryType.HYBRID:
+                # HYBRID query → Run both text and code search in parallel
+                if progress:
+                    await progress.update(1, f'🔄 Hybrid Search: "{query[:50]}..."')
+                
+                logger.info("Running parallel text + code search")
+                
+                # Run code analysis (non-blocking)
+                code_handler = CodeQueryHandler(graph_path)
+                code_task = code_handler.handle(query)
+                
+                # Continue with text search below
+                # Code results will be merged after text search completes
+                
+            # TEXT or HYBRID queries continue with normal semantic search
+            
             if progress:
-                await progress.update(1, f'📝 Query: "{query[:50]}..."')
+                query_label = "hybrid" if query_type == QueryType.HYBRID else "text"
+                await progress.update(2, f'📝 Searching ({query_label})...')
 
             # Wrap query execution with circuit breaker
             async def execute_query():

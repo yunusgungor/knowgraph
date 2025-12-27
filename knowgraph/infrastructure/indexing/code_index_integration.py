@@ -73,28 +73,103 @@ class CodeIndexIntegration:
                 logger.info("CPG generation skipped (skip_cpg=True)")
                 return results
             
-            # Step 3: Generate CPG
-            logger.info("Generating CPG...")
-            try:
-                provider = JoernProvider()
-                cpg_path = provider.generate_cpg(
-                    repo_path=input_path,
-                    timeout=300  # 5 minutes
-                )
-                
-                results['cpg_generated'] = True
-                results['cpg_path'] = str(cpg_path)
-                self.cpg_path = cpg_path
-                self.cpg_generated = True
-                
-                logger.info(f"CPG generated at: {cpg_path}")
-                
-            except Exception as e:
-                logger.error(f"CPG generation failed: {e}")
-                results['error'] = f"CPG generation failed: {e}"
-                return results
+            # Step 2.5: Check for incremental updates (NEW - Phase 4)
+            from knowgraph.infrastructure.indexing.incremental_cpg import IncrementalCPGUpdater
             
-            # Step 4: Extract entities
+            updater = IncrementalCPGUpdater(graph_path)
+            changes = updater.detect_changes(code_files)
+            change_summary = updater.get_change_summary(changes)
+            
+            logger.info(f"File changes: {change_summary}")
+            
+            # Skip CPG regeneration if no changes
+            if not updater.should_regenerate_cpg(changes):
+                logger.info("No file changes detected - skipping CPG regeneration")
+                
+                # Try to use cached CPG
+                from knowgraph.infrastructure.caching import CPGCache
+                cache = CPGCache()
+                cached_cpg = cache.get_cached_cpg(input_path)
+                
+                if cached_cpg:
+                    logger.info(f"Using cached CPG: {cached_cpg}")
+                    results['cpg_generated'] = True
+                    results['cpg_path'] = str(cached_cpg)
+                    results['cpg_from_cache'] = True
+                    
+                    # Continue with entity extraction using cached CPG
+                    cpg_path = cached_cpg
+                    self.cpg_path = cpg_path
+                    self.cpg_generated = True
+                else:
+                    logger.warning("No cached CPG available despite no changes")
+                    # Fall through to generate new CPG
+            
+            # Step 3: Generate CPG (if needed)
+            if not results.get('cpg_from_cache'):
+                logger.info("Generating CPG...")
+                
+                # Check if parallel generation is worthwhile (NEW - Phase 4)
+                from knowgraph.infrastructure.indexing.parallel_cpg import ParallelCPGGenerator
+                
+                parallel_gen = ParallelCPGGenerator(max_workers=4)
+                use_parallel = parallel_gen.should_use_parallel(code_files)
+                
+                if use_parallel:
+                    logger.info("Using parallel CPG generation for large repository")
+                    try:
+                        import tempfile
+                        with tempfile.TemporaryDirectory() as tmpdir:
+                            cpg_paths = parallel_gen.generate_parallel(
+                                code_files,
+                                Path(tmpdir),
+                                timeout=300
+                            )
+                            
+                            if cpg_paths:
+                                # Use first generated CPG (simplified)
+                                cpg_path = cpg_paths[0]
+                                results['cpg_generated'] = True
+                                results['cpg_path'] = str(cpg_path)
+                                results['parallel_generation'] = True
+                                self.cpg_path = cpg_path
+                                self.cpg_generated = True
+                                logger.info(f"Parallel CPG generation complete: {len(cpg_paths)} CPGs")
+                            else:
+                                logger.warning("Parallel generation failed, falling back to single CPG")
+                                use_parallel = False
+                    except Exception as e:
+                        logger.warning(f"Parallel generation failed: {e}, falling back to single CPG")
+                        use_parallel = False
+                
+                # Fall back to single CPG generation
+                if not use_parallel or not results.get('cpg_generated'):
+                    try:
+                        provider = JoernProvider()
+                        cpg_path = provider.generate_cpg(
+                            repo_path=input_path,
+                            timeout=300  # 5 minutes
+                        )
+                        
+                        results['cpg_generated'] = True
+                        results['cpg_path'] = str(cpg_path)
+                        results['parallel_generation'] = False
+                        self.cpg_path = cpg_path
+                        self.cpg_generated = True
+                        
+                        logger.info(f"CPG generated at: {cpg_path}")
+                        
+                        # NEW: Save CPG metadata for query-time use
+                        from knowgraph.infrastructure.indexing.cpg_metadata import save_cpg_metadata
+                        save_cpg_metadata(graph_path, cpg_path)
+                        logger.info("Saved CPG metadata to graph")
+                        
+                    except Exception as e:
+                        logger.error(f"CPG generation failed: {e}")
+                        results['error'] = f"CPG generation failed: {e}"
+                        return results
+            
+            # Step 4: Extract entities (methods + classes)
             logger.info("Extracting code entities...")
             try:
                 extractor = CodeEntityExtractor()
@@ -105,11 +180,69 @@ class CodeIndexIntegration:
                 
                 logger.info(f"Extracted {len(entities)} code entities")
                 
-                # Step 5: Convert to graph nodes
+                # Step 5: Extract call graph edges (NEW - Phase 3)
+                logger.info("Extracting call graph relationships...")
+                try:
+                    from knowgraph.domain.intelligence.call_graph_extractor import CallGraphExtractor
+                    
+                    call_extractor = CallGraphExtractor()
+                    call_edges = call_extractor.extract_call_edges(cpg_path)
+                    
+                    results['call_edges_extracted'] = len(call_edges)
+                    logger.info(f"Extracted {len(call_edges)} call graph edges")
+                    
+                except Exception as e:
+                    logger.warning(f"Call graph extraction failed (non-fatal): {e}")
+                    results['call_edges_extracted'] = 0
+                
+                # Step 6: Extract data flows (NEW - Phase 3)
+                logger.info("Analyzing data flows...")
+                try:
+                    from knowgraph.domain.intelligence.data_flow_analyzer import DataFlowAnalyzer
+                    
+                    flow_analyzer = DataFlowAnalyzer()
+                    data_flows = flow_analyzer.find_tainted_flows(cpg_path)
+                    
+                    results['data_flows_found'] = len(data_flows)
+                    logger.info(f"Found {len(data_flows)} potential data flows")
+                    
+                except Exception as e:
+                    logger.warning(f"Data flow analysis failed (non-fatal): {e}")
+                    results['data_flows_found'] = 0
+                
+                # Step 7: Link code to documentation (NEW - Phase 3)
+                logger.info("Linking code to documentation...")
+                try:
+                    from knowgraph.domain.intelligence.code_docs_linker import CodeDocsLinker
+                    
+                    linker = CodeDocsLinker()
+                    doc_links = linker.find_documentation_links(graph_path, entities)
+                    
+                    results['doc_links_found'] = len(doc_links)
+                    logger.info(f"Found {len(doc_links)} code-to-docs links")
+                    
+                except Exception as e:
+                    logger.warning(f"Code-docs linking failed (non-fatal): {e}")
+                    results['doc_links_found'] = 0
+                
+                # Step 8: Convert to graph nodes
                 if entities:
                     nodes = extractor.entities_to_graph_nodes(entities)
                     results['graph_nodes'] = nodes
                     logger.info(f"Converted to {len(nodes)} graph nodes")
+                
+                # Step 9: Cache CPG for future use (NEW - Phase 4)
+                try:
+                    from knowgraph.infrastructure.caching import CPGCache
+                    
+                    cache = CPGCache()
+                    cached_path = cache.cache_cpg(input_path, cpg_path)
+                    results['cpg_cached'] = True
+                    logger.info(f"Cached CPG for future queries")
+                    
+                except Exception as e:
+                    logger.warning(f"CPG caching failed (non-fatal): {e}")
+                    results['cpg_cached'] = False
                 
             except Exception as e:
                 logger.error(f"Entity extraction failed: {e}")
