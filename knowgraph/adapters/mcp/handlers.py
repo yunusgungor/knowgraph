@@ -1223,14 +1223,23 @@ async def handle_security_scan(arguments: dict[str, Any], PROJECT_ROOT: Path) ->
         except KeyError:
             severity_filter = Severity.MEDIUM
         
-        # Note: policy_names is not directly supported by PolicyEngine.validate_policies
-        # The method accepts 'policies' (list[Policy]) not 'policy_names' (list[str])
-        # For now, we use all policies and filter by severity
+        # Filter policies by name if policy_names is provided
+        policy_names = arguments.get("policy_names")
+        engine = PolicyEngine()
+        policies_to_check = None
+        
+        if policy_names:
+            policies_to_check = [p for p in engine.policies if p.name in policy_names]
+            if not policies_to_check:
+                return [types.TextContent(
+                    type="text", 
+                    text=f"Error: None of the specified policies found: {policy_names}"
+                )]
         
         # Run policy validation
-        engine = PolicyEngine()  
         violations = engine.validate_policies(
             cpg_path,
+            policies=policies_to_check,
             severity_filter=severity_filter
         )
         
