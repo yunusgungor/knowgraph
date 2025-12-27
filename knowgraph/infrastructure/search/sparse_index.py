@@ -197,7 +197,7 @@ class SparseIndex:
         with open(path) as f:
             data = json.load(f)
 
-        self.index = data["index"]
+        self.index = defaultdict(list, data["index"])
         self.doc_lengths = data["doc_lengths"]
         self.n_docs = data["n_docs"]
         self.avg_doc_length = data["avg_doc_length"]

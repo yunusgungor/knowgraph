@@ -6,6 +6,7 @@ improving maintainability and testability.
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -35,9 +36,13 @@ from knowgraph.shared.refactoring import (
 )
 from knowgraph.shared.tracing import trace_operation
 from knowgraph.shared.versioning import (
+    VersionRegistry,
     get_current_version,
     negotiate_version,
 )
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Global resilience patterns - shared across all handlers
 _global_circuit_breaker = CircuitBreaker(

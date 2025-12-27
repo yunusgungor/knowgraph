@@ -531,3 +531,48 @@ class JoernProvider:
                 
         logger.info(f"✅ Extracted {len(entities)} entities from CPG")
         return entities
+
+    def run_security_scan(self, cpg_path: Path) -> dict:
+        """Run security scan using PolicyEngine."""
+        from knowgraph.application.security.policy_engine import PolicyEngine
+        engine = PolicyEngine()
+        violations = engine.validate_policies(cpg_path)
+        
+        # Convert to dict format expected by CodeQueryHandler
+        return {"violations": [
+            {
+                "rule_name": v.policy.name,
+                "description": v.description,
+                "severity": v.severity.name,
+                "message": v.description,
+                "file_path": str(v.location),
+                "line_number": 0
+            }
+            for v in violations
+        ]}
+
+    def find_dead_code(self, cpg_path: Path) -> dict:
+        """Find dead code using DominanceAnalyzer."""
+        from knowgraph.application.analysis.dominance_analyzer import DominanceAnalyzer
+        analyzer = DominanceAnalyzer()
+        dead_methods = analyzer.find_dead_code(cpg_path)
+        # CodeQueryHandler expects simple list of names in 'unreachable_methods'
+        return {"unreachable_methods": [m.get('name') for m in dead_methods if isinstance(m, dict)]}
+
+    def analyze_call_graph(self, cpg_path: Path, analysis_type: str = "validate") -> dict:
+        """Analyze call graph using CallGraphAnalyzer."""
+        from knowgraph.application.analysis.call_graph_analyzer import CallGraphAnalyzer
+        analyzer = CallGraphAnalyzer()
+        
+        if analysis_type == "validate":
+            result = analyzer.validate_call_graph(cpg_path)
+            return {
+                "is_valid": result.is_valid,
+                "total_methods": result.total_methods,
+                "call_edges": result.call_edges,
+                "entry_points": result.entry_points
+            }
+        elif analysis_type == "recursive":
+             recursive_methods = analyzer.find_recursive_calls(cpg_path)
+             return {"recursive_methods": recursive_methods}
+        return {}

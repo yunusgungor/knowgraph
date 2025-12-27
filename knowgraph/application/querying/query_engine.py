@@ -393,7 +393,12 @@ class QueryEngine:
                         query=query_text,
                         answer=answer,
                         context=context,
-        centrality_time=timings["centrality"],
+                        seed_nodes=seed_node_ids,
+                        active_subgraph_size=len(nodes),
+                        execution_time=total_time,
+                        sparse_search_time=timings["sparse_search"],
+                        graph_expansion_time=timings["graph_expansion"],
+                        centrality_time=timings["centrality"],
                         explanation=explanation,
                     )
 

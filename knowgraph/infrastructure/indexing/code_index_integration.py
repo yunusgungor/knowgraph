@@ -312,6 +312,7 @@ class CodeIndexIntegration:
                         manifest = read_manifest(graph_path)
                         
                         written_count = 0
+                        created_nodes = []  # Track nodes for indexing
                         for node_dict in nodes:
                             try:
                                 # Convert dict to Node object
@@ -339,6 +340,7 @@ class CodeIndexIntegration:
                                 # Write to graphstore
                                 write_node_json(node, graph_path)
                                 written_count += 1
+                                created_nodes.append(node)
                                 
                             except Exception as e:
                                 logger.warning(f"Failed to write node {node_dict.get('name')}: {e}")
@@ -351,6 +353,44 @@ class CodeIndexIntegration:
                         
                         logger.info(f"✅ Written {written_count} code entities to graphstore")
                         results['entities_written_to_graph'] = written_count
+                        
+                        # Step 8.5: Generate embeddings and update sparse index (CRITICAL)
+                        if created_nodes:
+                            logger.info("Generating sparse embeddings for code entities...")
+                            try:
+                                from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
+                                from knowgraph.infrastructure.search.sparse_index import SparseIndex
+                                import asyncio
+                                
+                                embedder = SparseEmbedder()
+                                index = SparseIndex()
+                                
+                                # Load existing index if available to append to it
+                                try:
+                                    index.load(graph_path / "index")
+                                    logger.info(f"Loaded existing index with {index.n_docs} documents")
+                                except Exception:
+                                    logger.info("Creating new sparse index")
+                                
+                                indexed_count = 0
+                                for node in created_nodes:
+                                    try:
+                                        # Embed content (signatures + body) using code-aware embedding
+                                        embedding = embedder.embed_code(node.content)
+                                        index.add(node.id, embedding)
+                                        indexed_count += 1
+                                    except Exception as e:
+                                        import traceback
+                                        logger.warning(f"Failed to embed node {node.title}: {e}\n{traceback.format_exc()}")
+                                
+                                index.build()
+                                index.save(graph_path / "index")
+                                logger.info(f"✅ Added {indexed_count} code entities to sparse index")
+                                results['entities_indexed'] = indexed_count
+                                
+                            except Exception as e:
+                                logger.error(f"Failed to update sparse index: {e}")
+                                results['entities_indexed'] = 0
                         
                     except Exception as e:
                         logger.error(f"Failed to write entities to graphstore: {e}")
