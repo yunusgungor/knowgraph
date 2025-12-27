@@ -1185,15 +1185,31 @@ async def handle_security_scan(arguments: dict[str, Any], PROJECT_ROOT: Path) ->
     """
     try:
         from knowgraph.application.security.policy_engine import PolicyEngine, Severity
+        from knowgraph.infrastructure.indexing.cpg_metadata import get_cpg_path
         
-        # Required parameters
+        # Try to get CPG path from arguments or graph metadata
         cpg_path_str = arguments.get("cpg_path")
-        if not cpg_path_str:
-            return [types.TextContent(type="text", text="Error: cpg_path is required")]
+        graph_path_arg = arguments.get("graph_path")
         
-        cpg_path = Path(cpg_path_str)
-        if not cpg_path.exists():
-            return [types.TextContent(type="text", text=f"Error: CPG not found at {cpg_path}")]
+        if not cpg_path_str and graph_path_arg:
+            # Try to auto-detect CPG from graph metadata
+            graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+            cpg_path = get_cpg_path(graph_path)
+            
+            if not cpg_path:
+                return [types.TextContent(
+                    type="text", 
+                    text="Error: No CPG found. Either provide 'cpg_path' or run 'knowgraph_index' first to generate CPG."
+                )]
+        elif cpg_path_str:
+            cpg_path = Path(cpg_path_str)
+            if not cpg_path.exists():
+                return [types.TextContent(type="text", text=f"Error: CPG not found at {cpg_path}")]
+        else:
+            return [types.TextContent(
+                type="text", 
+                text="Error: Either 'cpg_path' or 'graph_path' is required"
+            )]
         
         # Optional parameters
         severity_filter_str = arguments.get("severity_filter", "MEDIUM")

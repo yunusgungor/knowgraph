@@ -119,25 +119,28 @@ class CodeIndexIntegration:
                     logger.info("Using parallel CPG generation for large repository")
                     try:
                         import tempfile
-                        with tempfile.TemporaryDirectory() as tmpdir:
-                            cpg_paths = parallel_gen.generate_parallel(
-                                code_files,
-                                Path(tmpdir),
-                                timeout=300
-                            )
-                            
-                            if cpg_paths:
-                                # Use first generated CPG (simplified)
-                                cpg_path = cpg_paths[0]
-                                results['cpg_generated'] = True
-                                results['cpg_path'] = str(cpg_path)
-                                results['parallel_generation'] = True
-                                self.cpg_path = cpg_path
-                                self.cpg_generated = True
-                                logger.info(f"Parallel CPG generation complete: {len(cpg_paths)} CPGs")
-                            else:
-                                logger.warning("Parallel generation failed, falling back to single CPG")
-                                use_parallel = False
+                        # Use persistent temp directory (don't auto-delete)
+                        tmpdir = Path(tempfile.mkdtemp(prefix="knowgraph_cpg_"))
+                        logger.info(f"Parallel CPG temp dir: {tmpdir}")
+                        
+                        cpg_paths = parallel_gen.generate_parallel(
+                            code_files,
+                            tmpdir,
+                            timeout=300
+                        )
+                        
+                        if cpg_paths:
+                            # Use first generated CPG (simplified)
+                            cpg_path = cpg_paths[0]
+                            results['cpg_generated'] = True
+                            results['cpg_path'] = str(cpg_path)
+                            results['parallel_generation'] = True
+                            self.cpg_path = cpg_path
+                            self.cpg_generated = True
+                            logger.info(f"Parallel CPG generation complete: {len(cpg_paths)} CPGs")
+                        else:
+                            logger.warning("Parallel generation failed, falling back to single CPG")
+                            use_parallel = False
                     except Exception as e:
                         logger.warning(f"Parallel generation failed: {e}, falling back to single CPG")
                         use_parallel = False
@@ -158,11 +161,6 @@ class CodeIndexIntegration:
                         self.cpg_generated = True
                         
                         logger.info(f"CPG generated at: {cpg_path}")
-                        
-                        # NEW: Save CPG metadata for query-time use
-                        from knowgraph.infrastructure.indexing.cpg_metadata import save_cpg_metadata
-                        save_cpg_metadata(graph_path, cpg_path)
-                        logger.info("Saved CPG metadata to graph")
                         
                     except Exception as e:
                         logger.error(f"CPG generation failed: {e}")
@@ -231,7 +229,41 @@ class CodeIndexIntegration:
                     results['graph_nodes'] = nodes
                     logger.info(f"Converted to {len(nodes)} graph nodes")
                 
-                # Step 9: Cache CPG for future use (NEW - Phase 4)
+                # Step 9: Persist CPG to graphstore and save metadata (NEW - CRITICAL)
+                try:
+                    import shutil
+                    from knowgraph.infrastructure.indexing.cpg_metadata import save_cpg_metadata
+                    
+                    # Create persistent CPG path in graphstore
+                    metadata_dir = graph_path / "metadata"
+                    metadata_dir.mkdir(parents=True, exist_ok=True)
+                    persistent_cpg_path = metadata_dir / "cpg.bin"
+                    
+                    # Copy CPG to graphstore (make it persistent)
+                    if cpg_path.exists():
+                        shutil.copy2(cpg_path, persistent_cpg_path)
+                        logger.info(f"Copied CPG to graphstore: {persistent_cpg_path}")
+                        
+                        # Save metadata with entity count
+                        save_cpg_metadata(
+                            graph_path=graph_path,
+                            cpg_path=persistent_cpg_path,
+                            entities_count=len(entities) if entities else 0
+                        )
+                        logger.info(f"Saved CPG metadata with {len(entities) if entities else 0} entities")
+                        
+                        # Update results with persistent path
+                        results['cpg_path'] = str(persistent_cpg_path)
+                        results['cpg_persisted'] = True
+                    else:
+                        logger.warning(f"CPG not found at {cpg_path}, skipping persistence")
+                        results['cpg_persisted'] = False
+                        
+                except Exception as e:
+                    logger.warning(f"CPG persistence failed (non-fatal): {e}")
+                    results['cpg_persisted'] = False
+                
+                # Step 10: Cache CPG for future use (NEW - Phase 4)
                 try:
                     from knowgraph.infrastructure.caching import CPGCache
                     

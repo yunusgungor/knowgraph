@@ -722,13 +722,13 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="knowgraph_security_scan",
-            description="Run security policy validation with 10 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc.",
+            description="Run security policy validation with 10 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc. Auto-detects CPG from graph_path if not explicitly provided.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "cpg_path": {
                         "type": "string",
-                        "description": "Path to CPG binary file (required).",
+                        "description": "Path to CPG binary file (optional if graph_path is provided).",
                     },
                     "severity_filter": {
                         "type": "string",
@@ -742,10 +742,9 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "graph_path": {
                         "type": "string",
-                        "description": "Path to graph storage for automatic CPG detection (optional).",
+                        "description": "Path to graph storage for automatic CPG detection (optional, defaults to ./graphstore).",
                     },
                 },
-                "required": ["cpg_path"],
             },
         ),
         types.Tool(
