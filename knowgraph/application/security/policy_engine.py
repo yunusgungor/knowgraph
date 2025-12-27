@@ -149,58 +149,14 @@ cpg.call.name("(MD5|SHA1|DES|RC4)").l
             remediation="Use SHA-256, AES-256, or other modern algorithms",
             cwe_id="CWE-327",
         ),
-        Policy(
-            name="NoNullPointerDeref",
-            description="Potential null pointer dereference",
-            query='''
-cpg.method.parameter.filter(_.evalType(".*\\*")).filter { p =>
-  p.refsTo.exists(_.code.contains("->"))
-}.l
-''',
-            severity=Severity.MEDIUM,
-            remediation="Add null checks before pointer dereference",
-            cwe_id="CWE-476",
-        ),
-        Policy(
-            name="NoIntegerOverflow",
-            description="Potential integer overflow in arithmetic",
-            query='''
-cpg.call.name("(\\+|\\-|\\*)").l
-''',
-            severity=Severity.MEDIUM,
-            remediation="Use safe math libraries or overflow checks",
-            cwe_id="CWE-190",
-        ),
-        Policy(
-            name="NoUseAfterFree",
-            description="Potential use-after-free vulnerability",
-            query='''
-cpg.call.name("free").argument.filter { a =>
-  a.refsTo.exists(_.code.contains("->"))
-}.l
-''',
-            severity=Severity.CRITICAL,
-            remediation="Set pointers to NULL after free, use RAII patterns",
-            cwe_id="CWE-416",
-        ),
-        Policy(
-            name="NoUnvalidatedInput",
-            description="User input used without validation",
-            query='''
-cpg.method.parameter.filter { p =>
-  !p.refsTo.exists(_.code.matches(".*(validate|sanitize|check).*"))
-}.name.l
-''',
-            severity=Severity.MEDIUM,
-            remediation="Validate all user input before use",
-            cwe_id="CWE-20",
-        ),
+
+
         Policy(
             name="NoPathTraversal",
             description="Path traversal vulnerability",
             query='''
 cpg.call.name("(open|fopen|readFile)").argument
-   .reachableBy(cpg.method.parameter).l
+    .reachableBy(cpg.method.parameter).l
 ''',
             severity=Severity.HIGH,
             remediation="Validate file paths, use absolute paths, check for '..'",

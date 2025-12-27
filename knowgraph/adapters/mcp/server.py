@@ -755,7 +755,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "cpg_path": {
                         "type": "string",
-                        "description": "Path to CPG binary file (required).",
+                        "description": "Path to CPG binary file (optional if graph_path is provided).",
                     },
                     "include_internal": {
                         "type": "boolean",
@@ -766,7 +766,7 @@ async def list_tools() -> list[types.Tool]:
                         "description": "Path to graph storage for automatic CPG detection (optional).",
                     },
                 },
-                "required": ["cpg_path"],
+                "required": [],
             },
         ),
         types.Tool(
@@ -777,7 +777,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "cpg_path": {
                         "type": "string",
-                        "description": "Path to CPG binary file (required).",
+                        "description": "Path to CPG binary file (optional if graph_path is provided).",
                     },
                     "analysis_type": {
                         "type": "string",
@@ -797,7 +797,7 @@ async def list_tools() -> list[types.Tool]:
                         "description": "Path to graph storage for automatic CPG detection (optional).",
                     },
                 },
-                "required": ["cpg_path"],
+                "required": [],
             },
         ),
         types.Tool(
