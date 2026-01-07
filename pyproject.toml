@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
 
 [project]
 name = "knowgraph"
@@ -12,53 +12,50 @@ license = { text = "MIT" }
 authors = [{ name = "Yunus Güngör", email = "mail@yunusgungor.com" }]
 keywords = ["graph", "rag", "code-analysis", "knowledge-graph", "ml"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
 dependencies = [
-    "numpy>=1.26.0",
-    "scipy>=1.11.0",
-    "networkx>=3.2.0",
-    "click>=8.1.0",
-    "rich>=13.7.0",
-    "tqdm>=4.66.0",
-    "mcp>=1.0.0",
-    "openai>=1.0.0",
-    "python-dotenv>=1.0.0",
-    "tiktoken>=0.5.0",
-    "gitingest>=0.3.1",
-    "tenacity>=8.2.0",      # Retry logic for async operations
-    "psutil>=5.9.0",        # System resource detection for auto-tuning
-    "aiofiles>=23.2.0",     # Async file I/O
+  "numpy>=1.26.0",
+  "scipy>=1.11.0",
+  "networkx>=3.2.0",
+  "click>=8.1.0",
+  "rich>=13.7.0",
+  "tqdm>=4.66.0",
+  "mcp>=1.0.0",
+  "openai>=1.0.0",
+  "python-dotenv>=1.0.0",
+  "tiktoken>=0.5.0",
+  "gitingest>=0.3.1",
+  "tenacity>=8.2.0",
+  "psutil>=5.9.0",
+  "aiofiles>=23.2.0",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "pytest-mock>=3.12.0",
-    "pytest-asyncio>=0.23.0",
-    "pytest-xdist>=3.5.0",
-    "black>=24.1.0",
-    "isort>=5.13.0",
-    "flake8>=7.0.0",
-    "pylint>=3.0.0",
-    "mypy>=1.8.0",
-    "ruff>=0.1.0",
-    "pre-commit>=3.6.0",
-    "ipdb>=0.13.0",
-    "jupyterlab>=4.0.0",
-    "sphinx>=7.2.0",
-    "sphinx-rtd-theme>=2.0.0",
-]
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4"
+pytest-asyncio = "^0.23"
+pytest-mock = "^3.12"
+pytest-xdist = "^3.5"
+pytest-cov = "^4.1"
+ruff = "^0.5"
+black = "^24.1"
+mypy = "^1.8"
+pyright = "^1.1.380"
+pre-commit = "^3.6"
+ipdb = "^0.13"
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.2"
+sphinx-rtd-theme = "^2.0"
 
 [project.scripts]
 knowgraph = "knowgraph.adapters.cli.main:cli"
@@ -69,15 +66,114 @@ Documentation = "https://github.com/yunusgungor/knowgraph/docs"
 Repository = "https://github.com/yunusgungor/knowgraph"
 Issues = "https://github.com/yunusgungor/knowgraph/issues"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["knowgraph*"]
-exclude = ["tests*", "docs*", "graph_store*"]
+# -------------------------
+# Packaging (hatchling)
+# -------------------------
+[tool.hatch.build.targets.wheel]
+packages = ["knowgraph"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+  "knowgraph/**",
+  "docs/**",
+  "tests/**",
+  "README.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "pyproject.toml",
+]
+
+# -------------------------
+# Pyright (replaces pyrightconfig.json)
+# -------------------------
+[tool.pyright]
+include = ["knowgraph", "tests"]
+exclude = [
+  "**/__pycache__",
+  "**/.pytest_cache",
+  "**/.mypy_cache",
+  "**/.ruff_cache",
+  "**/node_modules",
+  "**/.venv",
+  "**/venv",
+  "build",
+  "dist",
+  "graph_store",
+  "knowgraph.egg-info",
+]
+typeCheckingMode = "basic"
+pythonVersion = "3.10"
+pythonPlatform = "Linux"
+venvPath = "."
+venv = ".venv"
+
+reportMissingTypeStubs = false
+reportUnknownMemberType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownVariableType = "none"
+reportUnknownParameterType = "none"
+reportUnknownLambdaType = "none"
+reportMissingTypeArgument = "warning"
+reportUnnecessaryIsInstance = "none"
+reportUnnecessaryComparison = "warning"
+reportUnusedImport = "warning"
+reportUnusedVariable = "warning"
+reportAttributeAccessIssue = "warning"
+reportIndexIssue = "warning"
+reportCallIssue = "error"
+reportArgumentType = "error"
+reportReturnType = "error"
+reportOperatorIssue = "error"
+reportInvalidTypeForm = "error"
+reportPossiblyUnboundVariable = "error"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+  "-v",
+  "--strict-markers",
+  "--tb=short",
+  "--cov=knowgraph",
+  "--cov-report=html",
+  "--cov-report=term-missing",
+  "--cov-fail-under=70",
+]
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "integration: marks tests as integration tests",
+  "unit: marks tests as unit tests",
+  "benchmark: marks tests as performance benchmarks",
+]
+# pytest-asyncio modern default
+asyncio_mode = "auto"
+
+# -------------------------
+# Coverage
+# -------------------------
+[tool.coverage.run]
+source = ["knowgraph"]
+omit = ["*/tests/*", "*/__pycache__/*", "*/site-packages/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  "if typing.TYPE_CHECKING:",
+]
+
+# -------------------------
+# Formatting (Black) + Linting (Ruff)
+# -------------------------
 [tool.black]
 line-length = 100
-target-version = ["py310", "py311"]
-include = '\.pyi?$'
+target-version = ["py310"]
 extend-exclude = '''
 /(
     \.git
@@ -92,49 +188,85 @@ extend-exclude = '''
 )/
 '''
 
-[tool.isort]
-profile = "black"
-line_length = 100
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-ensure_newline_before_comments = true
-skip_glob = ["**/graph_store/**", "**/.venv/**"]
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [
+  ".git",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
+  "venv",
+  "build",
+  "dist",
+  "graph_store",
+]
 
+[tool.ruff.format]
+# Use Ruff for formatting too if you like; keep Black if you prefer.
+# If you want Ruff as the formatter, set this and remove Black usage in tooling.
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+  "E", "W", "F",     # basic correctness
+  "I",               # import sorting (replaces isort)
+  "UP",              # pyupgrade
+  "B",               # bugbear
+  "SIM",             # simplify
+  "ARG",             # unused arguments
+  "PT",              # pytest style
+  "RUF",             # ruff rules
+  "S",               # bandit-ish security checks
+]
+ignore = [
+  "E501",    # line length handled by formatter
+  "S101",    # asserts in tests
+  "S108",    # temp file warnings (common)
+  "B904",    # raise from (optional)
+  "PT011",   # broad raises
+  "ARG002",  # unused method args
+  "ARG001",  # unused function args
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+# Keep McCabe if you actually want it; otherwise drop it (Ruff can do complexity checks too).
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+# -------------------------
+# Mypy (keep if you still run it; otherwise drop and rely on Pyright)
+# -------------------------
 [tool.mypy]
 python_version = "3.10"
 strict = false
-warn_return_any = false
-warn_unused_configs = true
-disallow_untyped_defs = false
-disallow_any_generics = false
 check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
-warn_unused_ignores = false
+warn_unused_configs = true
 warn_no_return = true
-warn_unreachable = false
 strict_equality = true
 exclude = ["graph_store", ".venv", "venv", "build", "dist", "tests"]
 disable_error_code = [
-    "assignment",
-    "attr-defined",
-    "unreachable",
-    "truthy-function",
-    "index",
-    "arg-type",
-    "dict-item",
-    "misc",
-    "var-annotated",
+  "assignment",
+  "attr-defined",
+  "unreachable",
+  "truthy-function",
+  "index",
+  "arg-type",
+  "dict-item",
+  "misc",
+  "var-annotated",
 ]
 
 [[tool.mypy.overrides]]
-module = ["gitingest.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["networkx.*"]
+module = ["gitingest.*", "networkx.*", "opentelemetry.*", "psutil", "aiofiles", "aiofiles.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -144,135 +276,3 @@ disallow_untyped_calls = false
 check_untyped_defs = false
 warn_return_any = false
 no_implicit_optional = false
-
-[[tool.mypy.overrides]]
-module = ["opentelemetry.*", "psutil", "aiofiles", "aiofiles.*"]
-ignore_missing_imports = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "-v",
-    "--strict-markers",
-    "--tb=short",
-    "--cov=knowgraph",
-    "--cov-report=html",
-    "--cov-report=term-missing",
-    "--cov-fail-under=70",
-]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
-]
-
-[tool.coverage.run]
-source = ["knowgraph"]
-omit = ["*/tests/*", "*/__pycache__/*", "*/site-packages/*"]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-    "if typing.TYPE_CHECKING:",
-]
-
-[tool.ruff]
-line-length = 100
-target-version = "py310"
-exclude = [
-    ".git",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".venv",
-    "venv",
-    "build",
-    "dist",
-    "graph_store",
-]
-
-[tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "C90", # mccabe complexity
-    "N",   # pep8-naming
-    "D",   # pydocstyle
-    "UP",  # pyupgrade
-    "ANN", # flake8-annotations
-    "S",   # flake8-bandit
-    "B",   # flake8-bugbear
-    "A",   # flake8-builtins
-    "C4",  # flake8-comprehensions
-    "T10", # flake8-debugger
-    "ISC", # flake8-implicit-str-concat
-    "PIE", # flake8-pie
-    "PT",  # flake8-pytest-style
-    "Q",   # flake8-quotes
-    "SIM", # flake8-simplify
-    "ARG", # flake8-unused-arguments
-    "PTH", # flake8-use-pathlib
-    "RUF", # Ruff-specific rules
-]
-ignore = [
-    "C901",   # Function complexity - some functions are intentionally complex
-    "PTH123", # open() vs Path.open() - both are acceptable
-    "A003",   # Shadowing builtins - 'type' is a common field name
-    "A002",   # Argument shadowing builtins
-    "ARG002", # Unused method argument
-    "ARG005", # Unused lambda argument
-    "F841",   # Local variable is assigned to but never used (common in tests)
-    "S108",   # Probable insecure usage of temporary file or directory
-    "S101",   # Use of assert detected (common in tests)
-    "PT011",  # pytest.raises() is too broad
-    "N806",   # Variable in function should be lowercase
-    "E501",   # Line too long
-    "RUF059", # Unused unpacked variable
-    "ARG001", # Unused function argument
-    "SIM117", # Use a single `with` statement
-    "ANN",    # Typings
-    "SIM108", # Use ternary operator
-    "RUF100", # Unused noqa detected
-    "B007",   # Loop control variable not used
-    "B904",   # Raise ... from ...
-    "PTH",    # Use pathlib
-    "D",      # Pydocstyle (docstrings)
-    "S110",   # Try-except-pass
-    "B905",   # Zip without strict
-    "SIM105", # Contextlib.suppress
-    "RUF001", # Ambiguous characters (Turkish)
-    "RUF002", # Ambiguous characters (Turkish)
-    "RUF003", # Ambiguous characters (Turkish)
-    "S607",   # Partial executable path
-    "UP045",  # Optional[X] instead of X | None (keep purely optional for now)
-    "UP036",  # Version block outdated
-    "PT012",  # pytest.raises() too broad block
-    "PT017",  # Assertion on exception in except block
-    "PT018",  # Composite assertion
-    "E721",   # Type comparison
-    "RUF043", # Regex pattern escaping
-    "SIM102", # Nested if statements
-    "S105",   # Possible hardcoded password
-    "N818",   # Exception naming convention
-    "S311",   # Random generator for jitter
-]
-
-[tool.ruff.lint.mccabe]
-# McCabe complexity - monitor functions over threshold
-# Current: 100 functions exceed threshold (top: run_index at 94)
-# Target: Gradually reduce to max 15
-max-complexity = 15  # Increased from 10 to reduce noise, focus on worst offenders
-
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401", "D104"]
-"tests/**/*.py" = ["S101", "D", "ANN"]
