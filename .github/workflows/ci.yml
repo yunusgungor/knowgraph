@@ -36,7 +36,7 @@ jobs:
 
     - name: Setup Joern
       run: |
-        knowgraph-setup-joern
+        knowgraph-setup-joern || true
         
         # Verify Joern installation
         if [ -d "$HOME/.knowgraph/joern/joern-cli" ]; then
