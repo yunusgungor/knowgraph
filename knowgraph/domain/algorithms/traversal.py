@@ -202,7 +202,7 @@ def traverse_graph_reference_aware(
     semantic_adj: dict[UUID, list[UUID]] = {}
 
     for edge in edges:
-        if edge.type in ["reference", "call", "data_flow"]:
+        if edge.type in ["reference", "call", "data_flow", "hierarchy", "control_flow"]:
             # Reference edges are DIRECTED (follow code dependencies precisely)
             if edge.source not in reference_adj:
                 reference_adj[edge.source] = []

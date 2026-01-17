@@ -24,7 +24,7 @@ from knowgraph.infrastructure.storage.filesystem import (
 SHA1_PATTERN = re.compile(r"^[a-f0-9]{40}$")
 
 # Valid edge types from FR-058 (Updated to include Reference Edges)
-VALID_EDGE_TYPES = {"semantic", "reference"}
+VALID_EDGE_TYPES = {"semantic", "reference", "control_flow", "data_flow", "hierarchy"}
 
 
 @dataclass
