@@ -73,6 +73,13 @@ class CodeQueryHandler:
         r"(list files|show files|all files|dosyalar)": "list_files",
         r"(list packages|show packages|namespaces|paketler)": "list_namespaces",
         r"(list types|show types|defined types|tipler)": "list_types",
+
+        # Taint Analysis (Flow)
+        r"(flow from|data flow|taint analysis|track data|akışı)": "analyze_taint",
+
+        # Method Internals
+        r"(parameters of|args of|arguments of|parametreler)": "get_params",
+        r"(locals of|local variables|variables in|yerel değişkenler)": "get_locals",
     }
 
     def __init__(self, graph_path: Path):
@@ -317,6 +324,26 @@ class CodeQueryHandler:
         elif tool == "list_types":
             result = provider.list_types(cpg_path)
             return [{"type": "type_list", "types": result["types"]}]
+
+        elif tool == "analyze_taint":
+            source, sink = self._extract_chain_params(query)
+            if not source or not sink:
+                 return [{"error": "Could not identify source and sink. Use 'flow from X to Y'"}]
+            
+            result = provider.analyze_taint_flow(cpg_path, source, sink)
+            return [{"type": "taint_flow", "data": result}]
+
+        elif tool == "get_params":
+            method = self._extract_method_name(query, ["parameters of", "args of", "arguments of"])
+            if not method: method = query.split()[-1]
+            result = provider.get_method_params(cpg_path, method)
+            return [{"type": "method_params", "data": result}]
+
+        elif tool == "get_locals":
+            method = self._extract_method_name(query, ["locals of", "local variables", "variables in"])
+            if not method: method = query.split()[-1]
+            result = provider.get_method_locals(cpg_path, method)
+            return [{"type": "method_locals", "data": result}]
 
         else:
             return []
@@ -761,6 +788,38 @@ class CodeQueryHandler:
                  output += f"  - {t}\\n"
              if len(types) > 50:
                  output += f"  ... and {len(types)-50} more.\\n"
+
+        elif item_type == "taint_flow":
+             data = results[0].get("data", {})
+             flows = data.get("flows", [])
+             if not flows:
+                 output += f"No data flow found from '{data.get('source')}' to '{data.get('sink')}'.\\n"
+             else:
+                 output += f"Found {len(flows)} Data Flow Paths form '{data.get('source')}' to '{data.get('sink')}':\\n\\n"
+                 for i, flow in enumerate(flows, 1):
+                     output += f"Path #{i}:\\n"
+                     for step in flow:
+                         output += f"  ⬇️  {step['method']} ({step['filename']}:{step['line']}) - `{step['code']}`\\n"
+
+        elif item_type == "method_params":
+             data = results[0].get("data", {})
+             params = data.get("params", [])
+             output += f"Parameters for method '{data.get('method')}':\\n\\n"
+             if not params:
+                 output += "  (No parameters)\\n"
+             else:
+                 for p in params:
+                     output += f"  - {p['name']}: {p['type']}\\n"
+
+        elif item_type == "method_locals":
+             data = results[0].get("data", {})
+             locals_ = data.get("locals", [])
+             output += f"Local Variables in method '{data.get('method')}':\\n\\n"
+             if not locals_:
+                 output += "  (No local variables)\\n"
+             else:
+                 for l in locals_:
+                     output += f"  - {l['name']} ({l['type']})\\n"
 
         else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"

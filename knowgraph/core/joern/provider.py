@@ -795,7 +795,6 @@ class JoernProvider:
         
         methods = []
         for item in result.results:
-            raw = item.get("raw", "")
             if "__KG_SEP__" in raw:
                 try:
                     parts = raw.split("__KG_SEP__")
@@ -808,6 +807,111 @@ class JoernProvider:
                 except Exception:
                     continue
         return {"pattern": safe_pattern, "methods": methods}
+
+    def analyze_taint_flow(self, cpg_path: Path, source_pattern: str, sink_pattern: str) -> dict:
+        """Trace data flow (taint) from source to sink."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        # Robust query using reachableBy
+        query = f"""
+        val source = cpg.call.name("{source_pattern}").argument
+        val sink = cpg.call.name("{sink_pattern}").argument
+        
+        sink.reachableByFlows(source).map{{ path =>
+            val flow = path.elements.map{{ e => 
+                val method = e.method.name
+                val line = e.lineNumber.getOrElse(-1)
+                val code = e.code.replace("\\"", "'")
+                val file = e.method.filename
+                s"$method__KG_SEP__$line__KG_SEP__$file__KG_SEP__$code"
+            }}.mkString("__KS_FLOW__")
+            flow
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        flows = []
+        for item in result.results:
+            raw_flow = item.get("raw", "")
+            if "__KS_FLOW__" in raw_flow:
+                # Split flow into steps
+                steps_raw = raw_flow.split("__KS_FLOW__")
+                flow_steps = []
+                for step in steps_raw:
+                    if "__KG_SEP__" in step:
+                        parts = step.split("__KG_SEP__")
+                        flow_steps.append({
+                            "method": parts[0],
+                            "line": int(parts[1]),
+                            "filename": parts[2],
+                            "code": parts[3]
+                        })
+                if flow_steps:
+                    flows.append(flow_steps)
+                    
+        return {"source": source_pattern, "sink": sink_pattern, "flows": flows}
+
+    def get_method_params(self, cpg_path: Path, method_pattern: str) -> dict:
+        """Get parameters of a method."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.method.name("{method_pattern}").parameter.map{{ p =>
+            val name = p.name
+            val type = p.typeFullName
+            val index = p.index
+            s"$name__KG_SEP__$type__KG_SEP__$index"
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        params = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if "__KG_SEP__" in raw:
+                try:
+                    parts = raw.split("__KG_SEP__")
+                    params.append({
+                        "name": parts[0],
+                        "type": parts[1],
+                        "index": int(parts[2])
+                    })
+                except Exception:
+                    continue
+        # Sort by index
+        params.sort(key=lambda x: x["index"])
+        return {"method": method_pattern, "params": params}
+
+    def get_method_locals(self, cpg_path: Path, method_pattern: str) -> dict:
+        """Get local variables defined in a method."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.method.name("{method_pattern}").local.map{{ l =>
+            val name = l.name
+            val type = l.typeFullName
+            s"$name__KG_SEP__$type"
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        locals_ = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if "__KG_SEP__" in raw:
+                 try:
+                    parts = raw.split("__KG_SEP__")
+                    locals_.append({
+                        "name": parts[0],
+                        "type": parts[1]
+                    })
+                 except Exception:
+                    continue
+                    
+        return {"method": method_pattern, "locals": locals_}
 
     def find_annotations(self, cpg_path: Path, annotation_pattern: str) -> dict:
         """Find methods with specific annotations/decorators."""
