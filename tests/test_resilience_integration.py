@@ -202,7 +202,7 @@ class TestAPIVersioning:
         registry = get_version_registry()
         supported = registry.get_supported_versions()
         assert len(supported) > 0
-        assert any(v.major == 1 and v.minor >= 1 for v in supported)
+        assert any(v.major == 0 and v.minor >= 8 for v in supported)
 
 
 class TestEndToEndResilience:

@@ -815,12 +815,19 @@ class JoernProvider:
         
         # Robust query using reachableBy
         # Robust query using reachableBy
-        # FIX: Source should be the call itself (return value), not arguments passed to it
-        query = f"""
-        val source = cpg.call.name("{source_pattern}")
-        val sink = cpg.call.name("{sink_pattern}").argument
+        # Robust query using reachableBy
+        # FIX: Use .contains(...) which is safer and simpler for substring matching than regex
+        # FIX: Track flow to BOTH the call arguments AND the call node itself (for builtins/identifiers)
         
-        sink.reachableByFlows(source).map{{ path =>
+        # Clean pattern for string literal
+        src_clean = source_pattern.replace('"', '\\"')
+        sink_clean = sink_pattern.replace('"', '\\"')
+
+        query = f"""
+        def src = cpg.call.filter(c => c.name.contains("{src_clean}") || c.methodFullName.contains("{src_clean}") || c.code.contains("{src_clean}")) ++ cpg.identifier.filter(_.name.contains("{src_clean}"))
+        def dst = cpg.call.filter(c => c.name.contains("{sink_clean}") || c.methodFullName.contains("{sink_clean}") || c.code.contains("{sink_clean}")).argument ++ cpg.call.filter(c => c.name.contains("{sink_clean}") || c.methodFullName.contains("{sink_clean}") || c.code.contains("{sink_clean}")) ++ cpg.identifier.filter(_.name.contains("{sink_clean}"))
+        
+        dst.reachableByFlows(src).map{{ path =>
             val flow = path.elements.map{{ e => 
                 val method = e.method.name
                 val line = e.lineNumber.getOrElse(-1)

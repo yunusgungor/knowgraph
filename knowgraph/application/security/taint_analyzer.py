@@ -140,7 +140,7 @@ class TaintAnalyzer:
         sink_patterns: list[str] | None = None,
         max_depth: int = 10,
     ) -> list[TaintPath]:
-        """Find all taint flows from sources to sinks.
+        """Find all taint flows from sources to sinks using Joern.
 
         Args:
         ----
@@ -153,29 +153,101 @@ class TaintAnalyzer:
             List of identified taint paths
 
         """
+        from knowgraph.infrastructure.indexing.cpg_metadata import get_cpg_path
+        from knowgraph.core.joern import JoernProvider
+
+        cpg_path = get_cpg_path(self.graph_path)
+        if not cpg_path or not cpg_path.exists():
+            logger.warning("No CPG found for taint analysis")
+            return []
+
         sources = source_patterns or self.default_sources
         sinks = sink_patterns or self.default_sinks
-
-        logger.info(f"Scanning for vulnerabilities with {len(sources)} sources and {len(sinks)} sinks")
-
-        # 1. Find source nodes using pattern matching
-        source_nodes = self._find_nodes_by_pattern(sources)
-        logger.debug(f"Found {len(source_nodes)} source nodes")
-
-        # 2. Find sink nodes
-        sink_nodes = self._find_nodes_by_pattern(sinks)
-        logger.debug(f"Found {len(sink_nodes)} sink nodes")
-
-        # 3. Find all dataflow paths
+        
+        # Determine specific vulnerabilities to look for based on sinks
+        # Optimization: Map sinks to vulnerability types to avoid NxM scan if possible
+        # For now, we iterate, but we can limit combinatorics.
+        
+        provider = JoernProvider()
         taint_paths = []
-        for source_id in source_nodes:
-            for sink_id in sink_nodes:
-                paths = self._find_dataflow_paths(source_id, sink_id, max_depth)
+        
+        logger.info(f"Scanning for vulnerabilities with {len(sources)} sources and {len(sinks)} sinks via Joern")
 
-                for path in paths:
-                    taint_path = self._create_taint_path(source_id, sink_id, path)
-                    if taint_path:
-                        taint_paths.append(taint_path)
+        # Optimization: Group sinks by potential vulnerability type if patterns allow, 
+        # but Joern needs specific regex patterns.
+        # We'll iterate but we can combine patterns with OR (|) eventually.
+        # For compatibility with legacy test patterns (which might be simple substrings), we ensure regex safety.
+        
+        import re
+        
+        # Build node cache for lookup (File -> Line -> Node)
+        # This is expensive O(N), but done once per analyze call
+        node_map = {} # {filename: {line: node_id}}
+        for node_id, node in self.nodes.items():
+             if node.metadata and "file_path" in node.metadata:
+                 fname = node.metadata["file_path"]
+                 # Normalize filename to mimic Joern's output (often absolute or relative)
+                 # We'll fuzzy match end of path
+                 line = node.metadata.get("start_line", -1)
+                 if line != -1:
+                     if fname not in node_map: node_map[fname] = {}
+                     node_map[fname][line] = node_id
+
+        for source in sources:
+            for sink in sinks:
+                # Use Joern to analyze flow
+                try:
+                    # Sanitize patterns for regex
+                    # If pattern is simple (alphanumeric+dot), treat as literal, else assume regex
+                    src_regex = source if any(c in source for c in ".*^$") else re.escape(source)
+                    sink_regex = sink if any(c in sink for c in ".*^$") else re.escape(sink)
+                    
+                    result = provider.analyze_taint_flow(cpg_path, src_regex, sink_regex)
+                    
+                    if not result or "flows" not in result:
+                        continue
+                        
+                    for flow in result["flows"]:
+                         # Convert Joern flow (list of steps) to UUID path
+                         path_uuids = []
+                         for step in flow:
+                             # Try to find matching node
+                             step_file = step["filename"]
+                             step_line = step["line"]
+                             
+                             # Lookup
+                             found_id = None
+                             
+                             # Exact match attempt
+                             if step_file in node_map and step_line in node_map[step_file]:
+                                 found_id = node_map[step_file][step_line]
+                             else:
+                                 # Fuzzy match filename (suffix)
+                                 for f_key in node_map:
+                                     if f_key.endswith(step_file) or step_file.endswith(f_key):
+                                         if step_line in node_map[f_key]:
+                                             found_id = node_map[f_key][step_line]
+                                             break
+                             
+                             if found_id:
+                                 path_uuids.append(found_id)
+                             else:
+                                 # If we can't map a step to a graph node, we might skip it or use a placeholder?
+                                 # TaintPath requires UUIDs existing in graph.
+                                 # We'll skip the step but keep the path if we have start/end.
+                                 continue
+                         
+                         if len(path_uuids) >= 2:
+                             # Construct TaintPath
+                             tpath = self._create_taint_path(path_uuids[0], path_uuids[-1], path_uuids)
+                             if tpath:
+                                 # Deduplicate based on ID
+                                 if not any(tp.source_node == tpath.source_node and tp.sink_node == tpath.sink_node for tp in taint_paths):
+                                     taint_paths.append(tpath)
+                                     
+                except Exception as e:
+                    logger.debug(f"Joern taint analysis failed for {source}->{sink}: {e}")
+                    continue
 
         logger.info(f"Detected {len(taint_paths)} potential vulnerabilities")
         return taint_paths
