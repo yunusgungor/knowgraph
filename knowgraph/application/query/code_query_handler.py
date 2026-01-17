@@ -27,7 +27,8 @@ class CodeQueryHandler:
         r"(call graph|dependency|dependencies|bağımlı)": "analyze_call_graph",
 
         # Recursion analysis
-        r"(recursion|recursive|loop|cycle|özyineleme|döngü)": "analyze_recursion",
+        # Recursion analysis
+        r"(recursion|recursive|recursive calls|cycle|özyineleme)": "analyze_recursion",
 
         # Variable Usage and Slicing (Prioritize 'usage of' for variables)
         r"(usage of|where is|variable|identifier|değişken|nerede)": "find_variable_usages",
@@ -35,6 +36,15 @@ class CodeQueryHandler:
 
         # Literal/String Search
         r"(literal|hardcoded|string|constant|sabit|metin)": "find_literals",
+
+        # Annotations/Decorators
+        r"(annotation|decorator|tagged with|annotated|@|dekoratör|etiket)": "find_annotations",
+
+        # Imports/Dependencies
+        r"(import|dependency|library|uses library|bağımlılık|kütüphane)": "find_imports",
+
+        # Control Structures
+        r"(loops in|conditions in|if statements|control structures|döngüler|koşullar)": "analyze_structures",
 
         # Impact/Caller analysis
         r"(who calls|callers of|references to|kim çağırıyor|kullanımı)": "analyze_impact",
@@ -258,6 +268,28 @@ class CodeQueryHandler:
             result = provider.find_literals(cpg_path, lit_pattern)
             return self._format_literal_results(result)
 
+        elif tool == "find_annotations":
+            pattern = self._extract_method_name(query, ["annotated with", "tagged with", "decorator", "annotation", "etketli", "@"])
+            if not pattern:
+                 pattern = query.split()[-1].replace("@", "")
+            result = provider.find_annotations(cpg_path, pattern)
+            return self._format_annotation_results(result)
+
+        elif tool == "find_imports":
+            pattern = self._extract_method_name(query, ["uses library", "imports", "dependency", "bağımlılık"])
+            if not pattern:
+                 pattern = query.split()[-1]
+            result = provider.find_imports(cpg_path, pattern)
+            return self._format_import_results(result)
+
+        elif tool == "analyze_structures":
+            pattern = self._extract_method_name(query, ["loops in", "conditions in", "structures in", "structures of"])
+            if not pattern:
+                # Default wildcards if no method specified
+                pattern = ".*"
+            result = provider.analyze_structures(cpg_path, pattern)
+            return self._format_structure_results(result)
+
         else:
             return []
 
@@ -391,6 +423,51 @@ class CodeQueryHandler:
                 "line": item["line"],
                 "filename": item.get("filename", "unknown"),
                 "code": item["code"]
+            })
+        return formatted
+
+    def _format_annotation_results(self, results: dict) -> list:
+        if not results.get("findings"):
+            return [{"type": "annotation", "pattern": results.get("pattern"), "error": "No matching annotations found"}]
+        
+        formatted = []
+        for item in results["findings"]:
+            formatted.append({
+                "type": "annotation",
+                "pattern": results.get("pattern"),
+                "method": item["method"],
+                "filename": item["filename"],
+                "annotations": item["annotations"]
+            })
+        return formatted
+
+    def _format_import_results(self, results: dict) -> list:
+        if not results.get("imports"):
+             return [{"type": "import", "pattern": results.get("pattern"), "error": "No imports found"}]
+        
+        formatted = []
+        for item in results["imports"]:
+            formatted.append({
+                "type": "import",
+                "pattern": results.get("pattern"),
+                "import_stmt": item["import"],
+                "filename": item["filename"]
+            })
+        return formatted
+
+    def _format_structure_results(self, results: dict) -> list:
+        if not results.get("structures"):
+             return [{"type": "structure", "pattern": results.get("pattern"), "error": "No structures found"}]
+        
+        formatted = []
+        for item in results["structures"]:
+            formatted.append({
+                "type": "structure",
+                "pattern": results.get("pattern"),
+                "method": item["method"],
+                "filename": item["filename"],
+                "loops": item["loops"],
+                "ifs": item["ifs"]
             })
         return formatted
 
@@ -572,6 +649,33 @@ class CodeQueryHandler:
                 for i, item in enumerate(results, 1):
                      file_info = f" ({item.get('filename', 'unknown')})"
                      output += f"{i}. {item['code']} in {item['method']}:{item['line']}{file_info}\\n"
+
+        elif item_type == "annotation":
+            if "error" in results[0]:
+                 output += f"Error: {results[0]['error']}\\n"
+            else:
+                pattern = results[0].get("pattern", "unknown")
+                output += f"Methods with Annotation '@{pattern}':\\n\\n"
+                for i, item in enumerate(results, 1):
+                    output += f"{i}. {item['method']} ({item['filename']}) - [{item['annotations']}]\\n"
+
+        elif item_type == "import":
+             if "error" in results[0]:
+                 output += f"Error: {results[0]['error']}\\n"
+             else:
+                pattern = results[0].get("pattern", "unknown")
+                output += f"Imports matching '{pattern}':\\n\\n"
+                for i, item in enumerate(results, 1):
+                    output += f"{i}. {item['import_stmt']} (in {item['filename']})\\n"
+
+        elif item_type == "structure":
+             if "error" in results[0]:
+                 output += f"Error: {results[0]['error']}\\n"
+             else:
+                output += f"Control Structures Analysis:\\n\\n"
+                for i, item in enumerate(results, 1):
+                    if item['loops'] > 0 or item['ifs'] > 0:
+                        output += f"{i}. {item['method']} ({item['filename']}): Loops={item['loops']}, Ifs={item['ifs']}\\n"
 
         else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"

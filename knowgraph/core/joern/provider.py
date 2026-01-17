@@ -772,6 +772,109 @@ class JoernProvider:
         
         return {"pattern": literal_pattern, "literals": literals}
 
+    def find_annotations(self, cpg_path: Path, annotation_pattern: str) -> dict:
+        """Find methods with specific annotations/decorators."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        # Query to find methods having an annotation matching the pattern
+        query = f"""
+        cpg.method.filter(_.annotation.name(".*{annotation_pattern}.*")).map{{ m =>
+            val name = m.name
+            val line = m.lineNumber.getOrElse(-1)
+            val file = m.filename
+            val annots = m.annotation.name.mkString(", ")
+            s"$name|$line|$file|$annots"
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        findings = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if "|" in raw:
+                try:
+                    parts = raw.split("|")
+                    findings.append({
+                        "method": parts[0],
+                        "line": int(parts[1]),
+                        "filename": parts[2],
+                        "annotations": parts[3]
+                    })
+                except Exception:
+                    continue
+                    
+        return {"pattern": annotation_pattern, "findings": findings}
+
+    def find_imports(self, cpg_path: Path, import_pattern: str) -> dict:
+        """Find imports/dependencies matching a pattern."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        # Note: Joern representation of imports varies by language.
+        # This query targets the generic 'IMPORT' node type.
+        query = f"""
+        cpg.imports.code(".*{import_pattern}.*").map{{ i =>
+            val code = i.code
+            val file = i.file.name.headOption.getOrElse("unknown") 
+            s"$code|$file"
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        imports = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if "|" in raw:
+                try:
+                    parts = raw.split("|")
+                    imports.append({
+                        "import": parts[0],
+                        "filename": parts[1]
+                    })
+                except Exception:
+                    continue
+            else:
+                 # Fallback
+                 imports.append({"import": raw, "filename": "unknown"})
+                 
+        return {"pattern": import_pattern, "imports": imports}
+        
+    def analyze_structures(self, cpg_path: Path, method_pattern: str) -> dict:
+        """Analyze control structures (loops, ifs) in methods."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.method.name("{method_pattern}").map{{ m =>
+            val loops = m.controlStructure.filter(x => x.controlStructureType == "FOR" || x.controlStructureType == "WHILE" || x.controlStructureType == "DO").size
+            val ifs = m.controlStructure.filter(_.controlStructureType == "IF").size
+            val name = m.name
+            val line = m.lineNumber.getOrElse(-1)
+            val file = m.filename
+            s"$name|$line|$file|$loops|$ifs"
+        }}.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        structures = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if "|" in raw:
+                try:
+                    parts = raw.split("|")
+                    structures.append({
+                        "method": parts[0],
+                        "line": int(parts[1]),
+                        "filename": parts[2],
+                        "loops": int(parts[3]),
+                        "ifs": int(parts[4])
+                    })
+                except Exception:
+                    continue
+                    
+        return {"pattern": method_pattern, "structures": structures}
+
 
 
 

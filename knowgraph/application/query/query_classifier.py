@@ -109,7 +109,9 @@ class QueryClassifier:
             "subclasses", "superclasses", "inherits", "extends",
             "cfg", "pdg", "cdg", "control flow", "dependence",
             "slice", "slicing", "usage", "variable", "identifier",
-            "literal", "hardcoded", "string", "constant"
+            "slice", "slicing", "usage", "variable", "identifier",
+            "literal", "hardcoded", "string", "constant",
+            "annotation", "decorator", "import", "dependency", "loop", "if statement"
         ]
 
         for indicator in strong_code_indicators:
