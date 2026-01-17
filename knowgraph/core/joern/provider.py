@@ -662,5 +662,70 @@ class JoernProvider:
             return result.results[0].get("raw", "CDG not found")
         return "CDG not found"
 
+    def find_variable_usages(self, cpg_path: Path, var_pattern: str) -> dict:
+        """Find where a variable/identifier is used."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.identifier.name("{var_pattern}").map{{ i =>
+            val method = i.method.name
+            val line = i.lineNumber.getOrElse(-1)
+            s"$method:$line"
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        usages = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if ":" in raw:
+                method, line = raw.split(":", 1)
+                usages.append({"method": method, "line": int(line)})
+            else:
+                 usages.append({"method": "unknown", "line": -1, "raw": raw})
+                 
+        return {"variable": var_pattern, "usages": usages}
+
+    def perform_slicing(self, cpg_path: Path, var_pattern: str) -> dict:
+        """Perform backwards slicing (find code affecting a variable)."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        # Slicing logic using REACHABLE BY (Simplified Slice)
+        # Finds all calls that can reach the usages of this variable
+        query = f"""
+        val target = cpg.identifier.name("{var_pattern}")
+        val sources = cpg.call
+        
+        target.reachableBy(sources).map{{ c =>
+            val method = c.method.name
+            val line = c.lineNumber.getOrElse(-1)
+            val code = c.code
+            s"$method|$line|$code"
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        slice_lines = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if "|" in raw:
+                try:
+                    parts = raw.split("|")
+                    method = parts[0]
+                    line = parts[1]
+                    code = "|".join(parts[2:]) # Code might contain pipes
+                    slice_lines.append({
+                        "method": method, 
+                        "line": int(line), 
+                        "code": code
+                    })
+                except Exception:
+                    continue
+                    
+        return {"variable": var_pattern, "slice": slice_lines}
+
+
 
 

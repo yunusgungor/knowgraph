@@ -107,7 +107,8 @@ class QueryClassifier:
             "chain", "calls between",
             "complexity", "cyclomatic", "ast", "syntax tree",
             "subclasses", "superclasses", "inherits", "extends",
-            "cfg", "pdg", "cdg", "control flow", "dependence"
+            "cfg", "pdg", "cdg", "control flow", "dependence",
+            "slice", "slicing", "usage", "variable", "identifier"
         ]
 
         for indicator in strong_code_indicators:

@@ -29,8 +29,12 @@ class CodeQueryHandler:
         # Recursion analysis
         r"(recursion|recursive|loop|cycle|özyineleme|döngü)": "analyze_recursion",
 
+        # Variable Usage and Slicing (Prioritize 'usage of' for variables)
+        r"(usage of|where is|variable|identifier|değişken|nerede)": "find_variable_usages",
+        r"(slice|slicing|backwards slice|code affecting|dilimle|etkileyen)": "perform_slicing",
+
         # Impact/Caller analysis
-        r"(who calls|callers of|usage of|references to|kim çağırıyor|kullanımı)": "analyze_impact",
+        r"(who calls|callers of|references to|kim çağırıyor|kullanımı)": "analyze_impact",
 
         # Call Chain analysis
         r"(chain|path from|calls between|zincir|yol)": "analyze_chain",
@@ -48,8 +52,6 @@ class CodeQueryHandler:
         r"(cfg|control flow|akış grafiği)": "get_cfg",
         r"(pdg|program dependence|bağımlılık grafiği)": "get_pdg",
         r"(cdg|control dependence)": "get_cdg",
-
-        # Method/function search (generic)
 
         # Method/function search (generic)
         r"(show|list|find|get).*(function|method|class|fonksiyon|metot)": "joern_query",
@@ -225,7 +227,25 @@ class CodeQueryHandler:
             else:
                 result = provider.get_cdg(cpg_path, method_name)
                 
+                
             return [{"type": "dot_graph", "graph_type": graph_type, "data": result}]
+
+        elif tool == "find_variable_usages":
+            var_name = self._extract_method_name(query, ["usage of", "variable", "identifier", "where is", "değişken", "nerede"])
+            # Fallback: try to find the last word if regex fails
+            if not var_name:
+                 var_name = query.split()[-1]
+            
+            result = provider.find_variable_usages(cpg_path, var_name)
+            return self._format_usage_results(result)
+
+        elif tool == "perform_slicing":
+            var_name = self._extract_method_name(query, ["slice of", "slice", "backwards slice", "dilimle", "code affecting"])
+            if not var_name:
+                 var_name = query.split()[-1]
+            
+            result = provider.perform_slicing(cpg_path, var_name)
+            return self._format_slicing_results(result)
 
         else:
             return []
@@ -310,15 +330,40 @@ class CodeQueryHandler:
             return []
         return [{"type": "complexity", "method": item["method"], "score": item["score"]} for item in results["complexity"]]
 
-    def _format_hierarchy_results(self, results: dict, type_name: str) -> list:
-        if not results.get("found"):
-             return [{"type": "hierarchy", "error": f"Type '{type_name}' not found"}]
-        
         return [{
             "type": "hierarchy",
             "base_types": results.get("base", []),
             "derived_types": results.get("derived", [])
         }]
+
+    def _format_usage_results(self, results: dict) -> list:
+        if not results.get("usages"):
+            return [{"type": "usage", "variable": results.get("variable"), "error": "No usages found"}]
+        
+        formatted = []
+        for usage in results["usages"]:
+            formatted.append({
+                "type": "usage",
+                "variable": results.get("variable"),
+                "method": usage["method"],
+                "line": usage["line"]
+            })
+        return formatted
+
+    def _format_slicing_results(self, results: dict) -> list:
+        if not results.get("slice"):
+            return [{"type": "slice", "variable": results.get("variable"), "error": "Slice is empty"}]
+            
+        formatted = []
+        for item in results["slice"]:
+            formatted.append({
+                "type": "slice",
+                "variable": results.get("variable"),
+                "method": item["method"],
+                "line": item["line"],
+                "code": item["code"]
+            })
+        return formatted
 
     def _extract_method_name(self, query: str, prefixes: list[str]) -> str | None:
         """Extract method name from query removing prefixes."""
@@ -466,6 +511,26 @@ class CodeQueryHandler:
                 output += graph_data[:500] + "... (truncated)\\n"
             else:
                 output += graph_data + "\\n"
+
+        elif item_type == "usage":
+            if "error" in results[0]:
+                 output += f"Error: {results[0]['error']}\\n"
+            else:
+                var = results[0].get("variable", "unknown")
+                output += f"Variable Usage: '{var}'\\n\\n"
+                for i, item in enumerate(results, 1):
+                    output += f"{i}. Method: {item['method']}, Line: {item['line']}\\n"
+
+        elif item_type == "slice":
+            if "error" in results[0]:
+                 output += f"Error: {results[0]['error']}\\n"
+            else:
+                var = results[0].get("variable", "unknown")
+                output += f"Backwards Slice (Code affecting '{var}'):\\n\\n"
+                # Sort by line number for readability
+                sorted_results = sorted(results, key=lambda x: x.get('line', 0))
+                for item in sorted_results:
+                    output += f"[{item['method']}:{item['line']}] {item['code']}\\n"
 
         else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"
