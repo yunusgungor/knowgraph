@@ -1,4 +1,4 @@
-# 🧠 KnowGraph: Graph RAG & MCP Server for Code (v0.8.1 🚀)
+# 🧠 KnowGraph: Graph RAG & MCP Server for Code (v1.0.0 🚀)
 
 [![CI](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml)
 [![Joern](https://img.shields.io/badge/Powered_by-Joern_CPG-orange?style=flat-square)](https://joern.io)
@@ -136,7 +136,7 @@ For detailed usage, configuration, and advanced features, see the **[User Guide]
 **Quick Links:**
 - [Installation & Setup](docs/USER_GUIDE.md#3-installation)
 - [MCP Server Integration](docs/USER_GUIDE.md#8-mcp-server-integration)
-- [Joern Code Analysis](docs/USER_GUIDE.md#6-joern-code-analysis-new-v080)
+- [Joern Code Analysis](docs/USER_GUIDE.md#6-joern-code-analysis-new-v100)
 - [Advanced Querying](docs/USER_GUIDE.md#9-advanced-querying)
 - [Performance Optimization](docs/USER_GUIDE.md#13-performance-optimization)
 - [Security Analysis](docs/USER_GUIDE.md#14-security-analysis-deep-dive)
