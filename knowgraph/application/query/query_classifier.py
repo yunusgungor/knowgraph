@@ -108,7 +108,8 @@ class QueryClassifier:
             "complexity", "cyclomatic", "ast", "syntax tree",
             "subclasses", "superclasses", "inherits", "extends",
             "cfg", "pdg", "cdg", "control flow", "dependence",
-            "slice", "slicing", "usage", "variable", "identifier"
+            "slice", "slicing", "usage", "variable", "identifier",
+            "literal", "hardcoded", "string", "constant"
         ]
 
         for indicator in strong_code_indicators:

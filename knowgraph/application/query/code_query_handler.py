@@ -33,6 +33,9 @@ class CodeQueryHandler:
         r"(usage of|where is|variable|identifier|değişken|nerede)": "find_variable_usages",
         r"(slice|slicing|backwards slice|code affecting|dilimle|etkileyen)": "perform_slicing",
 
+        # Literal/String Search
+        r"(literal|hardcoded|string|constant|sabit|metin)": "find_literals",
+
         # Impact/Caller analysis
         r"(who calls|callers of|references to|kim çağırıyor|kullanımı)": "analyze_impact",
 
@@ -247,6 +250,14 @@ class CodeQueryHandler:
             result = provider.perform_slicing(cpg_path, var_name)
             return self._format_slicing_results(result)
 
+        elif tool == "find_literals":
+            lit_pattern = self._extract_method_name(query, ["literal containing", "string containing", "hardcoded", "sabit"])
+            if not lit_pattern:
+                lit_pattern = query.split()[-1]
+                
+            result = provider.find_literals(cpg_path, lit_pattern)
+            return self._format_literal_results(result)
+
         else:
             return []
 
@@ -346,7 +357,8 @@ class CodeQueryHandler:
                 "type": "usage",
                 "variable": results.get("variable"),
                 "method": usage["method"],
-                "line": usage["line"]
+                "line": usage["line"],
+                "filename": usage.get("filename", "unknown")
             })
         return formatted
 
@@ -361,6 +373,23 @@ class CodeQueryHandler:
                 "variable": results.get("variable"),
                 "method": item["method"],
                 "line": item["line"],
+                "filename": item.get("filename", "unknown"),
+                "code": item["code"]
+            })
+        return formatted
+
+    def _format_literal_results(self, results: dict) -> list:
+        if not results.get("literals"):
+             return [{"type": "literal", "pattern": results.get("pattern"), "error": "No literals found"}]
+        
+        formatted = []
+        for item in results["literals"]:
+            formatted.append({
+                "type": "literal",
+                "pattern": results.get("pattern"),
+                "method": item["method"],
+                "line": item["line"],
+                "filename": item.get("filename", "unknown"),
                 "code": item["code"]
             })
         return formatted
@@ -519,7 +548,8 @@ class CodeQueryHandler:
                 var = results[0].get("variable", "unknown")
                 output += f"Variable Usage: '{var}'\\n\\n"
                 for i, item in enumerate(results, 1):
-                    output += f"{i}. Method: {item['method']}, Line: {item['line']}\\n"
+                    file_info = f" ({item['filename']})" if item.get('filename') != 'unknown' else ""
+                    output += f"{i}. {item['method']}:{item['line']}{file_info}\\n"
 
         elif item_type == "slice":
             if "error" in results[0]:
@@ -530,7 +560,18 @@ class CodeQueryHandler:
                 # Sort by line number for readability
                 sorted_results = sorted(results, key=lambda x: x.get('line', 0))
                 for item in sorted_results:
-                    output += f"[{item['method']}:{item['line']}] {item['code']}\\n"
+                    file_info = f"[{item.get('filename', 'unknown')}] "
+                    output += f"{file_info}[{item['method']}:{item['line']}] {item['code']}\\n"
+
+        elif item_type == "literal":
+            if "error" in results[0]:
+                 output += f"Error: {results[0]['error']}\\n"
+            else:
+                pattern = results[0].get("pattern", "unknown")
+                output += f"Hardcoded Literals matching '{pattern}':\\n\\n"
+                for i, item in enumerate(results, 1):
+                     file_info = f" ({item.get('filename', 'unknown')})"
+                     output += f"{i}. {item['code']} in {item['method']}:{item['line']}{file_info}\\n"
 
         else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"

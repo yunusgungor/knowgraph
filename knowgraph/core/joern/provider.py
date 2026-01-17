@@ -663,7 +663,7 @@ class JoernProvider:
         return "CDG not found"
 
     def find_variable_usages(self, cpg_path: Path, var_pattern: str) -> dict:
-        """Find where a variable/identifier is used."""
+        """Find where a variable/identifier is used, including filename."""
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
         executor = JoernQueryExecutor(Path(self.joern_path))
         
@@ -671,7 +671,8 @@ class JoernProvider:
         cpg.identifier.name("{var_pattern}").map{{ i =>
             val method = i.method.name
             val line = i.lineNumber.getOrElse(-1)
-            s"$method:$line"
+            val file = i.method.filename
+            s"$method|$line|$file"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -679,21 +680,26 @@ class JoernProvider:
         usages = []
         for item in result.results:
             raw = item.get("raw", "")
-            if ":" in raw:
-                method, line = raw.split(":", 1)
-                usages.append({"method": method, "line": int(line)})
+            if "|" in raw:
+                try:
+                    parts = raw.split("|")
+                    method = parts[0]
+                    line = parts[1]
+                    filename = parts[2]
+                    usages.append({"method": method, "line": int(line), "filename": filename})
+                except Exception:
+                     usages.append({"method": "unknown", "line": -1, "filename": "unknown", "raw": raw})
             else:
-                 usages.append({"method": "unknown", "line": -1, "raw": raw})
+                 usages.append({"method": "unknown", "line": -1, "filename": "unknown", "raw": raw})
                  
         return {"variable": var_pattern, "usages": usages}
 
     def perform_slicing(self, cpg_path: Path, var_pattern: str) -> dict:
-        """Perform backwards slicing (find code affecting a variable)."""
+        """Perform backwards slicing with filename info."""
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
         executor = JoernQueryExecutor(Path(self.joern_path))
         
-        # Slicing logic using REACHABLE BY (Simplified Slice)
-        # Finds all calls that can reach the usages of this variable
+        # Slicing logic using REACHABLE BY
         query = f"""
         val target = cpg.identifier.name("{var_pattern}")
         val sources = cpg.call
@@ -701,8 +707,9 @@ class JoernProvider:
         target.reachableBy(sources).map{{ c =>
             val method = c.method.name
             val line = c.lineNumber.getOrElse(-1)
-            val code = c.code
-            s"$method|$line|$code"
+            val file = c.method.filename
+            val code = c.code.replace("\\"", "'") // Escape quotes
+            s"$method|$line|$file|$code"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -715,16 +722,55 @@ class JoernProvider:
                     parts = raw.split("|")
                     method = parts[0]
                     line = parts[1]
-                    code = "|".join(parts[2:]) # Code might contain pipes
+                    filename = parts[2]
+                    code = "|".join(parts[3:]) 
                     slice_lines.append({
                         "method": method, 
-                        "line": int(line), 
+                        "line": int(line),
+                        "filename": filename,
                         "code": code
                     })
                 except Exception:
                     continue
                     
         return {"variable": var_pattern, "slice": slice_lines}
+
+    def find_literals(self, cpg_path: Path, literal_pattern: str) -> dict:
+        """Find hardcoded literals/strings matching a pattern."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.literal.code(".*{literal_pattern}.*").map{{ l =>
+            val method = l.method.name
+            val line = l.lineNumber.getOrElse(-1)
+            val file = l.method.filename
+            val code = l.code.replace("\\"", "'")
+            s"$method|$line|$file|$code"
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        literals = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if "|" in raw:
+                try:
+                    parts = raw.split("|")
+                    method = parts[0]
+                    line = parts[1]
+                    filename = parts[2]
+                    code = "|".join(parts[3:])
+                    literals.append({
+                        "method": method,
+                        "line": int(line),
+                        "filename": filename,
+                        "code": code
+                    })
+                except Exception:
+                    continue
+        
+        return {"pattern": literal_pattern, "literals": literals}
 
 
 
