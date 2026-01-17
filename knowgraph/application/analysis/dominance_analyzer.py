@@ -203,10 +203,11 @@ val allMethods = cpg.method.filterNot(_.name.startsWith("<")).l
 // Dead code = methods with no callers
 val deadMethods = allMethods.filter(_.callIn.isEmpty)
 
-// Return names with line numbers
+// Return names with line numbers and filename
 deadMethods.map { m =>
   val line = m.lineNumber.headOption.map(_.toString).getOrElse("-1")
-  s"${m.name}:$line"
+  val filename = m.filename.headOption.getOrElse("unknown")
+  s"${m.name}:$line:$filename"
 }.l
 """
 
@@ -217,17 +218,23 @@ deadMethods.map { m =>
         dead_methods = []
         for item in result.results:
             raw = item.get("raw", "")
-            if ":" in raw:
-                name, line = raw.split(":", 1)
+            # Parse format: "name:line:filename"
+            parts = raw.split(":", 2)  # Split into max 3 parts
+            if len(parts) >= 2:
+                name = parts[0]
+                line = int(parts[1]) if parts[1].isdigit() else -1
+                filename = parts[2] if len(parts) > 2 else "unknown"
                 dead_methods.append({
                     "name": name,
-                    "line": int(line) if line.isdigit() else -1,
+                    "line": line,
+                    "filename": filename,
                     "reason": "unreachable_from_entry_points",
                 })
             else:
                 dead_methods.append({
                     "name": raw,
                     "line": -1,
+                    "filename": "unknown",
                     "reason": "unreachable",
                 })
 

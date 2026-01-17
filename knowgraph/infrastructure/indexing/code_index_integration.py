@@ -229,67 +229,70 @@ class CodeIndexIntegration:
 
 
                 # Step 7.5: Write call graph and data flow edges to graphstore (CRITICAL)
+                # DISABLED: This code creates dangling edges because it uses random UUIDs
+                # instead of mapping caller/callee names to actual node UUIDs.
+                # TODO: Implement proper node ID mapping before enabling this feature.
                 try:
-                    import time
-                    from uuid import uuid4
-
-                    from knowgraph.domain.models.edge import Edge
-                    from knowgraph.infrastructure.storage.filesystem import append_edge_jsonl
-
-                    logger.info("Writing code edges to graphstore...")
-
-                    edges_written = 0
-
-                    # Write call graph edges
-                    if call_edges:
-                        for call_edge in call_edges:
-                            try:
-                                # Create Edge object
-                                edge = Edge(
-                                    source=uuid4(),  # Will need to map to actual node UUIDs
-                                    target=uuid4(),
-                                    type="call",
-                                    score=1.0,  # Call edges are definite
-                                    created_at=int(time.time()),
-                                    metadata={
-                                        "caller": call_edge.get("caller", "unknown"),
-                                        "callee": call_edge.get("callee", "unknown"),
-                                        "source": "joern_call_graph"
-                                    }
-                                )
-
-                                append_edge_jsonl(edge, graph_path)
-                                edges_written += 1
-
-                            except Exception as e:
-                                logger.warning(f"Failed to write call edge: {e}")
-
-                    # Write data flow edges
-                    if data_flows:
-                        for flow in data_flows:
-                            try:
-                                edge = Edge(
-                                    source=uuid4(),
-                                    target=uuid4(),
-                                    type="data_flow",
-                                    score=0.8,  # Data flows have some uncertainty
-                                    created_at=int(time.time()),
-                                    metadata={
-                                        "source_node": flow.get("source", "unknown"),
-                                        "sink_node": flow.get("sink", "unknown"),
-                                        "variable": flow.get("variable", "unknown"),
-                                        "source": "joern_data_flow"
-                                    }
-                                )
-
-                                append_edge_jsonl(edge, graph_path)
-                                edges_written += 1
-
-                            except Exception as e:
-                                logger.warning(f"Failed to write data flow edge: {e}")
-
-                    logger.info(f"✅ Written {edges_written} code edges to graphstore")
-                    results["code_edges_written"] = edges_written
+                    logger.info("Skipping code edge generation (requires node ID mapping)")
+                    results["code_edges_written"] = 0
+                    
+                    # The following code is commented out until proper node ID mapping is implemented:
+                    # 
+                    # import time
+                    # from uuid import uuid4
+                    # from knowgraph.domain.models.edge import Edge
+                    # from knowgraph.infrastructure.storage.filesystem import append_edge_jsonl
+                    #
+                    # logger.info("Writing code edges to graphstore...")
+                    # edges_written = 0
+                    #
+                    # # Write call graph edges
+                    # if call_edges:
+                    #     for call_edge in call_edges:
+                    #         try:
+                    #             # PROBLEM: uuid4() creates random UUIDs that don't correspond to any nodes!
+                    #             # We need to map caller/callee names to actual node UUIDs first.
+                    #             edge = Edge(
+                    #                 source=uuid4(),  # ❌ WRONG: Random UUID
+                    #                 target=uuid4(),  # ❌ WRONG: Random UUID
+                    #                 type="call",
+                    #                 score=1.0,
+                    #                 created_at=int(time.time()),
+                    #                 metadata={
+                    #                     "caller": call_edge.get("caller", "unknown"),
+                    #                     "callee": call_edge.get("callee", "unknown"),
+                    #                     "source": "joern_call_graph"
+                    #                 }
+                    #             )
+                    #             append_edge_jsonl(edge, graph_path)
+                    #             edges_written += 1
+                    #         except Exception as e:
+                    #             logger.warning(f"Failed to write call edge: {e}")
+                    #
+                    # # Write data flow edges
+                    # if data_flows:
+                    #     for flow in data_flows:
+                    #         try:
+                    #             edge = Edge(
+                    #                 source=uuid4(),  # ❌ WRONG: Random UUID
+                    #                 target=uuid4(),  # ❌ WRONG: Random UUID
+                    #                 type="data_flow",
+                    #                 score=0.8,
+                    #                 created_at=int(time.time()),
+                    #                 metadata={
+                    #                     "source_node": flow.get("source", "unknown"),
+                    #                     "sink_node": flow.get("sink", "unknown"),
+                    #                     "variable": flow.get("variable", "unknown"),
+                    #                     "source": "joern_data_flow"
+                    #                 }
+                    #             )
+                    #             append_edge_jsonl(edge, graph_path)
+                    #             edges_written += 1
+                    #         except Exception as e:
+                    #             logger.warning(f"Failed to write data flow edge: {e}")
+                    #
+                    # logger.info(f"✅ Written {edges_written} code edges to graphstore")
+                    # results["code_edges_written"] = edges_written
 
                 except Exception as e:
                     logger.error(f"Failed to write code edges: {e}")
@@ -335,6 +338,20 @@ class CodeIndexIntegration:
                                 content_for_hash = f"{node_dict['name']}_{file_path}"
                                 content_hash = hashlib.sha1(content_for_hash.encode()).hexdigest()
 
+                                node_metadata = node_dict["metadata"].copy()
+                                
+                                # CRITICAL FIX: create_semantic_edges requires "entities" in metadata
+                                # For code nodes, the node itself IS the entity.
+                                # So we add itself as the single entity in the list.
+                                if "entities" not in node_metadata:
+                                    node_metadata["entities"] = [
+                                        {
+                                            "name": node_dict["name"],
+                                            "type": node_dict.get("type", "code"),
+                                            "description": f"Code entity: {node_dict['name']}"
+                                        }
+                                    ]
+
                                 node = Node(
                                     id=uuid4(),
                                     hash=content_hash,
@@ -344,7 +361,7 @@ class CodeIndexIntegration:
                                     type=node_dict["type"],
                                     token_count=len(node_dict["content"].split()),
                                     created_at=int(time.time()),
-                                    metadata=node_dict["metadata"]
+                                    metadata=node_metadata
                                 )
 
                                 # Write to graphstore
@@ -403,6 +420,47 @@ class CodeIndexIntegration:
                             except Exception as e:
                                 logger.error(f"Failed to update sparse index: {e}")
                                 results["entities_indexed"] = 0
+
+                        # Step 8.6: Generate Semantic and Reference Edges (NEW - MISSING FEATURE)
+                        if created_nodes:
+                            logger.info("Generating semantic and reference edges for code entities...")
+                            try:
+                                from knowgraph.application.indexing.graph_builder import (
+                                    create_semantic_edges,
+                                    create_reference_edges,
+                                )
+                                from knowgraph.infrastructure.storage.filesystem import append_edge_jsonl
+
+                                # Create semantic edges
+                                semantic_edges = create_semantic_edges(created_nodes, threshold=0.1)
+                                logger.info(f"Created {len(semantic_edges)} semantic edges")
+                                
+                                for edge in semantic_edges:
+                                    append_edge_jsonl(edge, graph_path)
+                                
+                                # Create reference edges
+                                # Note: Reference edges benefit from global context, but here we only have
+                                # the current batch of code nodes. This is still useful for internal
+                                # references within the codebase.
+                                reference_edges = create_reference_edges(created_nodes)
+                                logger.info(f"Created {len(reference_edges)} reference edges")
+
+                                for edge in reference_edges:
+                                    append_edge_jsonl(edge, graph_path)
+                                
+                                total_edges = len(semantic_edges) + len(reference_edges)
+                                logger.info(f"✅ Written {total_edges} new edges to graphstore")
+                                
+                                # Update manifest
+                                if manifest and total_edges > 0:
+                                    manifest.edge_count += total_edges
+                                    manifest.semantic_edge_count += len(semantic_edges)
+                                    manifest.updated_at = int(time.time())
+                                    write_manifest(manifest, graph_path)
+
+                            except Exception as e:
+                                logger.error(f"Failed to create edges: {e}")
+
 
                     except Exception as e:
                         logger.error(f"Failed to write entities to graphstore: {e}")

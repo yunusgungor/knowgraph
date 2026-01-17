@@ -682,12 +682,12 @@ async def handle_get_stats(
         # Use real-time node/edge counting instead of manifest for accuracy
         # Manifest can be outdated when nodes are added via tag_snippet
         from knowgraph.infrastructure.storage.filesystem import (
-            list_all_edges,
             list_all_nodes,
+            read_all_edges,  # Changed from list_all_edges (which is a stub)
         )
 
         node_ids = list_all_nodes(graph_path)
-        edge_ids = list_all_edges(graph_path)
+        edges = read_all_edges(graph_path)  # Read actual edges from JSONL
 
         # Still read manifest for version and file count
         with open(manifest_path, encoding="utf-8") as f:
@@ -696,7 +696,11 @@ async def handle_get_stats(
 
         # Override node/edge counts with real-time values
         manifest.node_count = len(node_ids)
-        manifest.edge_count = len(edge_ids)
+        manifest.edge_count = len(edges)
+        
+        # Count semantic edges
+        semantic_edges = [e for e in edges if e.type == "semantic"]
+        manifest.semantic_edge_count = len(semantic_edges)
 
         stats = build_graph_stats_response(manifest)
         return [types.TextContent(type="text", text=stats)]
@@ -1341,7 +1345,7 @@ async def handle_find_dead_code(arguments: dict[str, Any], PROJECT_ROOT: Path) -
             for idx, method in enumerate(dead_methods[:15], 1):  # Limit to 15
                 name = method.get("name", "Unknown")
                 signature = method.get("signature", "")
-                file_loc = method.get("filename", "Unknown file")
+                file_loc = method.get("filename", method.get("file", "Location not available"))
 
                 output += f"{idx}. `{name}`\n"
                 if signature:

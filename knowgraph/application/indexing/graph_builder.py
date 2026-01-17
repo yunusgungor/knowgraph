@@ -612,22 +612,59 @@ class SmartGraphBuilder:
                 all_context_nodes = final_nodes + existing_metadata
 
                 # OPTIMIZATION: Only create semantic edges between NEW nodes
-                # (semantic similarity between new and old nodes is less useful)
                 semantic_edges = create_semantic_edges(final_nodes)
+                logger.info(f"Created {len(semantic_edges)} semantic edges from {len(final_nodes)} nodes")
 
                 # create_reference_edges uses global context to resolve symbols
                 reference_edges = create_reference_edges(all_context_nodes)
+                logger.info(f"Created {len(reference_edges)} reference edges (before filtering)")
 
-                # Filter reference_edges: We only want edges where at least one side is a NEW node
+                # Filter reference_edges: We only want edges where BOTH ends are real nodes
+                # Real nodes = new nodes we just created (final_nodes)
+                # existing_metadata nodes are FAKE nodes (metadata-only) used for symbol resolution
+                # We must NOT create edges pointing to these fake nodes!
                 new_node_ids = {n.id for n in final_nodes}
+                
+                # Get IDs of all real nodes in the graph store (for validation)
+                existing_real_node_ids = set()
+                if existing_metadata:
+                    # existing_metadata contains fake nodes, but we need real node IDs
+                    # We already have them from list_all_nodes() call above (line 575)
+                    existing_real_node_ids = {n.id for n in existing_metadata}
+                
+                all_real_node_ids = new_node_ids | existing_real_node_ids
+                
                 relevant_reference_edges = [
                     e
                     for e in reference_edges
-                    if e.source in new_node_ids or e.target in new_node_ids
+                    # Keep edge only if BOTH source AND target are real nodes
+                    if e.source in all_real_node_ids and e.target in all_real_node_ids
+                    # AND at least one end is a NEW node (we don't want old-to-old edges)
+                    and (e.source in new_node_ids or e.target in new_node_ids)
                 ]
 
+                logger.info(f"Filtered to {len(relevant_reference_edges)} valid reference edges")
+
+                # Filter CPG edges: Only keep edges where BOTH ends exist in final_nodes
+                # CPG edges should only reference entity nodes we just created
+                valid_cpg_edges = [
+                    e
+                    for e in cpg_edges
+                    if e.source in new_node_ids and e.target in new_node_ids
+                ]
+                
+                if len(cpg_edges) != len(valid_cpg_edges):
+                    logger.warning(
+                        f"Filtered {len(cpg_edges) - len(valid_cpg_edges)} invalid CPG edges "
+                        f"(referencing non-existent nodes)"
+                    )
+
                 # Include CPG edges if any were collected
-                all_edges = semantic_edges + relevant_reference_edges + cpg_edges
+                all_edges = semantic_edges + relevant_reference_edges + valid_cpg_edges
+                logger.info(
+                    f"Total edges: {len(all_edges)} "
+                    f"(semantic: {len(semantic_edges)}, reference: {len(relevant_reference_edges)}, cpg: {len(valid_cpg_edges)})"
+                )
 
 
                 # Auto-validate graph before returning

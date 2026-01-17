@@ -23,8 +23,9 @@ from knowgraph.infrastructure.storage.filesystem import (
 # SHA-1 hash is 40 hexadecimal characters
 SHA1_PATTERN = re.compile(r"^[a-f0-9]{40}$")
 
-# Valid edge types from FR-058 (Updated to include Reference Edges)
-VALID_EDGE_TYPES = {"semantic", "reference", "control_flow", "data_flow", "hierarchy"}
+# Valid edge types from FR-058 (Updated to include Reference Edges and CPG types)
+# Matches EdgeType definition in shared/types.py
+VALID_EDGE_TYPES = {"semantic", "reference", "control_flow", "data_flow", "hierarchy", "call", "ast"}
 
 
 @dataclass
