@@ -659,13 +659,18 @@ class CodeQueryHandler:
             output += "Run indexing on a code directory to generate CPG.\\n"
             return output
 
-        # Format based on tool type
+
+        # Tool-specific formatting
         tool = raw_results["tool"]
         results = raw_results.get("results", [])
 
         if not results:
             output += "No results found.\\n"
             return output
+
+        # Determine result type from first item if available
+        item_type = results[0].get("type", "unknown") if results and isinstance(results[0], dict) else "unknown"
+
 
         # Tool-specific formatting
         if tool == "security_scan":

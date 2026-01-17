@@ -13,7 +13,7 @@
 > **"Your code is not just text, it's a living graph."**  
 > Shift from vector similarity to the deterministic clarity of **Graph Theory** and **Joern Code Property Graph**.
 
-[⚡ Quick Start](#-quick-start) • [📚 Full Documentation](docs/USER_GUIDE.md)
+[⚡ Quick Start](#-quick-start) • [📚 Full Documentation](docs/USER_GUIDE.md) • [📘 Example Usage Guide](docs/USAGE_GUIDE.md)
 
 </div>
 
@@ -141,6 +141,7 @@ For detailed usage, configuration, and advanced features, see the **[User Guide]
 - [Performance Optimization](docs/USER_GUIDE.md#13-performance-optimization)
 - [Security Analysis](docs/USER_GUIDE.md#14-security-analysis-deep-dive)
 - [Troubleshooting](docs/USER_GUIDE.md#17-troubleshooting--faq)
+- **[📘 Example Usage Guide (New!)](docs/USAGE_GUIDE.md)**: All commands, combinations and workflows.
 - [Architecture](docs/ARCHITECTURE.md)
 
 ---
