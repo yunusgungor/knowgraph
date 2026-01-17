@@ -61,10 +61,11 @@ class CodeQueryHandler:
         # Type Hierarchy
         r"(subclasses|superclasses|inherits|extends|derived|hierarchy|alt sınıf|türetilmiş|hiyerarşi)": "get_type_hierarchy",
 
-        # Visual Graphs (CFG, PDG, CDG)
+        # Visual Graphs (CFG, PDG, CDG, DDG)
         r"(cfg|control flow|akış grafiği)": "get_cfg",
         r"(pdg|program dependence|bağımlılık grafiği)": "get_pdg",
         r"(cdg|control dependence)": "get_cdg",
+        r"(ddg|data dependence)": "get_ddg",
 
         # Method/function search (generic)
         r"(show|list|find|get).*(function|method|class|fonksiyon|metot)": "joern_query",
@@ -80,6 +81,10 @@ class CodeQueryHandler:
         # Method Internals
         r"(parameters of|args of|arguments of|parametreler)": "get_params",
         r"(locals of|local variables|variables in|yerel değişkenler)": "get_locals",
+
+        # Comments and Tags
+        r"(comments|todos|fixmes|yorumlar)": "find_comments",
+        r"(list tags|show tags|etiketler)": "list_tags",
     }
 
     def __init__(self, graph_path: Path):
@@ -259,9 +264,10 @@ class CodeQueryHandler:
                 result = provider.get_cfg(cpg_path, method_name)
             elif tool == "get_pdg":
                 result = provider.get_pdg(cpg_path, method_name)
+            elif tool == "get_ddg":
+                result = provider.get_ddg(cpg_path, method_name)
             else:
                 result = provider.get_cdg(cpg_path, method_name)
-                
                 
             return [{"type": "dot_graph", "graph_type": graph_type, "data": result}]
 
@@ -344,6 +350,16 @@ class CodeQueryHandler:
             if not method: method = query.split()[-1]
             result = provider.get_method_locals(cpg_path, method)
             return [{"type": "method_locals", "data": result}]
+
+        elif tool == "find_comments":
+            pattern = self._extract_method_name(query, ["comments", "todos", "fixmes"])
+            if not pattern: pattern = "TODO" # Default to finding TODOs if generic
+            result = provider.find_comments(cpg_path, pattern)
+            return [{"type": "comment_list", "data": result}]
+
+        elif tool == "list_tags":
+            result = provider.list_tags(cpg_path)
+            return [{"type": "tag_list", "tags": result["tags"]}]
 
         else:
             return []
@@ -820,6 +836,23 @@ class CodeQueryHandler:
              else:
                  for l in locals_:
                      output += f"  - {l['name']} ({l['type']})\\n"
+
+        elif item_type == "comment_list":
+             data = results[0].get("data", {})
+             comments = data.get("comments", [])
+             pattern = data.get("pattern", "unknown")
+             output += f"Comments/TODOs matching '{pattern}':\\n\\n"
+             if not comments:
+                  output += "  (No matching comments)\\n"
+             else:
+                  for c in comments:
+                      output += f"  - {c['filename']}:{c['line']} -> {c['content']}\\n"
+
+        elif item_type == "tag_list":
+             tags = results[0].get("tags", [])
+             output += f"Found {len(tags)} Tags:\\n\\n"
+             for t in tags:
+                 output += f"  - {t}\\n"
 
         else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"

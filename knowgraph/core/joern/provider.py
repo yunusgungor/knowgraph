@@ -814,8 +814,10 @@ class JoernProvider:
         executor = JoernQueryExecutor(Path(self.joern_path))
         
         # Robust query using reachableBy
+        # Robust query using reachableBy
+        # FIX: Source should be the call itself (return value), not arguments passed to it
         query = f"""
-        val source = cpg.call.name("{source_pattern}").argument
+        val source = cpg.call.name("{source_pattern}")
         val sink = cpg.call.name("{sink_pattern}").argument
         
         sink.reachableByFlows(source).map{{ path =>
@@ -912,6 +914,69 @@ class JoernProvider:
                     continue
                     
         return {"method": method_pattern, "locals": locals_}
+
+    def get_ddg(self, cpg_path: Path, method_pattern: str) -> str:
+        """Get Data Dependence Graph (DOT format)."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.method.name("{method_pattern}").dotDdg.headOption.getOrElse("DDG not found")
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        if result.results:
+            return result.results[0].get("raw", "DDG not found")
+        return "DDG not found"
+
+    def find_comments(self, cpg_path: Path, pattern: str) -> dict:
+        """Find comments or TODOs matchin pattern."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        # Note: 'comment' node type might vary by language/CPG version, but widely supported
+        # If unavailable, returns empty
+        query = f"""
+        cpg.comment.code("(?i).*{pattern}.*").map{{ c =>
+            val file = c.file.name.headOption.getOrElse("<unknown>")
+            val line = c.lineNumber.getOrElse(-1)
+            val content = c.code.replace("\\"", "'")
+            s"$file__KG_SEP__$line__KG_SEP__$content"
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        comments = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if "__KG_SEP__" in raw:
+                try:
+                    parts = raw.split("__KG_SEP__")
+                    comments.append({
+                        "filename": parts[0],
+                        "line": int(parts[1]),
+                        "content": parts[2]
+                    })
+                except Exception:
+                    continue
+                    
+        return {"pattern": pattern, "comments": comments}
+
+    def list_tags(self, cpg_path: Path) -> dict:
+        """List all tags in the CPG."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = 'cpg.tag.name.dedup.l'
+        result = executor.execute_query(cpg_path, query)
+        
+        tags = []
+        for item in result.results:
+             t = item.get("raw", "").strip()
+             if t:
+                 tags.append(t)
+                 
+        return {"tags": sorted(tags)}
 
     def find_annotations(self, cpg_path: Path, annotation_pattern: str) -> dict:
         """Find methods with specific annotations/decorators."""
