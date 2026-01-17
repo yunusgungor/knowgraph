@@ -13,10 +13,6 @@ from knowgraph.infrastructure.parsing.conversation_ingestor import (
     ConversationIngestorError,
     ingest_conversation,
 )
-from knowgraph.infrastructure.parsing.conversation_parser import (
-    ConversationData,
-    Message,
-)
 
 
 @pytest.fixture

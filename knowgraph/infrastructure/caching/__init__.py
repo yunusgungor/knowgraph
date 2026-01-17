@@ -2,4 +2,4 @@
 
 from .cpg_cache import CPGCache
 
-__all__ = ['CPGCache']
+__all__ = ["CPGCache"]

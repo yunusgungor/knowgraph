@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    pass
+    from knowgraph.application.security.dataflow_result import DataFlowResult
 import asyncio
 import time
 from contextvars import ContextVar
@@ -446,8 +446,9 @@ class QueryEngine:
             DataFlowResult with paths, nodes, and visualization
 
         """
-        from knowgraph.application.security.dataflow_result import DataFlowResult
         import networkx as nx
+
+        from knowgraph.application.security.dataflow_result import DataFlowResult
 
         if edge_types is None:
             edge_types = ["data_flow"]
@@ -477,7 +478,7 @@ class QueryEngine:
                 sink_ids = [node.id for node, _ in sink_results]
 
                 trace.add_event("sinks_found", {"count": len(sink_ids)})
-                
+
                 # 3. Load edges and build graph
                 from pathlib import Path as PathType
                 graph_path = PathType(self.graph_store_path) if isinstance(self.graph_store_path, str) else self.graph_store_path

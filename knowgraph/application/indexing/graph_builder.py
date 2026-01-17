@@ -358,7 +358,7 @@ class SmartGraphBuilder:
         """Initialize builder with optional provider."""
         from knowgraph.config import CPG_NODES_ENABLED
         from knowgraph.domain.intelligence.cpg_converter import CPGConverter
-        
+
         self.provider = provider
         # CacheManager will be initialized in build() when path is known
         self.cache_manager: CacheManager | None = None
@@ -384,7 +384,7 @@ class SmartGraphBuilder:
             ):
                 # Track CPG edges during entity extraction
                 cpg_edges = []  # Collect CPG edges here
-                
+
                 with self.perf_tracker.track("total_build"):
                     # 1. Create Nodes (Initial)
                     with self.perf_tracker.track("node_creation"):
@@ -425,7 +425,7 @@ class SmartGraphBuilder:
                             node.content,
                             file_path=file_path  # Pass file path for language detection
                         )
-                        
+
                         if entities:
                             # Record success (may be AST or Joern depending on strategy)
                             self.metrics.record_ast_success()
@@ -433,25 +433,25 @@ class SmartGraphBuilder:
                             final_nodes_map[node.id] = replace(
                                 node, metadata={"entities": [e._asdict() for e in entities]}
                             )
-                            
+
                             # NEW: If CPG available and CPG nodes enabled, create entity nodes + edges
                             if cpg and self.enable_cpg_nodes:
                                 logger.info(f"Converting CPG for {file_path}: {cpg.metadata.get('num_nodes')} nodes")
-                                
+
                                 try:
                                     cpg_result = self.cpg_converter.convert_cpg_to_graph(
                                         cpg,
                                         chunk_node_id=node.id,
                                         file_path=file_path,
                                     )
-                                    
+
                                     # Add CPG entity nodes to graph
                                     for entity_node in cpg_result.entity_nodes:
                                         final_nodes_map[entity_node.id] = entity_node
-                                    
+
                                     # Add CPG edges to collection
                                     cpg_edges.extend(cpg_result.cpg_edges)
-                                    
+
                                     # Add hierarchy edges: entity nodes -> chunk node
                                     for entity_node in cpg_result.entity_nodes:
                                         hierarchy_edge = Edge(
@@ -459,27 +459,27 @@ class SmartGraphBuilder:
                                             target=node.id,
                                             type="hierarchy",
                                             score=1.0,
-                                            created_at=int(__import__('time').time()),
+                                            created_at=int(__import__("time").time()),
                                             metadata={"relation": "child_of_chunk", "source": "cpg"},
                                         )
                                         cpg_edges.append(hierarchy_edge)
-                                    
+
                                     logger.info(
                                         f"✅ CPG integration: +{len(cpg_result.entity_nodes)} nodes, "
                                         f"+{len(cpg_result.cpg_edges)} edges"
                                     )
-                                    
+
                                 except Exception as cpg_err:
                                     logger.warning(f"CPG conversion failed for {file_path}: {cpg_err}")
                                     # Continue with metadata-only (graceful degradation)
-                            
+
                             continue
                     except Exception as e:
                         self.metrics.record_ast_failure(str(e), f"node_{node.id}")
                         logger.debug(f"Code analysis failed for node {node.id}: {e}")
 
                     # If Cache Miss & AST Miss -> Check heuristics before Queueing for LLM
-                    # Optimization: If file is small (< 2000 tokens) and AST found nothing, 
+                    # Optimization: If file is small (< 2000 tokens) and AST found nothing,
                     # it likely has no significant entities. Skip expensive LLM call.
                     if node.token_count < 2000:
                         logger.debug(f"Skipping LLM for small file {node.path} ({node.token_count} tokens)")

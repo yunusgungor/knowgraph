@@ -134,8 +134,10 @@ async def index_graph(
 
             # NEW: Code analysis integration
             try:
-                from knowgraph.infrastructure.indexing.code_index_integration import CodeIndexIntegration
-                
+                from knowgraph.infrastructure.indexing.code_index_integration import (
+                    CodeIndexIntegration,
+                )
+
                 # Only run on local directories (not remote repos)
                 input_path_obj = Path(input_path)
                 if input_path_obj.exists() and input_path_obj.is_dir():
@@ -145,13 +147,13 @@ async def index_graph(
                         input_path_obj,
                         graph_path
                     )
-                    
+
                     # Log results
-                    if code_results['cpg_generated']:
+                    if code_results["cpg_generated"]:
                         logger.info(f"Code analysis: {code_results['entities_extracted']} entities extracted")
                     else:
                         logger.info(f"Code analysis: {code_results.get('code_files_detected', 0)} files detected (no CPG)")
-                        
+
             except Exception as e:
                 # Don't fail indexing if code analysis fails
                 logger.warning(f"Code analysis failed (non-fatal): {e}")
@@ -232,9 +234,9 @@ def security_scan_vulnerabilities(
     scan_type: str = "all",
 ) -> list[types.TextContent]:
     """Scan codebase for security vulnerabilities using taint analysis.
-    
+
     Uses Joern's data_flow edges to trace user input from sources to dangerous sinks.
-    
+
     Args:
     ----
         graph_path: Path to knowledge graph
@@ -246,22 +248,22 @@ def security_scan_vulnerabilities(
             - "path_traversal": Path traversal only
             - "xxe": XML external entity only
             - "ssrf": Server-side request forgery only
-            
+
     Returns:
     -------
         List of TextContent with scan results
-        
+
     """
     from knowgraph.application.security.taint_analyzer import TaintAnalyzer
     from knowgraph.application.security.vulnerability_patterns import (
         VULNERABILITY_PATTERNS,
         VulnerabilityType,
     )
-    
+
     with contextlib.redirect_stdout(sys.stderr):
         try:
             analyzer = TaintAnalyzer(str(graph_path))
-            
+
             # Determine which vulnerabilities to scan for
             if scan_type == "all":
                 results = analyzer.find_vulnerabilities()
@@ -275,7 +277,7 @@ def security_scan_vulnerabilities(
                     "xxe": VulnerabilityType.XXE,
                     "ssrf": VulnerabilityType.SSRF,
                 }
-                
+
                 vuln_type = scan_type_map.get(scan_type)
                 if not vuln_type:
                     return [
@@ -284,25 +286,25 @@ def security_scan_vulnerabilities(
                             text=f"Invalid scan type: {scan_type}. Valid options: {', '.join(scan_type_map.keys())}, all",
                         )
                     ]
-                    
+
                 pattern = VULNERABILITY_PATTERNS[vuln_type]
                 results = analyzer.find_vulnerabilities(
                     source_patterns=pattern.sources,
                     sink_patterns=pattern.sinks,
                 )
-            
+
             # Format output
             if not results:
-                output = f"🔒 Security Scan Complete - No vulnerabilities detected!\n"
+                output = "🔒 Security Scan Complete - No vulnerabilities detected!\n"
                 output += f"Scan type: {scan_type}\n"
                 return [types.TextContent(type="text", text=output)]
-                
+
             # Group by severity
             critical = [v for v in results if v.severity == "Critical"]
             high = [v for v in results if v.severity == "High"]
             medium = [v for v in results if v.severity == "Medium"]
             low = [v for v in results if v.severity == "Low"]
-            
+
             # Build report
             output = f"⚠️  Security Scan Results ({scan_type})\n"
             output += "=" * 60 + "\n\n"
@@ -311,7 +313,7 @@ def security_scan_vulnerabilities(
             output += f"  🟠 High: {len(high)}\n"
             output += f"  🟡 Medium: {len(medium)}\n"
             output += f"  🟢 Low: {len(low)}\n\n"
-            
+
             # Show top 10 most critical vulnerabilities
             sorted_results = sorted(
                 results,
@@ -320,10 +322,10 @@ def security_scan_vulnerabilities(
                     -v.confidence,
                 ),
             )
-            
+
             output += "Top Vulnerabilities:\n"
             output += "-" * 60 + "\n"
-            
+
             for idx, vuln in enumerate(sorted_results[:10], 1):
                 severity_icon = {
                     "Critical": "🔴",
@@ -331,22 +333,22 @@ def security_scan_vulnerabilities(
                     "Medium": "🟡",
                     "Low": "🟢",
                 }.get(vuln.severity, "⚪")
-                
+
                 output += f"\n{idx}. {severity_icon} {vuln.vulnerability_type} "
                 output += f"(Confidence: {vuln.confidence:.0%})\n"
                 output += f"   Source: {vuln.source_description[:80]}...\n"
                 output += f"   Sink: {vuln.sink_description[:80]}...\n"
                 output += f"   Path length: {len(vuln.path)} hops\n"
-                
+
             if len(results) > 10:
                 output += f"\n... and {len(results) - 10} more vulnerabilities\n"
-                
+
             output += "\n" + "=" * 60 + "\n"
             output += "💡 Recommendation: Review these findings and apply appropriate fixes.\n"
             output += "   Use prepared statements, input validation, and output escaping.\n"
-            
+
             return [types.TextContent(type="text", text=output)]
-            
+
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()

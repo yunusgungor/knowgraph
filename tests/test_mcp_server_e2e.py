@@ -10,25 +10,23 @@ Tests the KnowGraph MCP server by:
 """
 
 import asyncio
-import json
-import subprocess
 import tempfile
-import time
 from pathlib import Path
+
 
 # Simple MCP client simulation
 async def test_mcp_server():
     """Test MCP server end-to-end."""
-    
+
     print("=" * 80)
     print("MCP SERVER END-TO-END TEST")
     print("=" * 80)
-    
+
     # Step 1: Generate test CPG
     print("\n📦 Step 1: Generating test CPG...")
     test_dir = Path(tempfile.mkdtemp(prefix="mcp_e2e_test_"))
     test_file = test_dir / "test.c"
-    test_file.write_text('''
+    test_file.write_text("""
 #include <stdio.h>
 #include <string.h>
 
@@ -50,27 +48,27 @@ int main() {
     printf("Test\\n");
     return 0;
 }
-''')
-    
+""")
+
     from knowgraph.core.joern import JoernProvider
     provider = JoernProvider()
     cpg_path = provider.generate_cpg(test_dir)
     print(f"✅ CPG generated: {cpg_path}")
-    
+
     # Step 2: Test MCP server by importing handlers directly
     # (simulating MCP protocol calls)
     print("\n🔧 Step 2: Testing MCP handlers...")
-    
+
     from knowgraph.adapters.mcp.handlers import (
-        handle_joern_query,
-        handle_security_scan,
-        handle_find_dead_code,
         handle_analyze_call_graph,
         handle_export_cpg,
+        handle_find_dead_code,
+        handle_joern_query,
+        handle_security_scan,
     )
-    
+
     results = {}
-    
+
     # Test 1: Joern Query
     print("\n  🔍 Testing knowgraph_joern_query...")
     try:
@@ -87,7 +85,7 @@ int main() {
     except Exception as e:
         results["joern_query"] = f"❌ FAIL: {e}"
         print(f"     ❌ Error: {e}")
-    
+
     # Test 2: Security Scan
     print("\n  🔒 Testing knowgraph_security_scan...")
     try:
@@ -103,7 +101,7 @@ int main() {
     except Exception as e:
         results["security_scan"] = f"❌ FAIL: {e}"
         print(f"     ❌ Error: {e}")
-    
+
     # Test 3: Dead Code Detection
     print("\n  💀 Testing knowgraph_find_dead_code...")
     try:
@@ -119,7 +117,7 @@ int main() {
     except Exception as e:
         results["find_dead_code"] = f"❌ FAIL: {e}"
         print(f"     ❌ Error: {e}")
-    
+
     # Test 4: Call Graph Analysis
     print("\n  📊 Testing knowgraph_analyze_call_graph...")
     try:
@@ -135,7 +133,7 @@ int main() {
     except Exception as e:
         results["analyze_call_graph"] = f"❌ FAIL: {e}"
         print(f"     ❌ Error: {e}")
-    
+
     # Test 5: CPG Export
     print("\n  💾 Testing knowgraph_export_cpg...")
     try:
@@ -157,25 +155,25 @@ int main() {
     except Exception as e:
         results["export_cpg"] = f"❌ FAIL: {e}"
         print(f"     ❌ Error: {e}")
-    
+
     # Summary
     print("\n" + "=" * 80)
     print("TEST SUMMARY")
     print("=" * 80)
-    
+
     passed = sum(1 for v in results.values() if "PASS" in v)
     total = len(results)
-    
+
     print(f"\nTotal: {total}")
     print(f"✅ Passed: {passed}")
     print(f"❌ Failed: {total - passed}")
-    
+
     print("\nDetailed Results:")
     for tool, status in results.items():
         print(f"  {tool}: {status}")
-    
+
     print("\n" + "=" * 80)
-    
+
     if passed == total:
         print("🎉 ALL TESTS PASSED! MCP Server is working perfectly! 🎉")
         return 0

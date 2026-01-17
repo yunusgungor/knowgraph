@@ -2,4 +2,4 @@
 
 from knowgraph.core.joern import JoernDaemon
 
-__all__ = ['JoernDaemon']
+__all__ = ["JoernDaemon"]

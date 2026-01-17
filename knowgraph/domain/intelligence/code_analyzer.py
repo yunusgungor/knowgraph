@@ -4,6 +4,7 @@ import ast
 import logging
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from knowgraph.config import (
     JOERN_ENABLED,
@@ -14,6 +15,9 @@ from knowgraph.config import (
 from knowgraph.domain.intelligence.provider import Entity
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from knowgraph.core.joern import JoernCPG
 
 
 class ASTAnalyzer:
@@ -55,7 +59,7 @@ class ASTAnalyzer:
             return entities
         except (SyntaxError, Exception):
             entities = []
-            
+
             # Improved Regex Patterns for Multilingual Support
             # 1. Classes / Types (Python, JS, TS, Java, C#, Go)
             class_patterns = [
@@ -63,7 +67,7 @@ class ASTAnalyzer:
                 r"type\s+(\w+)\s+struct",  # Go structs
                 r"export\s+(?:default\s+)?(?:class|interface|type)\s+(\w+)", # JS/TS export
             ]
-            
+
             for pattern in class_patterns:
                 defs = re.findall(pattern, code_to_parse)
                 for name in defs:
@@ -80,22 +84,22 @@ class ASTAnalyzer:
 
             for pattern in func_patterns:
                 defs = re.findall(pattern, code_to_parse)
-                for name in defs:
+                for func_name in defs:
                     # Filter out common false positives
-                    if name not in ["if", "for", "while", "switch", "catch"]:
-                        entities.append(Entity(name=name, type="definition", description=f"Extracted function: {name}"))
+                    if func_name not in ["if", "for", "while", "switch", "catch"]:
+                        entities.append(Entity(name=func_name, type="definition", description=f"Extracted function: {func_name}"))
 
             return entities
 
 
 class CodeAnalyzer:
     """Unified code analyzer with hybrid AST + Joern backend."""
-    
+
     def __init__(self, use_joern: bool | None = None):
         self.ast_analyzer = ASTAnalyzer()
         self.joern_provider = None
         self.use_joern =use_joern if use_joern is not None else JOERN_ENABLED
-        
+
         if self.use_joern:
             try:
                 from knowgraph.core.joern import JoernProvider
@@ -104,16 +108,16 @@ class CodeAnalyzer:
             except Exception as e:
                 logger.warning(f"Joern unavailable: {e}")
                 self.use_joern = False
-                
+
     def _detect_language(self, file_path: str) -> str | None:
         path = Path(file_path)
         extension = path.suffix.lstrip(".")
         return extension if extension in JOERN_LANGUAGE_MAP else None
-        
+
     def _count_lines(self, content: str) -> int:
         lines = content.split("\n")
         return len([line for line in lines if line.strip() and not line.strip().startswith("#")])
-        
+
     def _should_use_joern(self, content: str, file_path: str) -> bool:
         if not self.use_joern or not self.joern_provider:
             return False
@@ -122,69 +126,67 @@ class CodeAnalyzer:
             return False
         loc = self._count_lines(content)
         return loc >= JOERN_MIN_FILE_SIZE
-        
+
     def extract_entities(self, content: str, file_path: str = "") -> list[Entity]:
         """Extract entities from code (backward compatible).
-        
+
         Args:
         ----
             content: Source code content
             file_path: Optional file path for language detection
-            
+
         Returns:
         -------
             List of Entity objects
-            
+
         """
         entities, _ = self.extract_entities_with_cpg(content, file_path)
         return entities
-    
+
     def extract_entities_with_cpg(
-        self, 
-        content: str, 
+        self,
+        content: str,
         file_path: str = ""
     ) -> tuple[list[Entity], "JoernCPG | None"]:
         """Extract entities and optionally return CPG for advanced processing.
-        
+
         Args:
         ----
             content: Source code content
             file_path: Optional file path for language detection
-            
+
         Returns:
         -------
             Tuple of (entities, cpg) where cpg is None if Joern not used
-            
+
         """
         if self._should_use_joern(content, file_path):
             try:
                 return self._extract_with_joern(content, file_path)
             except Exception as e:
                 logger.warning(f"Joern failed, fallback to AST: {e}")
-        
-        # AST fallback - no CPG available
+
+        if not self.joern_provider:
+             return self.ast_analyzer.extract_entities(content), None
+
+        # Fallback if logic reaches here
         return self.ast_analyzer.extract_entities(content), None
-        
+
     def _extract_with_joern(
-        self, 
-        content: str, 
+        self,
+        content: str,
         file_path: str
     ) -> tuple[list[Entity], "JoernCPG"]:
-        """Extract entities using Joern and return CPG.
-        
-        Args:
-        ----
-            content: Source code content
-            file_path: File path for language detection
-            
+        """
         Returns:
         -------
             Tuple of (entities, cpg)
-            
+
         """
+        assert self.joern_provider is not None, "JoernProvider must be initialized"
         import tempfile
-        from knowgraph.core.joern import JoernCPG
-        
+
+
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir) / Path(file_path).name
             temp_path.write_text(content)
@@ -192,7 +194,7 @@ class CodeAnalyzer:
             graphml_path = self.joern_provider.export_graphml(cpg_path)
             cpg = self.joern_provider.parse_graphml_to_cpg(graphml_path)
             joern_entities = self.joern_provider.extract_entities_from_cpg(cpg)
-            
+
             # Convert JoernEntity (NamedTuple) to Entity (dataclass)
             entities = []
             for je in joern_entities:
@@ -201,5 +203,5 @@ class CodeAnalyzer:
                     type=je.type,
                     description=je.description,
                 ))
-            
+
             return entities, cpg

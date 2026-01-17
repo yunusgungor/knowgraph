@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
-from knowgraph.core.joern import ExportFormat, JoernCPG, JoernEntity, JoernProvider
+from knowgraph.core.joern import JoernCPG
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
 
@@ -18,16 +18,16 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CPGConversionResult:
     """Result of CPG to KnowGraph conversion.
-    
+
     Attributes
     ----------
         entity_nodes: Nodes created from CPG entities
         cpg_edges: Edges from CPG relationships
         chunk_node_id: Parent chunk node ID
         metadata: Conversion statistics
-        
+
     """
-    
+
     entity_nodes: list[Node]
     cpg_edges: list[Edge]
     chunk_node_id: UUID
@@ -36,17 +36,17 @@ class CPGConversionResult:
 
 class CPGConverter:
     """Converts Joern CPG to KnowGraph nodes and edges.
-    
+
     Creates separate nodes for significant CPG entities (METHOD, CALL, etc.)
     and converts CPG edges to KnowGraph edge types (semantic, data_flow, etc.).
     """
-    
+
     # CPG node types to create KnowGraph nodes for
     SIGNIFICANT_NODE_TYPES = {
-        "METHOD", "CALL", "TYPE_DECL", "IDENTIFIER", 
+        "METHOD", "CALL", "TYPE_DECL", "IDENTIFIER",
         "LOCAL", "LITERAL", "NAMESPACE_BLOCK"
     }
-    
+
     def convert_cpg_to_graph(
         self,
         cpg: JoernCPG,
@@ -54,30 +54,30 @@ class CPGConverter:
         file_path: str,
     ) -> CPGConversionResult:
         """Convert CPG to KnowGraph nodes and edges.
-        
+
         Args:
         ----
             cpg: Joern CPG object
             chunk_node_id: Parent chunk node ID
             file_path: Source file path
-            
+
         Returns:
         -------
             CPGConversionResult with entity nodes, edges, and metadata
-            
+
         """
         entity_nodes = []
         cpg_edges = []
-        
+
         # Map CPG node IDs to KnowGraph node IDs
         id_mapping = {}
-        
+
         logger.info(f"Converting CPG: {len(cpg.nodes)} nodes, {len(cpg.edges)} edges")
-        
+
         # Convert CPG nodes to entity nodes
         for cpg_node in cpg.nodes:
             node_type = cpg_node.get("labelV", cpg_node.get("label", ""))
-            
+
             # Only create nodes for significant entities
             if node_type in self.SIGNIFICANT_NODE_TYPES:
                 kg_node = self._cpg_node_to_knowgraph_node(
@@ -87,15 +87,15 @@ class CPGConverter:
                 )
                 entity_nodes.append(kg_node)
                 id_mapping[cpg_node["id"]] = kg_node.id
-        
+
         logger.debug(f"Created {len(entity_nodes)} entity nodes from {len(cpg.nodes)} CPG nodes")
-        
+
         # Convert CPG edges to KnowGraph edges
         for cpg_edge in cpg.edges:
             edge_type = cpg_edge.get("labelE", cpg_edge.get("label", ""))
             source_cpg_id = cpg_edge["source"]
             target_cpg_id = cpg_edge["target"]
-            
+
             # Only create edges if both nodes exist in mapping
             if source_cpg_id in id_mapping and target_cpg_id in id_mapping:
                 kg_edge = Edge(
@@ -103,16 +103,16 @@ class CPGConverter:
                     target=id_mapping[target_cpg_id],
                     type=self._map_cpg_edge_type(edge_type),
                     score=0.9,  # CPG edges are high confidence
-                    created_at=int(__import__('time').time()),
+                    created_at=int(__import__("time").time()),
                     metadata={
                         "cpg_edge_type": edge_type,
                         "source": "joern_cpg",
                     },
                 )
                 cpg_edges.append(kg_edge)
-        
+
         logger.info(f"✅ CPG conversion: {len(entity_nodes)} nodes, {len(cpg_edges)} edges")
-        
+
         return CPGConversionResult(
             entity_nodes=entity_nodes,
             cpg_edges=cpg_edges,
@@ -125,7 +125,7 @@ class CPGConverter:
                 "conversion_rate": len(cpg_edges) / len(cpg.edges) if cpg.edges else 0,
             },
         )
-    
+
     def _cpg_node_to_knowgraph_node(
         self,
         cpg_node: dict,
@@ -133,40 +133,40 @@ class CPGConverter:
         file_path: str,
     ) -> Node:
         """Convert single CPG node to KnowGraph node.
-        
+
         Args:
         ----
             cpg_node: CPG node dictionary
             parent_id: Parent chunk node ID
             file_path: Source file path
-            
+
         Returns:
         -------
             KnowGraph Node object
-            
+
         """
         import hashlib
         import time
-        
+
         node_type = cpg_node.get("labelV", cpg_node.get("label", ""))
         name = cpg_node.get("NAME", cpg_node.get("CODE", cpg_node.get("FULL_NAME", "")))
-        
+
         # Create content snippet from CODE attribute
         content = cpg_node.get("CODE", "")
         if len(content) > 200:
             content = content[:200] + "..."
-        
+
         # If no content, use name
         if not content:
             content = name or f"<{node_type}>"
-        
+
         # Create title from name or node type
         title = name[:100] if name else f"{node_type} entity"
-        
+
         # Generate SHA-1 hash from CPG node ID (Node requires 40-char hash)
         cpg_id_str = str(cpg_node["id"])
         hash_value = hashlib.sha1(cpg_id_str.encode()).hexdigest()
-        
+
         return Node(
             id=uuid4(),
             hash=hash_value,  # Proper SHA-1 hash (40 chars)
@@ -179,8 +179,8 @@ class CPGConverter:
             header_depth=None,
             header_path=None,
             chunk_id=None,
-            line_start=cpg_node.get("LINE_NUMBER", None),
-            line_end=cpg_node.get("LINE_NUMBER_END", cpg_node.get("LINE_NUMBER", None)),
+            line_start=cpg_node.get("LINE_NUMBER"),
+            line_end=cpg_node.get("LINE_NUMBER_END", cpg_node.get("LINE_NUMBER")),
             metadata={
                 "cpg_type": node_type,
                 "cpg_id": str(cpg_node["id"]),
@@ -194,35 +194,35 @@ class CPGConverter:
                 "type_full_name": cpg_node.get("TYPE_FULL_NAME", ""),
             },
         )
-    
+
     def _map_cpg_node_type_to_knowgraph(self, cpg_type: str) -> str:
         """Map CPG node type to KnowGraph NodeType string.
-        
+
         Args:
         ----
             cpg_type: CPG node type (e.g., METHOD, CALL)
-            
+
         Returns:
         -------
             NodeType string literal ('code', 'text', etc.)
-            
+
         """
         # NodeType is a Literal type, not an enum - use strings
         # Most CPG entities are 'code'
         return "code"  # All CPG entities are code
 
-    
+
     def _map_cpg_edge_type(self, cpg_edge_type: str) -> str:
         """Map CPG edge type to KnowGraph edge type.
-        
+
         Args:
         ----
             cpg_edge_type: CPG edge type (e.g., AST, CFG, DDG)
-            
+
         Returns:
         -------
             KnowGraph edge type string
-            
+
         """
         mapping = {
             # Abstract Syntax Tree

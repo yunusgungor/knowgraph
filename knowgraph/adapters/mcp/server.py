@@ -11,23 +11,23 @@ from mcp.server.stdio import stdio_server
 
 from knowgraph.adapters.mcp.diagnostic_handler import handle_diagnostic
 from knowgraph.adapters.mcp.handlers import (
+    # Joern-specific handlers
+    handle_analyze_call_graph,
     handle_analyze_conversations,
     handle_analyze_impact,
     handle_batch_query,
     handle_discover_conversations,
-    handle_get_stats,
-    handle_index,
-    handle_query,
-    handle_search_bookmarks,
-    handle_tag_snippet,
-    handle_validate,
-    # Joern-specific handlers
-    handle_analyze_call_graph,
     handle_export_cpg,
     handle_find_dead_code,
     handle_generate_cpg,
+    handle_get_stats,
+    handle_index,
     handle_joern_query,
+    handle_query,
+    handle_search_bookmarks,
     handle_security_scan,
+    handle_tag_snippet,
+    handle_validate,
 )
 from knowgraph.adapters.mcp.utils import get_llm_provider, resolve_graph_path
 from knowgraph.adapters.mcp.version_handlers import (
