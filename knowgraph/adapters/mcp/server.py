@@ -80,7 +80,17 @@ def _register_api_versions():
             "Conversation discovery",
         ],
     )
-
+    # Version 0.9.0 - Current stable release
+    register_version(
+        version="0.9.0",
+        status=VersionStatus.STABLE,
+        release_date=now,
+        features=[
+            "Taint Analysis Refinement",
+            "Resilience Improvements",
+            "Full System Verification",
+        ],
+    )
     logger.debug(f"Registered API versions, current: {get_current_version()}")
 
 
