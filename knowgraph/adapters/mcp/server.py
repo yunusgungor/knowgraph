@@ -80,9 +80,9 @@ def _register_api_versions():
             "Conversation discovery",
         ],
     )
-    # Version 0.9.0 - Current stable release
+    # Version 1.0.0 - Current stable release
     register_version(
-        version="0.9.0",
+        version="1.0.0",
         status=VersionStatus.STABLE,
         release_date=now,
         features=[

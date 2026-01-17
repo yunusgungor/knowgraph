@@ -106,7 +106,7 @@ class Manifest:
         cls: type["Manifest"],
         edges_filename: str,
         sparse_index_filename: str,
-        version: str = "0.8.0",
+        version: str | None = None,
         created_at: int | None = None,
     ) -> "Manifest":
         """Create a new manifest with default values.
@@ -115,7 +115,7 @@ class Manifest:
         ----
             edges_filename: Filename for the edges data
             sparse_index_filename: Filename for the sparse index data
-            version: Schema version (default: "1.0.0")
+            version: Schema version (default: loaded from knowgraph.version)
             created_at: Unix timestamp of initial creation (default: current time)
 
         Returns:
@@ -123,6 +123,13 @@ class Manifest:
             New manifest instance
 
         """
+        if version is None:
+            try:
+                from knowgraph.version import __version__
+                version = __version__
+            except ImportError:
+                version = "1.0.0"
+
         now = int(time.time())
         return cls(
             version=version,

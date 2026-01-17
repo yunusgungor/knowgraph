@@ -68,12 +68,20 @@ class TracingConfig:
     def __init__(
         self,
         service_name: str = "knowgraph",
-        service_version: str = "0.8.1",
+        service_version: str | None = None,
         environment: str = "development",
         enabled: bool = True,
         console_export: bool = False,
     ):
         self.service_name = service_name
+        
+        if service_version is None:
+            try:
+                from knowgraph.version import __version__
+                service_version = __version__
+            except ImportError:
+                service_version = "1.0.0"
+                
         self.service_version = service_version
         self.environment = environment
         self.enabled = enabled and OPENTELEMETRY_AVAILABLE
@@ -272,7 +280,7 @@ def get_tracer(config: TracingConfig | None = None) -> KnowGraphTracer:
 
 def configure_tracing(
     service_name: str = "knowgraph",
-    service_version: str = "0.8.1",
+    service_version: str | None = None,
     environment: str = "development",
     enabled: bool = True,
     console_export: bool = False,

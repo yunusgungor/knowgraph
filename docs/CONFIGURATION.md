@@ -1,8 +1,9 @@
-# KnowGraph v0.8.0 Configuration Guide
+# KnowGraph v1.0.0 Configuration Guide
+
 
 ## Overview
 
-This document describes the configuration options for KnowGraph v0.8.0, including the new **Joern Code Analysis** engine.
+This document describes the configuration options for KnowGraph v1.0.0, including the new **Joern Code Analysis** engine.
 
 ---
 
@@ -221,7 +222,7 @@ max_workers=5  # Reduce to avoid overwhelming storage
 
 ---
 
-## 6. Joern Integration Configuration (v0.8.0)
+## 6. Joern Integration Configuration (v1.0.0)
 
 **Modules:** `knowgraph.infrastructure.indexing.code_index_integration`, `knowgraph.infrastructure.caching.cpg_cache`
 
@@ -389,4 +390,4 @@ If you see critical errors:
 ---
 
 **Last Updated:** 2025-12-27  
-**Version:** 0.8.0
+**Version:** 1.0.0

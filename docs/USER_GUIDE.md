@@ -14,7 +14,7 @@ Welcome to the comprehensive KnowGraph User Guide. This document covers everythi
 3. [Installation](#3-installation)
 4. [Configuration](#4-configuration)
 5. [Indexing Your Knowledge Base](#5-indexing-your-knowledge-base)
-6. [Joern Code Analysis (NEW v0.8.0)](#6-joern-code-analysis-new-v080)
+6. [Joern Code Analysis (NEW v1.0.0)](#6-joern-code-analysis-new-v100)
 7. [Querying the Knowledge Graph](#7-querying-the-knowledge-graph)
 8. [MCP Server Integration](#8-mcp-server-integration)
 9. [Advanced Querying](#9-advanced-querying)
@@ -39,7 +39,7 @@ KnowGraph is a **Graph RAG (Retrieval-Augmented Generation)** system that transf
 - **Centrality Analysis**: Identifies architecturally critical components
 - **Deterministic Provenance**: Provides verifiable reasoning paths
 - **Hierarchical Understanding**: Interprets code within project context
-- **Deep Code Analysis**: Joern-powered security and data flow analysis (NEW v0.8.0)
+- **Deep Code Analysis**: Joern-powered security and data flow analysis (NEW v1.0.0)
 
 ### Key Benefits
 
@@ -333,9 +333,9 @@ For detailed conversation indexing, see [Section 11](#11-conversational-memory).
 
 ---
 
-## 6. Joern Code Analysis (NEW v0.8.0)
+## 6. Joern Code Analysis (NEW v1.0.0)
 
-KnowGraph v0.8.0 includes **fully integrated Joern code analysis** for deep code understanding.
+KnowGraph v1.0.0 includes **fully integrated Joern code analysis** for deep code understanding.
 
 ### 6.1 Automatic Code Detection
 
@@ -423,7 +423,7 @@ result = engine.query("How does auth work?")
 print(result.answer)
 ```
 
-### 7.2 Advanced Parameters (v0.8.0)
+### 7.2 Advanced Parameters (v1.0.0)
 
 Fine-tune your query logic with new weighting parameters:
 
