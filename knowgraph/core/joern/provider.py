@@ -509,3 +509,25 @@ class JoernProvider:
              recursive_methods = analyzer.find_recursive_calls(cpg_path)
              return {"recursive_methods": recursive_methods}
         return {}
+
+    def find_call_chains(
+        self,
+        cpg_path: Path,
+        from_pattern: str,
+        to_pattern: str,
+    ) -> list[list[str]]:
+        """Find call chains between methods."""
+        from knowgraph.application.analysis.call_graph_analyzer import CallGraphAnalyzer
+        analyzer = CallGraphAnalyzer()
+        return analyzer.find_call_chains(cpg_path, from_pattern, to_pattern)
+
+    def analyze_method_callers(
+        self,
+        cpg_path: Path,
+        method_pattern: str,
+    ) -> dict:
+        """Analyze who calls a specific method."""
+        from knowgraph.application.analysis.call_graph_analyzer import CallGraphAnalyzer
+        analyzer = CallGraphAnalyzer()
+        return analyzer.analyze_method_callers(cpg_path, method_pattern)
+

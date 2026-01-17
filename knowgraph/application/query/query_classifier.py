@@ -13,6 +13,7 @@ class QueryType(Enum):
     CODE = "code"
     TEXT = "text"
     HYBRID = "hybrid"
+    DATAFLOW = "dataflow"
 
 
 class QueryClassifier:
@@ -44,6 +45,14 @@ class QueryClassifier:
         "kullanılmayan", "karmaşıklık", "bağımlılık",
     }
 
+    # Dataflow keywords
+    DATAFLOW_KEYWORDS = {
+        "data flow", "dataflow", "taint", "taint analysis",
+        "flow", "trace", "path", "source", "sink",
+        "veri akışı", "akış", "izle", "yol", "kaynak", "hedef",
+        "flows to", "leads to", "reaches", "ulaşır", "gider"
+    }
+
     # Code-related patterns (regex)
     CODE_PATTERNS = [
         r"\bfind\s+(sql|xss|buffer|injection|vulnerability)",
@@ -51,6 +60,16 @@ class QueryClassifier:
         r"\bis\s+\w+\s+(secure|safe|vulnerable)",
         r"\b(analyze|check|scan)\s+(code|security)",
         r"\w+\s+(açığı|güvenli)\s+mi",  # Turkish patterns
+    ]
+
+    # Dataflow patterns (Source -> Sink)
+    DATAFLOW_PATTERNS = [
+        r"(flow|trace|path)\s+(from|between)\s+(?P<source>.+?)\s+(to|and)\s+(?P<sink>.+)",
+        r"how\s+(does|do)\s+(?P<source>.+?)\s+(flow|reach|affect)\s+(?P<sink>.+)",
+        r"(?P<source>.+?)\s+(flows?|leads?)\s+to\s+(?P<sink>.+)",
+        r"(show|find)\s+data\s*flow\s+from\s+(?P<source>.+?)\s+to\s+(?P<sink>.+)",
+        r"(?P<source>.+?)\s+(ile|ve)\s+(?P<sink>.+?)\s+(arasındaki|arasında)\s+(akış|yol)",  # Turkish
+        r"(?P<source>.+?)\s+(kaynağından|den)\s+(?P<sink>.+?)\s+(hedefine|e)\s+(veri\s+akışı|akış)", # Turkish
     ]
 
     # Question patterns that suggest code analysis
@@ -72,13 +91,20 @@ class QueryClassifier:
         """
         query_lower = query.lower()
 
+        # Check for Dataflow patterns FIRST (most specific)
+        for pattern in self.DATAFLOW_PATTERNS:
+            if re.search(pattern, query_lower):
+                return QueryType.DATAFLOW
+
         # Strong CODE indicators - always CODE
         strong_code_indicators = [
             "vulnerability", "vulnerabilities", "sql injection", "xss",
             "buffer overflow", "injection", "exploit",
             "dead code", "unused code", "unreachable",
-            "call graph", "recursive", "scan for", "find bug",
-            "güvenlik açık", "açık var", "zafiyet"
+            "call graph", "recursive", "recursion", "scan for", "find bug",
+            "güvenlik açık", "açık var", "zafiyet",
+            "who calls", "callers of", "usage of", "references to",
+            "chain", "calls between"
         ]
 
         for indicator in strong_code_indicators:

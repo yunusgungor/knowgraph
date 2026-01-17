@@ -23,8 +23,19 @@ class CodeQueryHandler:
         # Dead code detection
         r"(dead code|unused|unreachable|kullanılmayan)": "find_dead_code",
 
-        # Call graph analysis
-        r"(call graph|dependency|dependencies|call chain|bağımlı)": "analyze_call_graph",
+        # Call graph analysis (general)
+        r"(call graph|dependency|dependencies|bağımlı)": "analyze_call_graph",
+
+        # Recursion analysis
+        r"(recursion|recursive|loop|cycle|özyineleme|döngü)": "analyze_recursion",
+
+        # Impact/Caller analysis
+        r"(who calls|callers of|usage of|references to|kim çağırıyor|kullanımı)": "analyze_impact",
+
+        # Call Chain analysis
+        r"(chain|path from|calls between|zincir|yol)": "analyze_chain",
+
+        # Method/function search (generic)
 
         # Method/function search (generic)
         r"(show|list|find|get).*(function|method|class|fonksiyon|metot)": "joern_query",
@@ -136,6 +147,30 @@ class CodeQueryHandler:
             result = executor.execute_query(cpg_path, "cpg.method.name.l", timeout=30)
             return result.results if result else []
 
+        elif tool == "analyze_recursion":
+            # Recursion detection
+            analysis = provider.analyze_call_graph(cpg_path, "recursive")
+            return self._format_recursion_results(analysis)
+
+        elif tool == "analyze_impact":
+            # Impact/Caller analysis
+            # Extract method name from query
+            method_name = self._extract_method_name(query, ["who calls", "callers of", "usage of", "references to", "kim çağırıyor", "kullanımı"])
+            if not method_name:
+                return [{"error": "Could not extract method name"}]
+            
+            result = provider.analyze_method_callers(cpg_path, method_name)
+            return self._format_impact_results(result)
+
+        elif tool == "analyze_chain":
+            # Call chain analysis
+            source, target = self._extract_chain_params(query)
+            if not source or not target:
+                return [{"error": "Could not extract source and target methods"}]
+                
+            chains = provider.find_call_chains(cpg_path, source, target)
+            return self._format_chain_results(chains, source, target)
+
         else:
             return []
 
@@ -169,6 +204,73 @@ class CodeQueryHandler:
             return []
 
         return [{"analysis": "call_graph", "result": str(results)}]
+
+    def _format_recursion_results(self, results: dict) -> list:
+        """Format recursion analysis results."""
+        recursive_methods = results.get("recursive_methods", [])
+        if not recursive_methods:
+            return []
+            
+        formatted = []
+        for m in recursive_methods:
+            formatted.append({
+                "type": "recursive_method",
+                "method": m.get("name"),
+                "line": m.get("line", -1)
+            })
+        return formatted
+
+    def _format_impact_results(self, results: dict) -> list:
+        """Format impact analysis results."""
+        if not results:
+            return []
+            
+        return [{
+            "type": "impact_analysis",
+            "target_method": results.get("method"),
+            "callers": results.get("callers", []),
+            "count": results.get("caller_count", 0)
+        }]
+
+    def _format_chain_results(self, chains: list, source: str, target: str) -> list:
+        """Format call chain results."""
+        if not chains:
+            return []
+            
+        formatted = []
+        for chain in chains:
+            formatted.append({
+                "type": "call_chain",
+                "source": source,
+                "target": target,
+                "path": " -> ".join(chain)
+            })
+        return formatted
+
+    def _extract_method_name(self, query: str, prefixes: list[str]) -> str | None:
+        """Extract method name from query removing prefixes."""
+        lower_query = query.lower()
+        for prefix in prefixes:
+            if prefix in lower_query:
+                # Find the prefix in original case to preserve method casing
+                start_idx = lower_query.find(prefix) + len(prefix)
+                candidate = query[start_idx:].strip(" ?.")
+                # Simple heuristic: take the first word or remaining string
+                if " " in candidate:
+                     # Check if it looks like "calls to method X"
+                     parts = candidate.split()
+                     return parts[0]
+                return candidate
+        return None
+
+    def _extract_chain_params(self, query: str) -> tuple[str | None, str | None]:
+        """Extract source and target from chain query."""
+        # Simple regex for "from X to Y"
+        import re
+        match = re.search(r"(from|between)\s+(?P<source>.+?)\s+(to|and)\s+(?P<target>.+)", query, re.IGNORECASE)
+        if match:
+            return match.group("source").strip(), match.group("target").strip(" ?.")
+        return None, None
 
     def _match_tool(self, query: str) -> Optional[str]:
         """Match query to appropriate Joern tool.
@@ -235,7 +337,26 @@ class CodeQueryHandler:
             output += "Call graph analysis results:\\n\\n"
             output += str(results)
 
-        else:  # joern_query
+            for i, item in enumerate(results[:20], 1):
+                output += f"  {i}. {item}\\n"
+
+        elif tool == "analyze_recursion":
+            output += f"Found {len(results)} recursive methods:\\n\\n"
+            for item in results:
+                output += f"  - {item['method']} (Line {item['line']})\\n"
+
+        elif tool == "analyze_impact":
+            for item in results:
+                output += f"Method '{item['target_method']}' is called by {item['count']} methods:\\n"
+                for caller in item['callers']:
+                    output += f"  <- {caller}\\n"
+
+        elif tool == "analyze_chain":
+            output += f"Found {len(results)} call chains:\\n\\n"
+            for i, item in enumerate(results, 1):
+                output += f"Chain {i}: {item['path']}\\n"
+
+        else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"
             for i, item in enumerate(results[:20], 1):
                 output += f"  {i}. {item}\\n"

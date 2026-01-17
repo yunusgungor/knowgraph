@@ -20,6 +20,8 @@ from uuid import UUID, uuid4
 from knowgraph.application.querying.context_assembly import assemble_context
 from knowgraph.application.querying.explanation import ExplanationObject, generate_explanation
 from knowgraph.application.querying.retriever import QueryRetriever
+from knowgraph.application.query.code_query_handler import CodeQueryHandler
+from knowgraph.application.query.query_classifier import QueryClassifier, QueryType
 from knowgraph.config import (
     DEFAULT_CENTRALITY_SCORE,
     MAX_CONCURRENT_QUERIES,
@@ -137,6 +139,11 @@ class QueryEngine:
         """
         self.graph_store_path = graph_store_path
         self.retriever = QueryRetriever(graph_store_path)
+        
+        # Smart Routing Components
+        self.classifier = QueryClassifier()
+        self.code_handler = CodeQueryHandler(graph_store_path)
+
         # LAZY LOADING: Don't load all edges upfront
         # Instead, load only when needed with optional filtering
         self._edges_cache: list[Edge] | None = None
@@ -717,6 +724,90 @@ class QueryEngine:
                 timings = {}
 
                 try:
+                    # Step 0: Smart Routing (Joern Analysis)
+                    # Check if query requires specialized code analysis tool
+                    query_type = self.classifier.classify(query_text)
+                    
+                    if query_type in (QueryType.CODE, QueryType.HYBRID):
+                        # Try to handle with specialized code tool
+                        code_result = await self.code_handler.handle(query_text)
+                        
+                        # If successful and returned actual results
+                        if code_result["success"] and code_result["results"]:
+                            formatted_answer = self.code_handler.format_results(code_result)
+                            
+                            # Return immediately for specific analysis results
+                            return QueryResult(
+                                query=query_text,
+                                answer=formatted_answer,
+                                context=formatted_answer,
+                                seed_nodes=[],
+                                active_subgraph_size=0,
+                                execution_time=time.time() - start_time,
+                                sparse_search_time=0.0,
+                                graph_expansion_time=0.0,
+                                centrality_time=0.0,
+                                explanation=None,
+                            )
+
+
+
+                    elif query_type == QueryType.DATAFLOW:
+                        # Extract source and sink using regex patterns
+                        import re
+                        
+                        source = None
+                        sink = None
+                        
+                        # Try to match patterns to extract entities
+                        for pattern in self.classifier.DATAFLOW_PATTERNS:
+                            match = re.search(pattern, query_text, re.IGNORECASE)
+                            if match:
+                                match_dict = match.groupdict()
+                                if "source" in match_dict and "sink" in match_dict:
+                                    source = match_dict["source"]
+                                    sink = match_dict["sink"]
+                                    break
+                                    
+                        if source and sink:
+                            # Execute dataflow query
+                            dataflow_result = await self.query_dataflow(
+                                source_pattern=source,
+                                sink_pattern=sink,
+                                edge_types=["data_flow", "taint", "reachability"] # Broaden types
+                            )
+                            
+                            # Format result as context
+                            df_context = f"Dataflow Analysis Result:\\n"
+                            df_context += f"Source: {dataflow_result.source_pattern}\\n"
+                            df_context += f"Sink: {dataflow_result.sink_pattern}\\n"
+                            df_context += f"Paths Found: {dataflow_result.path_count}\\n\\n"
+                            
+                            if dataflow_result.path_count > 0:
+                                df_context += "Path Visualization (Mermaid):\\n"
+                                df_context += "```mermaid\\n"
+                                # Assuming to_mermaid() exists or simple representation
+                                # For now, just listing paths textually is safer without looking at DataFlowResult details
+                                for i, path in enumerate(dataflow_result.paths[:3], 1):
+                                    path_str = " -> ".join([str(node_id)[:8] for node_id in path])
+                                    df_context += f"Path {i}: {path_str}\\n"
+                                df_context += "```\\n"
+                            else:
+                                df_context += "No data flow paths found between these components.\\n"
+
+                            return QueryResult(
+                                query=query_text,
+                                answer=df_context,
+                                context=df_context,
+                                seed_nodes=[],
+                                active_subgraph_size=len(dataflow_result.nodes),
+                                execution_time=time.time() - start_time,
+                                sparse_search_time=0.0,
+                                graph_expansion_time=0.0,
+                                centrality_time=0.0,
+                                explanation=None,
+                            )
+
                     # Step 1: Sparse search + graph expansion (async)
                     retrieval_start = time.time()
                     nodes, seed_node_ids = await self.retriever.retrieve_async(
