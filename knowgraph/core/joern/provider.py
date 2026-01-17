@@ -740,13 +740,14 @@ class JoernProvider:
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
         executor = JoernQueryExecutor(Path(self.joern_path))
         
+        # Case-insensitive wildcard search
         query = f"""
-        cpg.literal.code(".*{literal_pattern}.*").map{{ l =>
-            val method = l.method.name
-            val line = l.lineNumber.getOrElse(-1)
-            val file = l.method.filename
-            val code = l.code.replace("\\"", "'")
-            s"$method|$line|$file|$code"
+        cpg.literal.code("(?i).*{literal_pattern}.*").map{{ l =>
+             val code = l.code
+             val method = l.method.name.headOption.getOrElse("<unknown>")
+             val line = l.lineNumber.getOrElse(-1)
+             val file = l.file.name.headOption.getOrElse("<unknown>")
+             s"$method|$line|$file|$code"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -780,8 +781,9 @@ class JoernProvider:
         # Safe string for scala
         safe_pattern = pattern.replace('"', '').replace("'", "")
         
+        # Case-insensitive wildcard search
         query = f"""
-        cpg.method.name(".*{safe_pattern}.*").map{{ m =>
+        cpg.method.name("(?i).*{safe_pattern}.*").map{{ m =>
             val name = m.name
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
@@ -812,9 +814,9 @@ class JoernProvider:
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
         executor = JoernQueryExecutor(Path(self.joern_path))
         
-        # Query to find methods having an annotation matching the pattern
+        # Case-insensitive wildcard search
         query = f"""
-        cpg.method.filter(_.annotation.name(".*{annotation_pattern}.*")).map{{ m =>
+        cpg.method.filter(_.annotation.name("(?i).*{annotation_pattern}.*")).map{{ m =>
             val name = m.name
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
@@ -846,10 +848,9 @@ class JoernProvider:
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
         executor = JoernQueryExecutor(Path(self.joern_path))
         
-        # Note: Joern representation of imports varies by language.
-        # This query targets the generic 'IMPORT' node type.
+        # Case-insensitive wildcard search
         query = f"""
-        cpg.imports.code(".*{import_pattern}.*").map{{ i =>
+        cpg.imports.code("(?i).*{import_pattern}.*").map{{ i =>
             val code = i.code
             val file = i.file.name.headOption.getOrElse("unknown") 
             s"$code|$file"
@@ -880,8 +881,12 @@ class JoernProvider:
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
         executor = JoernQueryExecutor(Path(self.joern_path))
         
+        # Ensure we have a valid pattern, default to all if wildcard passed
+        # Joern regex: use (?i) for case insensitive, wrap in .* for partial
+        final_pattern = method_pattern if method_pattern == ".*" else f"(?i).*{method_pattern}.*"
+        
         query = f"""
-        cpg.method.name("{method_pattern}").map{{ m =>
+        cpg.method.name("{final_pattern}").map{{ m =>
             val loops = m.controlStructure.filter(x => x.controlStructureType == "FOR" || x.controlStructureType == "WHILE" || x.controlStructureType == "DO").size
             val ifs = m.controlStructure.filter(_.controlStructureType == "IF").size
             val name = m.name
@@ -909,7 +914,3 @@ class JoernProvider:
                     continue
                     
         return {"pattern": method_pattern, "structures": structures}
-
-
-
-
