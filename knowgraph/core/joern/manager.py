@@ -190,12 +190,11 @@ def extract_joern(zip_path: Path, install_dir: Path) -> bool:
                     if exe_path.exists():
                         exe_path.chmod(0o755)
                         
-                # Make all files in bin/ directory executable
-                bin_dir = joern_cli_dir / "bin"
-                if bin_dir.exists():
-                    for file in bin_dir.iterdir():
-                        if file.is_file():
-                            file.chmod(0o755)
+                # Make all files in ANY bin/ directory executable (including frontends)
+                # This covers joern-cli/bin/ and joern-cli/frontends/*/bin/
+                for bin_file in joern_cli_dir.rglob("bin/*"):
+                    if bin_file.is_file():
+                        bin_file.chmod(0o755)
                         
         logger.info("✅ Extraction complete")
         return True
