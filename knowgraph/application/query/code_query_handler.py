@@ -44,6 +44,11 @@ class CodeQueryHandler:
         # Type Hierarchy
         r"(subclasses|superclasses|inherits|extends|derived|hierarchy|alt sınıf|türetilmiş|hiyerarşi)": "get_type_hierarchy",
 
+        # Visual Graphs (CFG, PDG, CDG)
+        r"(cfg|control flow|akış grafiği)": "get_cfg",
+        r"(pdg|program dependence|bağımlılık grafiği)": "get_pdg",
+        r"(cdg|control dependence)": "get_cdg",
+
         # Method/function search (generic)
 
         # Method/function search (generic)
@@ -202,6 +207,25 @@ class CodeQueryHandler:
                 return [{"error": "Could not extract type name"}]
             result = provider.get_type_hierarchy(cpg_path, type_name)
             return self._format_hierarchy_results(result, type_name)
+
+        elif tool in ["get_cfg", "get_pdg", "get_cdg"]:
+            graph_type = tool.split("_")[1].upper() # CFG, PDG, CDG
+            method_name = self._extract_method_name(query, [
+                f"{graph_type.lower()} of", f"{graph_type.lower()} for", 
+                "control flow of", "dependence of", "grafiği"
+            ])
+            
+            if not method_name:
+                return [{"error": f"Could not extract method name for {graph_type}"}]
+                
+            if tool == "get_cfg":
+                result = provider.get_cfg(cpg_path, method_name)
+            elif tool == "get_pdg":
+                result = provider.get_pdg(cpg_path, method_name)
+            else:
+                result = provider.get_cdg(cpg_path, method_name)
+                
+            return [{"type": "dot_graph", "graph_type": graph_type, "data": result}]
 
         else:
             return []
@@ -433,6 +457,15 @@ class CodeQueryHandler:
                  output += f"Type Hierarchy:\\n"
                  output += f"  Base Types: {', '.join(item['base_types']) or 'None'}\\n"
                  output += f"  Derived Types: {', '.join(item['derived_types']) or 'None'}\\n"
+
+        elif item_type == "dot_graph":
+            graph_type = results[0].get("graph_type", "GRAPH")
+            output += f"{graph_type} (DOT Format):\\n\\n"
+            graph_data = results[0].get("data", "")
+            if len(graph_data) > 500:
+                output += graph_data[:500] + "... (truncated)\\n"
+            else:
+                output += graph_data + "\\n"
 
         else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"

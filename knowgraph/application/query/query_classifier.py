@@ -106,7 +106,8 @@ class QueryClassifier:
             "who calls", "callers of", "usage of", "references to",
             "chain", "calls between",
             "complexity", "cyclomatic", "ast", "syntax tree",
-            "subclasses", "superclasses", "inherits", "extends"
+            "subclasses", "superclasses", "inherits", "extends",
+            "cfg", "pdg", "cdg", "control flow", "dependence"
         ]
 
         for indicator in strong_code_indicators:

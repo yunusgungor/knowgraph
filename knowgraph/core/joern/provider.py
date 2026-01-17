@@ -620,4 +620,47 @@ class JoernProvider:
             
         return hierarchy
 
+    def get_cfg(self, cpg_path: Path, method_pattern: str) -> str:
+        """Get Control Flow Graph (DOT format) for a method."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.method.name("{method_pattern}").dotCfg.headOption.getOrElse("CFG not found")
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        if result.results:
+            return result.results[0].get("raw", "CFG not found")
+        return "CFG not found"
+
+    def get_pdg(self, cpg_path: Path, method_pattern: str) -> str:
+        """Get Program Dependence Graph (DOT format) for a method."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.method.name("{method_pattern}").dotPdg.headOption.getOrElse("PDG not found")
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        if result.results:
+            return result.results[0].get("raw", "PDG not found")
+        return "PDG not found"
+
+    def get_cdg(self, cpg_path: Path, method_pattern: str) -> str:
+        """Get Control Dependence Graph (DOT format) for a method."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.method.name("{method_pattern}").dotCdg.headOption.getOrElse("CDG not found")
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        if result.results:
+            return result.results[0].get("raw", "CDG not found")
+        return "CDG not found"
+
+
 
