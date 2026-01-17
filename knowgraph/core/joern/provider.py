@@ -772,6 +772,41 @@ class JoernProvider:
         
         return {"pattern": literal_pattern, "literals": literals}
 
+    def find_methods(self, cpg_path: Path, pattern: str) -> dict:
+        """Find methods matching a pattern with detailed info."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        # Safe string for scala
+        safe_pattern = pattern.replace('"', '').replace("'", "")
+        
+        query = f"""
+        cpg.method.name(".*{safe_pattern}.*").map{{ m =>
+            val name = m.name
+            val line = m.lineNumber.getOrElse(-1)
+            val file = m.filename
+            val sig = m.signature
+            s"$name|$line|$file|$sig"
+        }}.dedup.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        methods = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if "|" in raw:
+                try:
+                    parts = raw.split("|")
+                    methods.append({
+                        "method": parts[0],
+                        "line": int(parts[1]),
+                        "filename": parts[2],
+                        "signature": parts[3]
+                    })
+                except Exception:
+                    continue
+        return {"pattern": safe_pattern, "methods": methods}
+
     def find_annotations(self, cpg_path: Path, annotation_pattern: str) -> dict:
         """Find methods with specific annotations/decorators."""
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor

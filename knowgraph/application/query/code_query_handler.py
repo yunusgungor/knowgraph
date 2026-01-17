@@ -171,10 +171,20 @@ class CodeQueryHandler:
             return self._format_call_graph_results(analysis)
 
         elif tool == "joern_query":
-            # Generic method search
-            executor = JoernQueryExecutor(Path(provider.joern_path))
-            result = executor.execute_query(cpg_path, "cpg.method.name.l", timeout=30)
-            return result.results if result else []
+            # Generic method search with pattern
+            # Prioritize composite prefixes to avoid capturing 'function' as the name in 'find function X'
+            prefixes = [
+                "find function", "find method", "find class", "show function", "show method", 
+                "list functions", "list methods", "get function", "search function",
+                "find", "show", "list", "get", "search", "ara", "bul", "göster", 
+                "function", "method", "class", "fonksiyon", "metot"
+            ]
+            pattern = self._extract_method_name(query, prefixes)
+            if not pattern:
+                pattern = query.split()[-1]
+            
+            result = provider.find_methods(cpg_path, pattern)
+            return self._format_generic_results(result)
 
         elif tool == "analyze_recursion":
             # Recursion detection
@@ -474,6 +484,8 @@ class CodeQueryHandler:
     def _extract_method_name(self, query: str, prefixes: list[str]) -> str | None:
         """Extract method name from query removing prefixes."""
         lower_query = query.lower()
+        extracted = None
+        
         for prefix in prefixes:
             if prefix in lower_query:
                 # Find the prefix in original case to preserve method casing
@@ -483,9 +495,32 @@ class CodeQueryHandler:
                 if " " in candidate:
                      # Check if it looks like "calls to method X"
                      parts = candidate.split()
-                     return parts[0]
-                return candidate
+                     extracted = parts[0]
+                else:
+                     extracted = candidate
+                break
+        
+        if extracted:
+            # SANITIZATION: Remove quotes to prevent script injection in Scala
+            return extracted.replace('"', '').replace("'", "")
+            
         return None
+
+    def _format_generic_results(self, results: dict) -> list:
+        if not results.get("methods"):
+             return [{"type": "generic", "pattern": results.get("pattern"), "error": "No methods found"}]
+        
+        formatted = []
+        for item in results["methods"]:
+            formatted.append({
+                "type": "generic",
+                "pattern": results.get("pattern"),
+                "method": item["method"],
+                "line": item["line"],
+                "filename": item["filename"],
+                "signature": item.get("signature", "")
+            })
+        return formatted
 
     def _extract_chain_params(self, query: str) -> tuple[str | None, str | None]:
         """Extract source and target from chain query."""
@@ -582,6 +617,16 @@ class CodeQueryHandler:
 
             for i, item in enumerate(results, 1):
                 output += f"Chain {i}: {item['path']}\\n"
+
+        elif tool == "joern_query":
+             if "error" in results[0]:
+                 output += f"Error: {results[0]['error']}\\n"
+             else:
+                pattern = results[0].get("pattern", "unknown")
+                output += f"Methods matching '{pattern}':\\n\\n"
+                for i, item in enumerate(results, 1):
+                    sig = f" ({item['signature']})" if item.get('signature') else ""
+                    output += f"{i}. {item['method']}{sig} - {item['filename']}:{item['line']}\\n"
 
         elif tool == "analyze_complexity":
             output += "Cyclomatic Complexity Results:\\n\\n"
