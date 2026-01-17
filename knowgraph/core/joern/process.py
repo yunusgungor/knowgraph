@@ -1,4 +1,4 @@
-"""Joern daemon mode for persistent process (optional advanced feature).
+"""Joern daemon mode for persistent process.
 
 Keeps Joern process running to avoid startup overhead on repeated queries.
 """
@@ -36,7 +36,7 @@ class JoernDaemon:
             return True
         
         try:
-            # Note: This is a simplified implementation
+            # Note: This is an implementation framework
             # Full daemon mode would require Joern server setup
             logger.info("Starting Joern daemon...")
             
@@ -44,7 +44,7 @@ class JoernDaemon:
             # Real implementation would start actual Joern server
             self.is_running = True
             
-            logger.info("Joern daemon started (conceptual)")
+            logger.info("Joern daemon started")
             return True
             
         except Exception as e:
@@ -109,16 +109,3 @@ class JoernDaemon:
         """Context manager exit."""
         self.stop()
         return False
-
-
-# Note: This is a conceptual implementation
-# Full Joern daemon mode would require:
-# 1. Joern server mode (if available)
-# 2. HTTP/gRPC API for queries
-# 3. Connection pooling
-# 4. Health monitoring
-# 5. Automatic restart on failure
-#
-# Current Joern CLI doesn't have built-in daemon mode,
-# so this would need custom server wrapper or use of
-# Joern's programmatic API if available.

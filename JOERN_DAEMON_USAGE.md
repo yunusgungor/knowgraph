@@ -29,7 +29,7 @@ Use JoernDaemon when:
 
 ```python
 from pathlib import Path
-from knowgraph.infrastructure.daemon import JoernDaemon
+from knowgraph.core.joern import JoernDaemon
 
 joern_path = Path('/path/to/joern-cli')
 
@@ -45,7 +45,7 @@ with JoernDaemon(joern_path) as daemon:
 ### Option 2: Manual Control
 
 ```python
-from knowgraph.infrastructure.daemon import JoernDaemon
+from knowgraph.core.joern import JoernDaemon
 
 daemon = JoernDaemon(joern_path)
 
@@ -73,7 +73,7 @@ finally:
 
 ```python
 from pathlib import Path
-from knowgraph.infrastructure.daemon import JoernDaemon
+from knowgraph.core.joern import JoernDaemon
 from knowgraph.application.query.code_query_handler import CodeQueryHandler
 
 graph_path = Path('./graphstore')
@@ -94,7 +94,7 @@ with JoernDaemon(joern_path) as daemon:
 ### Interactive Analysis Session
 
 ```python
-from knowgraph.infrastructure.daemon import JoernDaemon
+from knowgraph.core.joern import JoernDaemon
 
 daemon = JoernDaemon(joern_path)
 daemon.start()
@@ -181,7 +181,7 @@ daemon = JoernDaemon(
 
 ```python
 # In your application startup
-from knowgraph.infrastructure.daemon import JoernDaemon
+from knowgraph.core.joern import JoernDaemon
 
 class Application:
     def __init__(self):

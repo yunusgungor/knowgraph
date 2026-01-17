@@ -478,8 +478,15 @@ class SmartGraphBuilder:
                         self.metrics.record_ast_failure(str(e), f"node_{node.id}")
                         logger.debug(f"Code analysis failed for node {node.id}: {e}")
 
-                    # If Cache Miss & AST Miss -> Queue for LLM
-                    nodes_needing_llm.append(node)
+                    # If Cache Miss & AST Miss -> Check heuristics before Queueing for LLM
+                    # Optimization: If file is small (< 2000 tokens) and AST found nothing, 
+                    # it likely has no significant entities. Skip expensive LLM call.
+                    if node.token_count < 2000:
+                        logger.debug(f"Skipping LLM for small file {node.path} ({node.token_count} tokens)")
+                        # Add node without entities
+                        final_nodes_map[node.id] = node
+                    else:
+                        nodes_needing_llm.append(node)
 
             # Phase 2: LLM Batch Processing
             if nodes_needing_llm and self.provider:

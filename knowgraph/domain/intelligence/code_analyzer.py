@@ -55,12 +55,36 @@ class ASTAnalyzer:
             return entities
         except (SyntaxError, Exception):
             entities = []
-            class_defs = re.findall(r"(?:class|interface|type)\s+(\w+)", code_to_parse)
-            for c in class_defs:
-                entities.append(Entity(name=c, type="definition", description=f"Extracted definition: {c}"))
-            func_defs = re.findall(r"(?:def|function|func)\s+(\w+)", code_to_parse)
-            for f in func_defs:
-                entities.append(Entity(name=f, type="definition", description=f"Extracted definition: {f}"))
+            
+            # Improved Regex Patterns for Multilingual Support
+            # 1. Classes / Types (Python, JS, TS, Java, C#, Go)
+            class_patterns = [
+                r"(?:class|interface|type|struct)\s+(\w+)",  # Standard class/type
+                r"type\s+(\w+)\s+struct",  # Go structs
+                r"export\s+(?:default\s+)?(?:class|interface|type)\s+(\w+)", # JS/TS export
+            ]
+            
+            for pattern in class_patterns:
+                defs = re.findall(pattern, code_to_parse)
+                for name in defs:
+                    entities.append(Entity(name=name, type="definition", description=f"Extracted type: {name}"))
+
+            # 2. Functions / Methods
+            func_patterns = [
+                r"(?:def|function|func)\s+(\w+)", # Python, JS, Go
+                r"func\s+\((?:[^)]+)\)\s+(\w+)",  # Go methods: func (r Receiver) MethodName()
+                r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|_)\s*=>", # JS/TS Arrows: const x = () =>
+                r"(?:const|let|var)\s+(\w+)\s*=\s*function", # JS/TS Expressions: const x = function()
+                r"(?:public|private|protected|static|async)\s+(?:[\w\[\]<>]+\s+)?(\w+)\s*\(", # Java/C#/TS methods
+            ]
+
+            for pattern in func_patterns:
+                defs = re.findall(pattern, code_to_parse)
+                for name in defs:
+                    # Filter out common false positives
+                    if name not in ["if", "for", "while", "switch", "catch"]:
+                        entities.append(Entity(name=name, type="definition", description=f"Extracted function: {name}"))
+
             return entities
 
 
@@ -74,7 +98,7 @@ class CodeAnalyzer:
         
         if self.use_joern:
             try:
-                from knowgraph.domain.intelligence.joern_provider import JoernProvider
+                from knowgraph.core.joern import JoernProvider
                 self.joern_provider = JoernProvider()
                 logger.info("Joern backend enabled")
             except Exception as e:
@@ -159,7 +183,7 @@ class CodeAnalyzer:
             
         """
         import tempfile
-        from knowgraph.domain.intelligence.joern_provider import JoernCPG
+        from knowgraph.core.joern import JoernCPG
         
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir) / Path(file_path).name

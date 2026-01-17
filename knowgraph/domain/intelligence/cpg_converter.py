@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
-from knowgraph.domain.intelligence.joern_provider import JoernCPG
+from knowgraph.core.joern import ExportFormat, JoernCPG, JoernEntity, JoernProvider
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
 

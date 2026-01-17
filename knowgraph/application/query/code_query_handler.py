@@ -110,7 +110,7 @@ class CodeQueryHandler:
         Returns:
             List of results
         """
-        from knowgraph.domain.intelligence.joern_provider import JoernProvider
+        from knowgraph.core.joern import JoernProvider
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
         
         provider = JoernProvider()

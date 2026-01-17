@@ -52,7 +52,7 @@ int main() {
 }
 ''')
     
-    from knowgraph.domain.intelligence.joern_provider import JoernProvider
+    from knowgraph.core.joern import JoernProvider
     provider = JoernProvider()
     cpg_path = provider.generate_cpg(test_dir)
     print(f"✅ CPG generated: {cpg_path}")

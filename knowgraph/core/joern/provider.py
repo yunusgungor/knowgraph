@@ -1,70 +1,24 @@
 """Joern integration provider - CPG generation and entity extraction."""
 
 import logging
-import os
 import platform
-import re
 import subprocess
 import tempfile
-from collections.abc import Callable, Iterator
-from dataclasses import dataclass
-from enum import Enum
-from pathlib import Path
-from typing import NamedTuple, TypedDict
-
 import networkx as nx
+from pathlib import Path
+
+from knowgraph.core.joern.types import ExportFormat, JoernCPG, JoernEntity
+from knowgraph.core.joern.manager import INSTALL_DIR
 
 logger = logging.getLogger(__name__)
-
-
-class ExportFormat(Enum):
-    """Supported CPG export formats."""
-    GRAPHML = "graphml"
-    JSON = "json"
-    NEO4J = "neo4j"
-    SARIF = "sarif"
-    DOT = "dot"
 
 
 class JoernNotFoundError(Exception):
     """Raised when Joern CLI is not found."""
 
 
-class JoernEntity(NamedTuple):
-    """Entity extracted from Joern CPG.
-    
-    Attributes
-    ----------
-        name: Entity name (e.g., function name, variable name)
-        type: Entity type (definition, reference, call)
-        description: Human-readable description
-        
-    """
-    
-    name: str
-    type: str  # definition, reference, call, import
-    description: str
-
-
-@dataclass
-class JoernCPG:
-    """Code Property Graph from Joern.
-    
-    Attributes
-    ----------
-        nodes: List of CPG nodes
-        edges: List of CPG edges
-        metadata: CPG metadata (language, version, etc.)
-        
-    """
-    
-    nodes: list[dict]
-    edges: list[dict]
-    metadata: dict
-
-
 class JoernProvider:
-    """Joern CPG generator and exporter with auto-detection.
+    """Joern CPG generator and exporter.
     
     Handles Joern CLI execution, CPG generation, GraphML export,
     and entity extraction for KnowGraph integration.
@@ -93,7 +47,7 @@ class JoernProvider:
         """Auto-detect Joern installation.
         
         Checks:
-        1. ~/.knowgraph/joern/joern-cli
+        1. ~/.knowgraph/joern/joern-cli (Default Managed Location)
         2. /usr/local/joern/joern-cli
         3. $PATH (finds executable, returns parent)
         
@@ -102,8 +56,8 @@ class JoernProvider:
             Path to Joern CLI directory (not executable) or None
             
         """
-        # Check 1: KnowGraph installation directory
-        knowgraph_joern = Path.home() / ".knowgraph" / "joern" / "joern-cli"
+        # Check 1: KnowGraph installation directory (using constant from manager)
+        knowgraph_joern = INSTALL_DIR / "joern-cli"
         
         if knowgraph_joern.exists() and knowgraph_joern.is_dir():
             return str(knowgraph_joern)
@@ -220,7 +174,6 @@ class JoernProvider:
         
         # Build joern-export command
         # Note: -o expects a DIRECTORY that DOESN'T EXIST YET in Joern v4.x
-        # repr=cpg14 NOT supported for GraphML        # Build joern-export command
         joern_export = str(Path(self.joern_path) / "joern-export")
         cmd = [
             joern_export,
@@ -253,9 +206,7 @@ class JoernProvider:
                     return stdout_output_file
             
             # Joern might return non-zero but still create files
-            if result.returncode != 0:
-                logger.warning(f"joern-export returned {result.returncode}: {result.stderr}")
-           
+            
             # Joern exports GraphML files (may use .xml or .graphml extension)
             # Return the directory itself - parse_graphml_to_cpg will handle it
             graphml_files = []
@@ -355,7 +306,7 @@ class JoernProvider:
             }
             
             logger.info(f"✅ Parsed {len(nodes)} nodes, {len(edges)} edges")
-            return JoernCPG(nodes=nodes, edges=edges)
+            return JoernCPG(nodes=nodes, edges=edges, metadata=metadata)
             
         except Exception as e:
             logger.error(f"GraphML parsing failed: {e}")
@@ -381,22 +332,6 @@ class JoernProvider:
         -------
             Path to exported file or directory
             
-        Example:
-        -------
-            provider = JoernProvider()
-            
-            # JSON for tool integration
-            json_path = provider.export_cpg(
-                cpg_path=Path("cpg.bin"),
-                format=ExportFormat.JSON
-            )
-            
-            # SARIF for CI/CD
-            sarif_path = provider.export_cpg(
-                cpg_path=Path("cpg.bin"),
-                format=ExportFormat.SARIF
-            )
-            
         """
         # Determine output directory
         if output_path:
@@ -407,7 +342,6 @@ class JoernProvider:
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Build joern-export command
-        # joern_path is the joern-cli directory
         joern_export = str(Path(self.joern_path) / "joern-export")
         
         cmd = [
@@ -421,12 +355,6 @@ class JoernProvider:
         if format == ExportFormat.GRAPHML:
             cmd.insert(2, "--repr")
             cmd.insert(3, "all")
-        elif format == ExportFormat.SARIF:
-            # SARIF for security findings
-            pass  # No additional options needed
-        elif format == ExportFormat.NEO4J:
-            # Neo4j export (if configured)
-            pass
         
         logger.info(f"Exporting CPG to {format.value}: {' '.join(cmd)}")
         
@@ -534,6 +462,7 @@ class JoernProvider:
 
     def run_security_scan(self, cpg_path: Path) -> dict:
         """Run security scan using PolicyEngine."""
+        # Delayed import to avoid circular dependency
         from knowgraph.application.security.policy_engine import PolicyEngine
         engine = PolicyEngine()
         violations = engine.validate_policies(cpg_path)
@@ -553,6 +482,7 @@ class JoernProvider:
 
     def find_dead_code(self, cpg_path: Path) -> dict:
         """Find dead code using DominanceAnalyzer."""
+        # Delayed import
         from knowgraph.application.analysis.dominance_analyzer import DominanceAnalyzer
         analyzer = DominanceAnalyzer()
         dead_methods = analyzer.find_dead_code(cpg_path)
@@ -561,11 +491,13 @@ class JoernProvider:
 
     def analyze_call_graph(self, cpg_path: Path, analysis_type: str = "validate") -> dict:
         """Analyze call graph using CallGraphAnalyzer."""
+        # Delayed import
         from knowgraph.application.analysis.call_graph_analyzer import CallGraphAnalyzer
         analyzer = CallGraphAnalyzer()
         
         if analysis_type == "validate":
             result = analyzer.validate_call_graph(cpg_path)
+            # Handle the named tuple result
             return {
                 "is_valid": result.is_valid,
                 "total_methods": result.total_methods,

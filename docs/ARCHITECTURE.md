@@ -1,6 +1,6 @@
 # KnowGraph Architecture & Joern Integration
 
-**Version**: 1.0.0  
+**Version**: 0.8.0  
 **Status**: Production Ready  
 **Last Updated**: December 27, 2024
 
@@ -38,7 +38,7 @@ KnowGraph combines **Graph RAG** with **Joern Code Property Graph** analysis for
 
 ---
 
-## Joern Integration Architecture (v1.0.0)
+## Joern Integration Architecture (v0.8.0)
 
 ### Component Overview
 

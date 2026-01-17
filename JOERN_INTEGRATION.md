@@ -26,7 +26,7 @@ knowgraph index ./my_project --output ./graph
 
 ## Documentation
 
-See `.gemini/antigravity/brain/.../JOERN_INTEGRATION_README.md` for complete documentation.
+See `JOERN_USAGE.md` for complete documentation.
 
 ## Quick Examples
 

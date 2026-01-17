@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+CURRENT_API_VERSION = "0.8.0"
 
 class VersionStatus(Enum):
     """Status of an API version."""

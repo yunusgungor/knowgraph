@@ -106,7 +106,7 @@ class Manifest:
         cls: type["Manifest"],
         edges_filename: str,
         sparse_index_filename: str,
-        version: str = "1.0.0",
+        version: str = "0.8.0",
         created_at: int | None = None,
     ) -> "Manifest":
         """Create a new manifest with default values.

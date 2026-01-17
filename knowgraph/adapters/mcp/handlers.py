@@ -1503,7 +1503,7 @@ async def handle_export_cpg(arguments: dict[str, Any], PROJECT_ROOT: Path) -> li
     Supports JSON, SARIF, Neo4j, DOT, and GraphML formats.
     """
     try:
-        from knowgraph.domain.intelligence.joern_provider import JoernProvider, ExportFormat
+        from knowgraph.core.joern import JoernProvider, ExportFormat
         
         from knowgraph.infrastructure.indexing.cpg_metadata import get_cpg_path
         
@@ -1596,7 +1596,7 @@ async def handle_generate_cpg(arguments: dict[str, Any], PROJECT_ROOT: Path) -> 
     Allows AI assistants to generate CPGs on-the-fly without manual setup.
     """
     try:
-        from knowgraph.domain.intelligence.joern_provider import JoernProvider
+        from knowgraph.core.joern import JoernProvider
         
         # Required parameters
         source_path_str = arguments.get("source_path")

@@ -41,7 +41,7 @@ class TestManifestCreation:
             sparse_index_filename="index.json",
         )
 
-        assert manifest.version == "1.0.0"
+        assert manifest.version == "0.8.0"
         assert manifest.edges_filename == "edges.json"
         assert manifest.sparse_index_filename == "index.json"
         assert manifest.node_count == 0
@@ -97,7 +97,7 @@ class TestManifestSerialization:
         data = manifest.to_dict()
 
         assert isinstance(data, dict)
-        assert data["version"] == "1.0.0"
+        assert data["version"] == "0.8.0"
         # Check for essential fields (keys may vary)
         assert "version" in data
         assert "node_count" in data

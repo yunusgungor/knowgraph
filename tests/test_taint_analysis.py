@@ -12,17 +12,32 @@ from pathlib import Path
 @pytest.fixture
 def vulnerable_app_graph():
     """Index vulnerable Flask app and return graph path."""
-    from knowgraph.adapters.cli.indexing import run_index
+    import asyncio
+    from knowgraph.adapters.cli.index_command import run_index
     
     fixture_path = Path(__file__).parent / "fixtures" / "vulnerable_app.py"
     graph_path = Path(__file__).parent / "test_graphs" / "vulnerable_app"
     
-    # Index the vulnerable code
-    run_index(
-        input_path=str(fixture_path),
-        output_path=str(graph_path),
-        use_joern=True,  # Enable Joern for data_flow edges
-    )
+    # Patch config to force Joern usage for this test
+    import knowgraph.domain.intelligence.code_analyzer as ca_module
+    import knowgraph.config as config_module
+    from unittest.mock import patch
+
+    # Force enable CPG nodes and override language checks
+    with patch.object(config_module, 'CPG_NODES_ENABLED', True), \
+         patch.object(config_module, 'JOERN_ENABLED', True), \
+         patch.object(ca_module, 'JOERN_ENABLED', True), \
+         patch.object(ca_module, 'JOERN_FAST_LANGUAGES', []), \
+         patch.object(ca_module, 'JOERN_MIN_FILE_SIZE', 0):
+        
+        # Index the vulnerable code
+        # Use asyncio.run + run_index helper
+        asyncio.run(
+            run_index(
+                input_path=str(fixture_path),
+                output_path=str(graph_path),
+            )
+        )
     
     return str(graph_path)
 

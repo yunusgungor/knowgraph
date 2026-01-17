@@ -1,5 +1,5 @@
 """Daemon infrastructure package."""
 
-from .joern_daemon import JoernDaemon
+from knowgraph.core.joern import JoernDaemon
 
 __all__ = ['JoernDaemon']

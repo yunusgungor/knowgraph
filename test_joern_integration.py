@@ -13,7 +13,7 @@ def test_joern_provider_init():
     print("="*60)
     
     try:
-        from knowgraph.domain.intelligence.joern_provider import JoernProvider
+        from knowgraph.core.joern import ExportFormat, JoernCPG, JoernEntity, JoernProvider
         
         provider = JoernProvider()
         print(f"✅ JoernProvider initialized")
@@ -90,7 +90,7 @@ def test_config():
 
 
 if __name__ == "__main__":
-    print("\n🧪 KnowGraph v1.0.0 - Joern Integration Test Suite")
+    print("\n🧪 KnowGraph v0.8.0 - Joern Integration Test Suite")
     
     results = []
     results.append(("JoernProvider", test_joern_provider_init()))

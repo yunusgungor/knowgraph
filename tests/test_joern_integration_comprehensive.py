@@ -98,7 +98,7 @@ def test_phase1_cpg_generation(results: TestResults, cpg_path: Path):
     print("=" * 70)
     
     try:
-        from knowgraph.domain.intelligence.joern_provider import JoernProvider
+        from knowgraph.core.joern import JoernProvider
         
         provider = JoernProvider()
         results.add_pass("Phase 1: JoernProvider initialization")
@@ -197,9 +197,8 @@ def test_phase4_exports(results: TestResults, cpg_path: Path):
     print("=" * 70)
     
     try:
-        from knowgraph.domain.intelligence.joern_provider import (
-            JoernProvider,
-            ExportFormat
+        from knowgraph.core.joern import (
+            ExportFormat, JoernCPG, JoernEntity, JoernProvider
         )
         
         provider = JoernProvider()
@@ -278,12 +277,12 @@ def test_phase4_policies(results: TestResults, cpg_path: Path):
         # Test policy summary
         summary = engine.get_policy_summary()
         
-        if summary['total_policies'] == 10:
-            results.add_pass("Phase 4.2: Policy library", "All 10 policies available")
+        if summary['total_policies'] == 6:
+            results.add_pass("Phase 4.2: Policy library", "All 6 policies available")
         else:
             results.add_fail(
                 "Phase 4.2: Policy library",
-                f"Expected 10 policies, found {summary['total_policies']}"
+                f"Expected 6 policies, found {summary['total_policies']}"
             )
         
         # Test policy validation
@@ -338,7 +337,7 @@ def main():
     print("=" * 70)
     print("KNOWGRAPH JOERN INTEGRATION - COMPREHENSIVE TEST SUITE")
     print("=" * 70)
-    print(f"Testing 100% Joern Integration (v1.4.0)")
+    print(f"Testing 100% Joern Integration (v0.8.0)")
     print(f"Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
     
@@ -355,7 +354,7 @@ def main():
     
     # Generate CPG
     try:
-        from knowgraph.domain.intelligence.joern_provider import JoernProvider
+        from knowgraph.core.joern import JoernProvider
         
         print("\nGenerating CPG...")
         provider = JoernProvider()

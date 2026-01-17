@@ -1,4 +1,4 @@
-# 🧠 KnowGraph: Graph RAG & MCP Server for Code (v1.0.0 🚀)
+# 🧠 KnowGraph: Graph RAG & MCP Server for Code (v0.8.0 🚀)
 [![CI](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml)
 [![Joern](https://img.shields.io/badge/Powered_by-Joern_CPG-orange?style=flat-square)](https://joern.io)
 
@@ -36,11 +36,11 @@ KnowGraph leverages **Graph Theory** and **Network Science** principles to offer
 
 ---
 
-## 🚀 Performance Engine (v1.0.0) 🆕
+## 🚀 Performance Engine (v0.8.0) 🆕
 
 KnowGraph is built for scale with **revolutionary deep code analysis** powered by Joern:
 
-### 🔬 Deep Code Analysis (PRODUCTION READY in v1.0.0)
+### 🔬 Deep Code Analysis (PRODUCTION READY in v0.8.0)
 
 *   **🧬 Joern CPG Integration:** Fully integrated [Joern's Code Property Graph](https://joern.io) for industrial-grade static analysis:
     *   **✅ Automatic Code Detection:** 15 languages supported (Python, JS/TS, Java, C/C++, Go, C#, Scala, PHP, Ruby, Kotlin, Swift, and more)
@@ -96,7 +96,7 @@ knowgraph index ./my-project
 
 ## 🎯 Key Features
 
-### 🆕 1. 🔬 Advanced Code Intelligence (v1.0.0)
+### 🆕 1. 🔬 Advanced Code Intelligence (v0.8.0)
 
 KnowGraph now includes **Joern-powered deep code analysis** for security and architecture insights:
 

@@ -277,7 +277,7 @@ DEFAULT_CENTRALITY_SCORE = 0.0
 DEFAULT_ROLE_WEIGHT = 0.5
 
 # =============================================================================
-# Joern Integration Configuration (v1.0.0+)
+# Joern Integration Configuration (v0.8.0+)
 # =============================================================================
 
 # Joern Enabled/Disabled (DEFAULT: ENABLED)
@@ -287,9 +287,9 @@ JOERN_ENABLED = os.getenv("KNOWGRAPH_JOERN_ENABLED", "true").lower() == "true"
 JOERN_PATH = os.getenv("KNOWGRAPH_JOERN_PATH")  # None = auto-detect
 
 # Joern Timeout Configuration
-JOERN_TIMEOUT = int(os.getenv("KNOWGRAPH_JOERN_TIMEOUT", "600"))  # 10 minutes
+JOERN_TIMEOUT = int(os.getenv("KNOWGRAPH_JOERN_TIMEOUT", "120"))  # Reduced to 2 minutes
 
-# CPG Integration Settings (v1.2.0+)
+# CPG Integration Settings (v0.8.0+)
 # Enable creation of separate nodes from CPG entities (default: disabled for backward compatibility)
 CPG_NODES_ENABLED = os.getenv("KNOWGRAPH_CPG_NODES_ENABLED", "false").lower() == "true"
 

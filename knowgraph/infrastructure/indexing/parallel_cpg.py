@@ -82,7 +82,7 @@ class ParallelCPGGenerator:
         Returns:
             List of generated CPG paths
         """
-        from knowgraph.domain.intelligence.joern_provider import JoernProvider
+        from knowgraph.core.joern import JoernProvider
         
         if not self.should_use_parallel(code_files):
             logger.info("Parallel generation not needed - using single CPG")

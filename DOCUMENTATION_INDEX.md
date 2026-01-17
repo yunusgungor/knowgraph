@@ -24,7 +24,7 @@ This document provides a comprehensive index of all Joern integration documentat
    - Main project documentation
    - Quick start guide
    - Feature overview
-   - Updated with v1.0.0 Joern integration
+   - Updated with v0.8.0 Joern integration
 
 ### Developer Documentation
 
@@ -91,7 +91,7 @@ This document provides a comprehensive index of all Joern integration documentat
 
 ## 📊 Project Status
 
-**Version**: 1.0.0  
+**Version**: 0.8.0  
 **Status**: ✅ Production Ready  
 **Modules**: 13/13 integrated  
 **Dead Code**: 0  
@@ -118,7 +118,7 @@ This document provides a comprehensive index of all Joern integration documentat
 
 **Last Updated**: December 27, 2024
 
-**Changes in v1.0.0**:
+**Changes in v0.8.0**:
 - ✅ Added complete Joern integration
 - ✅ Updated README with production metrics
 - ✅ Created comprehensive usage guides

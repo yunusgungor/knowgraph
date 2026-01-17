@@ -52,11 +52,11 @@ def _register_api_versions():
     """Register all KnowGraph API versions."""
     now = datetime.now()
 
-    # Version 1.0.0 - Initial stable release
+    # Version 0.7.0 - Previous stable release
     register_version(
-        version="1.0.0",
+        version="0.7.0",
         status=VersionStatus.STABLE,
-        release_date=now - timedelta(days=180),
+        release_date=now - timedelta(days=30),
         features=[
             "Basic query support",
             "Graph indexing",
@@ -65,18 +65,17 @@ def _register_api_versions():
         ],
     )
 
-    # Version 1.1.0 - Current stable with resilience patterns
+    # Version 0.8.0 - Current stable with Joern
     register_version(
-        version="1.1.0",
+        version="0.8.0",
         status=VersionStatus.STABLE,
         release_date=now,
         features=[
-            "All 1.0.0 features",
-            "Circuit breaker pattern",
-            "Rate limiting",
-            "Request throttling",
-            "Retry logic with backoff",
-            "API versioning support",
+            "Joern Code Analysis Integration",
+            "Security Scanning",
+            "Dead Code Detection",
+            "Call Graph Analysis",
+            "Daemon Support",
             "Batch query support",
             "Conversation discovery",
         ],

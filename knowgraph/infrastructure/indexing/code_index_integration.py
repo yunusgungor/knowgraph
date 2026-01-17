@@ -37,7 +37,7 @@ class CodeIndexIntegration:
             Dictionary with processing results
         """
         from knowgraph.infrastructure.indexing.code_file_detector import CodeFileDetector
-        from knowgraph.domain.intelligence.joern_provider import JoernProvider
+        from knowgraph.core.joern import ExportFormat, JoernCPG, JoernEntity, JoernProvider
         from knowgraph.domain.intelligence.code_entity_extractor import CodeEntityExtractor
         
         results = {

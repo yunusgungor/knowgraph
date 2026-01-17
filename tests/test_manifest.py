@@ -8,14 +8,14 @@ from knowgraph.infrastructure.storage.manifest import (
 
 def test_manifest_creation():
     m = Manifest.create_new("edges.jsonl", "index")
-    assert m.version == "1.0.0"
+    assert m.version == "0.8.0"
     assert m.node_count == 0
     assert m.edges_filename == "edges.jsonl"
 
 
 def test_manifest_serialization():
     m = Manifest(
-        version="1.0",
+        version="0.8",
         node_count=10,
         edge_count=5,
         file_hashes={"file": "1"},
@@ -25,7 +25,7 @@ def test_manifest_serialization():
         updated_at=200,
     )
     d = m.to_dict()
-    assert d["version"] == "1.0"
+    assert d["version"] == "0.8"
     assert d["node_count"] == 10
 
     m2 = Manifest.from_dict(d)

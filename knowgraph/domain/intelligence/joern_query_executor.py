@@ -72,7 +72,7 @@ class JoernQueryExecutor:
         """
         self.joern_path = joern_path or self._find_joern()
         if not self.joern_path:
-            raise RuntimeError("Joern not found. Install with setup_joern.py")
+            raise RuntimeError("Joern not found. Install with: knowgraph-setup-joern")
         
         logger.info(f"JoernQueryExecutor initialized: {self.joern_path}")
     

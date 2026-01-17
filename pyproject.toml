@@ -7,11 +7,11 @@ include-package-data = true
 
 # Post-install hook for Joern setup
 [tool.setuptools.cmdclass]
-install = "setup_joern.PostInstallCommand"
+install = "knowgraph.core.joern.manager.PostInstallCommand"
 
 [project]
 name = "knowgraph"
-version = "1.0.0"
+version = "0.8.0"
 description = "Knowledge Graph-Powered RAG system with enterprise resilience patterns"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -69,7 +69,7 @@ dev = [
 
 [project.scripts]
 knowgraph = "knowgraph.adapters.cli.main:cli"
-knowgraph-setup-joern = "setup_joern:install_joern"
+knowgraph-setup-joern = "knowgraph.core.joern.manager:install_joern"
 
 [project.urls]
 Homepage = "https://github.com/yunusgungor/knowgraph"

@@ -78,7 +78,7 @@ class MCPTestSuite:
         # Generate CPG
         print("\n📦 Generating CPG with Joern...")
         try:
-            from knowgraph.domain.intelligence.joern_provider import JoernProvider
+            from knowgraph.core.joern import JoernProvider
             provider = JoernProvider()
             self.cpg_path = provider.generate_cpg(self.test_dir)
             print(f"✅ CPG generated: {self.cpg_path}")

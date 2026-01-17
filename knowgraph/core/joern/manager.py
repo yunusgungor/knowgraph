@@ -1,10 +1,9 @@
-"""Automatic Joern installation for KnowGraph.
+"""Automatic Joern installation and management for KnowGraph.
 
-This script downloads and installs Joern CLI during pip install.
+This module handles downloading, installing, and verifying the Joern CLI.
 """
 
 import logging
-import os
 import platform
 import shutil
 import subprocess
@@ -12,6 +11,13 @@ import sys
 import zipfile
 from pathlib import Path
 from urllib.request import urlretrieve
+from typing import Optional
+
+# Import setuptools locally to avoid import errors if not installed
+try:
+    from setuptools.command.install import install
+except ImportError:
+    install = object  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +44,30 @@ def check_jdk() -> bool:
             timeout=10,
         )
         # Parse version from output (format: "java version "11.0.x" ...")
-        version_line = result.stderr.split("\n")[0]
+        # Note: java -version outputs to stderr
+        version_output = result.stderr
+        if not version_output and result.stdout:
+            version_output = result.stdout
+            
+        version_line = version_output.split("\n")[0]
         if "version" in version_line:
             version_str = version_line.split('"')[1]
-            major_version = int(version_str.split(".")[0])
-            if major_version >= 11:
-                logger.info(f"✅ JDK {version_str} detected")
-                return True
+            try:
+                major_version = int(version_str.split(".")[0])
+                # Handle "1.8.0" style (Java 8) where first part is 1
+                if major_version == 1:
+                    major_version = int(version_str.split(".")[1])
+                
+                if major_version >= 11:
+                    logger.info(f"✅ JDK {version_str} detected")
+                    return True
+            except (ValueError, IndexError):
+                # Fallback for non-standard version strings
+                pass
+                
+        # If we got here but command succeeded, it might be a valid java but parsing failed
+        # Just return True if we can't parse but it ran? No, safer to be strict or improve parsing.
+        # Strict for now.
         return False
     except (subprocess.CalledProcessError, FileNotFoundError, IndexError, ValueError, subprocess.TimeoutExpired):
         return False
@@ -90,10 +113,7 @@ def download_joern(version: str = JOERN_VERSION) -> Path:
     system = platform.system().lower()
     
     # Construct download URL
-    if system == "windows":
-        filename = f"joern-cli.zip"
-    else:
-        filename = f"joern-cli.zip"
+    filename = "joern-cli.zip"
         
     url = f"https://github.com/{JOERN_REPO}/releases/download/v{version}/{filename}"
     
@@ -319,18 +339,14 @@ def install_joern() -> bool:
     return True
 
 
-
-
-from setuptools.command.install import install
-
-
 class PostInstallCommand(install):
     """Setuptools command to run Joern installation after pip install."""
     
     def run(self):
         """Execute post-install Joern setup."""
         # First run the standard install
-        install.run(self)
+        if install != object:
+            install.run(self)
         
         # Then run Joern setup
         try:
@@ -348,4 +364,3 @@ if __name__ == "__main__":
     
     success = install_joern()
     sys.exit(0 if success else 1)
-
