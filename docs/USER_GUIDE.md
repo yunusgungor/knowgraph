@@ -85,11 +85,25 @@ knowgraph serve
 pip install knowgraph
 ```
 
+### 3.1 Setup Joern (Required for Code Analysis)
+
+To enable advanced code analysis features, you must install the Joern CLI. We provide a helper script for this:
+
+```bash
+knowgraph-setup-joern
+```
+
+This will:
+1. Check for JDK 11+ (required)
+2. Download and install Joern to `~/.knowgraph/joern`
+3. Verify the installation
+
 For development:
 ```bash
 git clone https://github.com/yunusgungor/knowgraph.git
 cd knowgraph
 pip install -e ".[dev]"
+knowgraph-setup-joern
 ```
 
 ---
@@ -281,6 +295,43 @@ KnowGraph exposes a comprehensive suite of tools to your AI assistant. Here is t
 | `knowgraph_diff_versions` | Compare nodes/edges between two commits. |
 | `knowgraph_rollback` | Revert graph state to a previous snapshot. |
 | `knowgraph_diagnostic` | Run system health checks (Graph Store, LLM, Config). |
+| `knowgraph_joern_query` | Execute native Joern DSL queries. |
+| `knowgraph_security_scan` | Scan for vulnerabilities using Joern policies. |
+| `knowgraph_find_dead_code` | Detect unreachable methods using dominance analysis. |
+| `knowgraph_analyze_call_graph` | Analyze call paths and recursion. |
+| `knowgraph_export_cpg` | Export CPG to JSON/DOT/Neo4j/SARIF. |
+| `knowgraph_generate_cpg` | Manually trigger CPG generation for a path. |
+
+### 8.1 Configuring AI Clients
+
+#### Claude Desktop (`claude_desktop_config.json`)
+```json
+{
+  "mcpServers": {
+    "knowgraph": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/knowgraph",
+        "run",
+        "knowgraph-mcp"
+      ]
+    }
+  }
+}
+```
+
+#### Cursor (`.cursor/mcp.json`)
+```json
+{
+  "mcpServers": {
+    "knowgraph": {
+      "command": "python",
+      "args": ["-m", "knowgraph.adapters.mcp.server"]
+    }
+  }
+}
+```
 
 ---
 

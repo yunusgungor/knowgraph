@@ -11,7 +11,7 @@ install = "knowgraph.core.joern.manager.PostInstallCommand"
 
 [project]
 name = "knowgraph"
-version = "0.8.0"
+version = "0.8.1"
 description = "Knowledge Graph-Powered RAG system with enterprise resilience patterns"
 readme = "README.md"
 requires-python = ">=3.10"

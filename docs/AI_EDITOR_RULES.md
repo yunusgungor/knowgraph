@@ -15,6 +15,19 @@ This document defines the **Rules of Engagement** for interacting with KnowGraph
 5.  **Preserve Knowledge (RAG)**: If you generate a valuable insight, solve a hard problem, or receive critical instruction, use `knowgraph_tag_snippet` to save it via Semantic Bookmarking.
 6.  **Respect Time**: Use Version Control (`knowgraph_version_*`) features to understand evolution and regressions.
 
+### 1.1 Strict Coding Standards (Zero Tolerance)
+*   **Type Safety**: All Python code **must** be fully typed and pass `mypy --strict`.
+    *   Explicitly handle `None` (e.g., `if x is not None:`).
+    *   No `Any` unless absolutely necessary and documented.
+*   **Linting & Style**: Code must pass `ruff check .` with zero errors.
+    *   No unused imports or variables (use `_`).
+    *   No bare `except:` clauses.
+    *   Security: No hardcoded secrets, shell injections (`shell=True`), or weak crypto (`md5/sha1`) in production code.
+*   **Path Handling**: ALWAYS use `pathlib.Path`. NEVER use string concatenation (`+`) for paths.
+    *   Bad: `os.path.join(root, "file.txt")`
+    *   Good: `Path(root) / "file.txt"`
+*   **Integrity**: Critical file operations must use atomic writes or locking (`aiofiles`, `tenacity`).
+
 ---
 
 ## 🛠️ 2. Tool Selection Decision Tree
