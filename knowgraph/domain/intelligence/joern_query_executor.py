@@ -260,6 +260,13 @@ flows.l
 // Load CPG
 importCpg("{cpg_path}")
 
+// Ensure dataflow overlays are present for complete analysis
+try {{
+  run.ossdataflow
+}} catch {{
+  case e: Exception => // Ignore if already present or not applicable
+}}
+
 // Execute query
 val queryResult = {{ {query} }}
 

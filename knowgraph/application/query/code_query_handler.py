@@ -85,6 +85,9 @@ class CodeQueryHandler:
         # Comments and Tags
         r"(comments|todos|fixmes|yorumlar)": "find_comments",
         r"(list tags|show tags|etiketler)": "list_tags",
+
+        # Raw/Custom Query (Power User)
+        r"(run query|execute query|joern script|custom query|raw query|sorgu çalıştır)": "run_custom_query",
     }
 
     def __init__(self, graph_path: Path):
@@ -360,6 +363,28 @@ class CodeQueryHandler:
         elif tool == "list_tags":
             result = provider.list_tags(cpg_path)
             return [{"type": "tag_list", "tags": result["tags"]}]
+
+        elif tool == "run_custom_query":
+            # Extract the actual query string. 
+            # Expecting "run query cpg.method.name.l" -> extract "cpg.method.name.l"
+            # Logic: Split by tool keywords and take the rest
+            clean_query = query
+            keywords = ["run query", "execute query", "joern script", "custom query", "raw query", "sorgu çalıştır"]
+            for kw in keywords:
+                if kw in clean_query.lower():
+                     # Find index and take substring after
+                     idx = clean_query.lower().find(kw) + len(kw)
+                     clean_query = clean_query[idx:].strip()
+                     break
+            
+            # Remove potential quotes if user wrapped query in quotes
+            if clean_query.startswith('"') and clean_query.endswith('"'):
+                clean_query = clean_query[1:-1]
+            if clean_query.startswith("'") and clean_query.endswith("'"):
+                clean_query = clean_query[1:-1]
+                
+            result = provider.run_custom_query(cpg_path, clean_query)
+            return [{"type": "custom_query_result", "data": result}]
 
         else:
             return []
@@ -853,6 +878,23 @@ class CodeQueryHandler:
              output += f"Found {len(tags)} Tags:\\n\\n"
              for t in tags:
                  output += f"  - {t}\\n"
+
+        elif item_type == "custom_query_result":
+             data = results[0].get("data", {})
+             query_str = data.get("query", "")
+             res_list = data.get("results", [])
+             count = data.get("count", 0)
+             
+             output += f"Custom Query Execution ('{query_str}'):\\n"
+             output += f"Count: {count}\\n\\n"
+             if not res_list:
+                 output += "  (No results)\\n"
+             else:
+                 # Limit output for raw queries
+                 for i, r in enumerate(res_list[:20]):
+                     output += f"  [{i+1}] {r}\\n"
+                 if len(res_list) > 20:
+                     output += f"  ... and {len(res_list)-20} more.\\n"
 
         else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"

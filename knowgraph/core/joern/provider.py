@@ -1131,3 +1131,19 @@ class JoernProvider:
                  types.append(t)
                  
         return {"types": sorted(types)}
+
+    def run_custom_query(self, cpg_path: Path, query: str) -> dict:
+        """Execute a raw custom Joern query string."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        # Determine if it's a list operation to append .l if missing
+        final_query = query.strip()
+        
+        result = executor.execute_query(cpg_path, final_query)
+        
+        return {
+            "query": query,
+            "results": [r.get("raw", str(r)) for r in result.results],
+            "count": result.node_count
+        }
