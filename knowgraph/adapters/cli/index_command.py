@@ -127,7 +127,7 @@ async def run_index(
         existing_manifest = load_existing_manifest(output_path, verbose)
 
         file_hashes, files_ready, cached_files, cache, file_hash_map = await prepare_files_and_hashes(
-            files_to_process, base_path, verbose
+            files_to_process, base_path, graph_store_path, verbose
         )
 
         # Step 3: Check if indexing can be skipped

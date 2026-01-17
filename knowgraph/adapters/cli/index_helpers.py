@@ -285,7 +285,7 @@ def cleanup_temp_files() -> None:
 # Hash Preparation & File Processing
 
 
-async def prepare_files_and_hashes(files, base_path, verbose):
+async def prepare_files_and_hashes(files, base_path, graph_store_path, verbose):
     from knowgraph.adapters.cli.index_command import EXT_MAP
     from knowgraph.application.indexing.graph_builder import normalize_markdown_content
     from knowgraph.infrastructure.cache.indexing_cache import IndexingCache
@@ -299,7 +299,7 @@ async def prepare_files_and_hashes(files, base_path, verbose):
     _log_verbose(verbose, "Analysing file states...")
 
     # Initialize cache
-    cache_dir = base_path if isinstance(base_path, Path) else Path(base_path)
+    cache_dir = graph_store_path if isinstance(graph_store_path, Path) else Path(graph_store_path)
     cache = IndexingCache(cache_dir)
 
     total_files = len(files)
@@ -468,7 +468,7 @@ async def build_knowledge_graph(chunks, input_path, graph_store_path, provider, 
     # Initialize cache and save results
     cache = None
     if base_path and file_hash_map:
-        cache_dir = base_path if isinstance(base_path, Path) else Path(base_path)
+        cache_dir = graph_store_path if isinstance(graph_store_path, Path) else Path(graph_store_path)
         cache = IndexingCache(cache_dir)
 
         # Group nodes by file and cache them
