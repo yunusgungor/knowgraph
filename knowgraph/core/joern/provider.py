@@ -531,3 +531,93 @@ class JoernProvider:
         analyzer = CallGraphAnalyzer()
         return analyzer.analyze_method_callers(cpg_path, method_pattern)
 
+    def analyze_complexity(self, cpg_path: Path, method_pattern: str) -> dict:
+        """Calculate cyclomatic complexity for methods."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        # Calculate complexity: control structures + 1
+        query = f"""
+        cpg.method.name("{method_pattern}").map{{ m =>
+           val complexity = m.controlStructure.size + 1
+           s"${{m.name}}:$complexity"
+        }}.l
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        complexity_data = []
+        for item in result.results:
+            raw = item.get("raw", "")
+            if ":" in raw:
+                name, score = raw.split(":")
+                complexity_data.append({"method": name, "score": int(score)})
+                
+        return {"complexity": complexity_data}
+
+    def get_ast(self, cpg_path: Path, method_pattern: str) -> str:
+        """Get Abstract Syntax Tree (DOT format) for a method."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        cpg.method.name("{method_pattern}").dotAst.headOption.getOrElse("AST not found")
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        # Extract the DOT string
+        if result.results:
+            return result.results[0].get("raw", "AST not found")
+        return "AST not found"
+
+    def get_type_hierarchy(self, cpg_path: Path, type_pattern: str) -> dict:
+        """Get base types and derived types for a class/structure."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = f"""
+        val target = cpg.typeDecl.name("{type_pattern}").headOption
+        
+        target match {{
+          case Some(t) =>
+            val baseTypes = t.inheritsFromTypeFullName.l
+            val derivedTypes = cpg.typeDecl.where(_.inheritsFromTypeFullName(t.fullName)).name.l
+            Map("base" -> baseTypes, "derived" -> derivedTypes)
+          case None =>
+            Map("error" -> "Type not found")
+        }}
+        """
+        result = executor.execute_query(cpg_path, query)
+        
+        # Parse map result - Joern output parsing might need adjustment based on how Map prints
+        # For simplicity, we'll rely on the executor's parser or raw output if simple
+        # Since Map output can be complex, we might want a simpler string output query
+        
+        # Revised simpler query for robust parsing
+        simple_query = f"""
+        val target = cpg.typeDecl.name("{type_pattern}").headOption
+        target match {{
+            case Some(t) => 
+                val base = t.inheritsFromTypeFullName.mkString(",")
+                val derived = cpg.typeDecl.where(_.inheritsFromTypeFullName(t.fullName)).name.mkString(",")
+                s"BASE:$base|DERIVED:$derived"
+            case None => "NOT_FOUND"
+        }}
+        """
+        result = executor.execute_query(cpg_path, simple_query)
+        raw = result.results[0].get("raw", "") if result.results else ""
+        
+        if raw == "NOT_FOUND":
+            return {"found": False}
+            
+        hierarchy = {"found": True, "base": [], "derived": []}
+        if "BASE:" in raw and "|DERIVED:" in raw:
+            parts = raw.split("|DERIVED:")
+            base_part = parts[0].replace("BASE:", "")
+            derived_part = parts[1]
+            
+            hierarchy["base"] = [x.strip() for x in base_part.split(",") if x.strip()]
+            hierarchy["derived"] = [x.strip() for x in derived_part.split(",") if x.strip()]
+            
+        return hierarchy
+
+

@@ -35,6 +35,15 @@ class CodeQueryHandler:
         # Call Chain analysis
         r"(chain|path from|calls between|zincir|yol)": "analyze_chain",
 
+        # Complexity analysis
+        r"(complexity|cyclomatic|complex|karmaşıklık|zorluk)": "analyze_complexity",
+
+        # AST inspection
+        r"(ast|syntax tree|soyut sözdizimi|ağaç)": "get_ast",
+
+        # Type Hierarchy
+        r"(subclasses|superclasses|inherits|extends|derived|hierarchy|alt sınıf|türetilmiş|hiyerarşi)": "get_type_hierarchy",
+
         # Method/function search (generic)
 
         # Method/function search (generic)
@@ -171,6 +180,29 @@ class CodeQueryHandler:
             chains = provider.find_call_chains(cpg_path, source, target)
             return self._format_chain_results(chains, source, target)
 
+        elif tool == "analyze_complexity":
+            method_name = self._extract_method_name(query, ["complexity of", "complexity for", "karmaşıklık"])
+            if not method_name:
+                 # Default to wildcards if no specific method named, or better, return error
+                 return [{"error": "Could not extract method name for complexity analysis"}]
+            result = provider.analyze_complexity(cpg_path, method_name)
+            return self._format_complexity_results(result)
+
+        elif tool == "get_ast":
+            method_name = self._extract_method_name(query, ["ast of", "ast for", "syntax tree of", "ağacı"])
+            if not method_name:
+                return [{"error": "Could not extract method name for AST"}]
+            result = provider.get_ast(cpg_path, method_name)
+            return [{"type": "ast", "data": result}]
+
+        elif tool == "get_type_hierarchy":
+            # Reuse method extraction logic but for types
+            type_name = self._extract_method_name(query, ["subclasses of", "superclasses of", "hierarchy of", "inherits", "extends", "alt sınıf"])
+            if not type_name:
+                return [{"error": "Could not extract type name"}]
+            result = provider.get_type_hierarchy(cpg_path, type_name)
+            return self._format_hierarchy_results(result, type_name)
+
         else:
             return []
 
@@ -246,6 +278,23 @@ class CodeQueryHandler:
                 "path": " -> ".join(chain)
             })
         return formatted
+
+        return formatted
+
+    def _format_complexity_results(self, results: dict) -> list:
+        if not results or "complexity" not in results:
+            return []
+        return [{"type": "complexity", "method": item["method"], "score": item["score"]} for item in results["complexity"]]
+
+    def _format_hierarchy_results(self, results: dict, type_name: str) -> list:
+        if not results.get("found"):
+             return [{"type": "hierarchy", "error": f"Type '{type_name}' not found"}]
+        
+        return [{
+            "type": "hierarchy",
+            "base_types": results.get("base", []),
+            "derived_types": results.get("derived", [])
+        }]
 
     def _extract_method_name(self, query: str, prefixes: list[str]) -> str | None:
         """Extract method name from query removing prefixes."""
@@ -355,6 +404,35 @@ class CodeQueryHandler:
             output += f"Found {len(results)} call chains:\\n\\n"
             for i, item in enumerate(results, 1):
                 output += f"Chain {i}: {item['path']}\\n"
+
+            for i, item in enumerate(results, 1):
+                output += f"Chain {i}: {item['path']}\\n"
+
+        elif tool == "analyze_complexity":
+            output += "Cyclomatic Complexity Results:\\n\\n"
+            for item in results:
+                score = item.get('score', 0)
+                rating = "Low" if score < 5 else "Medium" if score < 10 else "High"
+                output += f"Method: {item['method']}\\n"
+                output += f"  Score: {score} ({rating})\\n"
+
+        elif tool == "get_ast":
+            output += "Abstract Syntax Tree (DOT):\\n\\n"
+            # Just show first few lines if too long
+            ast_data = results[0].get("data", "")
+            if len(ast_data) > 500:
+                output += ast_data[:500] + "... (truncated)\\n"
+            else:
+                output += ast_data + "\\n"
+
+        elif tool == "get_type_hierarchy":
+             item = results[0]
+             if "error" in item:
+                 output += f"Error: {item['error']}\\n"
+             else:
+                 output += f"Type Hierarchy:\\n"
+                 output += f"  Base Types: {', '.join(item['base_types']) or 'None'}\\n"
+                 output += f"  Derived Types: {', '.join(item['derived_types']) or 'None'}\\n"
 
         else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"

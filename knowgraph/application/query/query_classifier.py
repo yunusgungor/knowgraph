@@ -104,7 +104,9 @@ class QueryClassifier:
             "call graph", "recursive", "recursion", "scan for", "find bug",
             "güvenlik açık", "açık var", "zafiyet",
             "who calls", "callers of", "usage of", "references to",
-            "chain", "calls between"
+            "chain", "calls between",
+            "complexity", "cyclomatic", "ast", "syntax tree",
+            "subclasses", "superclasses", "inherits", "extends"
         ]
 
         for indicator in strong_code_indicators:
