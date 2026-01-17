@@ -278,8 +278,8 @@ class TestVersionRegistry:
         assert registry.get_current_version() is None
 
         # Register first stable version
-        registry.register("1.0.0", VersionStatus.STABLE, now)
-        assert registry.get_current_version() == Version(1, 0, 0)
+        registry.register("0.8.0", VersionStatus.STABLE, now)
+        assert registry.get_current_version() == Version(0, 8, 0)
 
         # Register newer stable version
         registry.register("1.1.0", VersionStatus.STABLE, now)
@@ -423,10 +423,10 @@ class TestGlobalRegistry:
         from knowgraph.shared import versioning
         versioning._registry = VersionRegistry()
 
-        register_version("1.0.0", VersionStatus.STABLE, now)
+        register_version("0.8.0", VersionStatus.STABLE, now)
 
         current = get_current_version()
-        assert current == Version(1, 0, 0)
+        assert current == Version(0, 8, 0)
 
     def test_negotiate_version_global(self):
         """Test global negotiate_version function."""
@@ -436,10 +436,10 @@ class TestGlobalRegistry:
         from knowgraph.shared import versioning
         versioning._registry = VersionRegistry()
 
-        register_version("1.0.0", VersionStatus.STABLE, now)
+        register_version("0.8.0", VersionStatus.STABLE, now)
 
-        version = negotiate_version("1.0.0")
-        assert version == Version(1, 0, 0)
+        version = negotiate_version("0.8.0")
+        assert version == Version(0, 8, 0)
 
 
 class TestVersionOrdering:

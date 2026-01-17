@@ -76,7 +76,7 @@ def test_cache_version_manager_with_manifest(tmp_path: Path):
     import json
 
     manifest_data = {
-        "version": "1.0.0",
+        "version": "0.8.0",
         "updated_at": 12345678,
         "created_at": 12345600,
         "node_count": 10,
@@ -203,7 +203,7 @@ def test_cache_version_mismatch(tmp_path: Path):
 
     new_version = int(time.time()) + 1000  # Future timestamp
     manifest_data = {
-        "version": "1.0.0",
+        "version": "0.8.0",
         "updated_at": new_version,
         "created_at": int(time.time()),
         "node_count": 10,

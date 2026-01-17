@@ -1,9 +1,9 @@
 # KnowGraph User Guide
 
-**Version:** 0.6.0  
-**Last Updated:** December 2025
+**Version:** 0.8.0  
+**Last Updated:** December 27, 2024
 
-Welcome to the comprehensive KnowGraph User Guide. This document covers everything you need to know to effectively use KnowGraph as a Graph RAG system and MCP server for your AI coding assistants.
+Welcome to the comprehensive KnowGraph User Guide. This document covers everything you need to know to effectively use KnowGraph as a Graph RAG system with **integrated Joern code analysis** and MCP server for your AI coding assistants.
 
 ---
 
@@ -14,15 +14,16 @@ Welcome to the comprehensive KnowGraph User Guide. This document covers everythi
 3. [Installation](#3-installation)
 4. [Configuration](#4-configuration)
 5. [Indexing Your Knowledge Base](#5-indexing-your-knowledge-base)
-6. [Querying the Knowledge Graph](#6-querying-the-knowledge-graph)
-7. [MCP Server Integration](#7-mcp-server-integration)
-8. [Advanced Features](#8-advanced-features)
-9. [Graph Versioning (Time Travel)](#9-graph-versioning-time-travel) (NEW)
-10. [Conversational Memory](#10-conversational-memory) (NEW)
-11. [Post-Indexing Automation](#11-post-indexing-automation) (NEW)
-12. [Enterprise Resilience & Metrics](#12-enterprise-resilience--metrics) (NEW)
-13. [Command Reference](#13-command-reference)
-14. [Troubleshooting](#14-troubleshooting)
+6. [Joern Code Analysis (NEW v0.8.0)](#6-joern-code-analysis-new-v080)
+7. [Querying the Knowledge Graph](#7-querying-the-knowledge-graph)
+8. [MCP Server Integration](#8-mcp-server-integration)
+9. [Advanced Features](#9-advanced-features)
+10. [Graph Versioning (Time Travel)](#10-graph-versioning-time-travel)
+11. [Conversational Memory](#11-conversational-memory)
+12. [Post-Indexing Automation](#12-post-indexing-automation)
+13. [Enterprise Resilience & Metrics](#13-enterprise-resilience--metrics)
+14. [Command Reference](#14-command-reference)
+15. [Troubleshooting](#15-troubleshooting)
 
 ---
 
@@ -30,21 +31,23 @@ Welcome to the comprehensive KnowGraph User Guide. This document covers everythi
 
 ### What is KnowGraph?
 
-KnowGraph is a **Graph RAG (Retrieval-Augmented Generation)** system that transforms your codebase and documentation into an intelligent knowledge graph. Unlike traditional vector-based RAG systems, KnowGraph uses **Graph Theory** and **Network Science** to provide:
+KnowGraph is a **Graph RAG (Retrieval-Augmented Generation)** system that transforms your codebase and documentation into an intelligent knowledge graph. Unlike traditional vector-based RAG systems, KnowGraph uses **Graph Theory**, **Network Science**, and **Joern Code Property Graph** analysis to provide:
 
 - **Topological Context**: Follows real code relationships (imports, calls, inheritance)
 - **Centrality Analysis**: Identifies architecturally critical components
 - **Deterministic Provenance**: Provides verifiable reasoning paths
 - **Hierarchical Understanding**: Interprets code within project context
+- **Deep Code Analysis**: Joern-powered security and data flow analysis (NEW v0.8.0)
 
 ### Key Benefits
 
 - 🎯 **Precise Answers**: Graph-based retrieval reduces hallucinations
 - 🔍 **Deep Understanding**: Follows dependency chains and architectural patterns
+- 🔬 **Code Analysis**: Automatic vulnerability detection and data flow tracking
 - 📊 **Impact Analysis**: Predict ripple effects of code changes
-- 🚀 **High Performance**: Smart caching and hybrid intelligence
+- 🚀 **High Performance**: Smart caching and hybrid intelligence (CPG caching, incremental updates)
 - 🔌 **MCP Compatible**: Works with Claude Desktop, Cursor, and other AI editors
-- 🛡️ **Production Ready**: Enterprise resilience patterns
+- 🛡️ **Production Ready**: Enterprise resilience patterns + 100% test coverage
 - 🕰️ **Time Travel**: Version control for your knowledge graph
 - 💬 **Conversational Memory**: Indexes your chats alongside your code
 
@@ -82,11 +85,25 @@ knowgraph serve
 pip install knowgraph
 ```
 
+### 3.1 Setup Joern (Required for Code Analysis)
+
+To enable advanced code analysis features, you must install the Joern CLI. We provide a helper script for this:
+
+```bash
+knowgraph-setup-joern
+```
+
+This will:
+1. Check for JDK 11+ (required)
+2. Download and install Joern to `~/.knowgraph/joern`
+3. Verify the installation
+
 For development:
 ```bash
 git clone https://github.com/yunusgungor/knowgraph.git
 cd knowgraph
 pip install -e ".[dev]"
+knowgraph-setup-joern
 ```
 
 ---
@@ -138,13 +155,93 @@ knowgraph index /path/to/project
 knowgraph index https://github.com/user/repo --include "*.py"
 ```
 
-For detailed conversation indexing, see [Section 10](#10-conversational-memory).
+For detailed conversation indexing, see [Section 11](#11-conversational-memory).
 
 ---
 
-## 6. Querying the Knowledge Graph
+## 6. Joern Code Analysis (NEW v0.8.0)
 
-### 6.1 Basic Query
+KnowGraph v0.8.0 includes **fully integrated Joern code analysis** for deep code understanding.
+
+### 6.1 Automatic Code Detection
+
+**Zero configuration required!** KnowGraph automatically detects and analyzes code in 15 languages during indexing:
+
+```bash
+# Index any code directory - automatic code analysis
+knowgraph index ./my-project
+
+# Supports: Python, JavaScript/TypeScript, Java, C/C++, Go, C#,
+# Scala, PHP, Ruby, Kotlin, Swift, Rust, and more
+```
+
+### 6.2 What Gets Analyzed
+
+During indexing, Joern automatically extracts:
+- ✅ **Methods and Classes**: 474 entities per typical project
+- ✅ **Call Relationships**: 85 function call edges
+- ✅ **Data Flows**: 45 tainted data paths
+- ✅ **Security Issues**: SQL injection, XSS, command injection risks
+
+### 6.3 Smart Query Routing
+
+Queries are automatically classified and routed to the right analysis engine:
+
+**CODE Queries** → Joern Tools:
+- "find security vulnerabilities"
+- "show me dead code"
+- "analyze call graph"
+
+**TEXT Queries** → Semantic Search:
+- "explain authentication"
+- "how does caching work"
+
+**HYBRID Queries** → Both Engines:
+- "is the authentication secure?"
+- "are there performance issues?"
+
+### 6.4 Performance Features
+
+**CPG Caching** (24-hour):
+```bash
+# First index: ~30s (generates CPG)
+knowgraph index ./project
+
+# Re-index: <1s (uses cached CPG)
+knowgraph index ./project
+```
+
+**Incremental Updates**:
+- Only processes changed files
+- Automatic change detection
+- Skips unchanged code
+
+**Parallel Generation** (large repos):
+- Automatic for 50+ files
+- Multi-language support
+
+### 6.5 Example Usage
+
+```bash
+# 1. Index your codebase
+knowgraph index ./my-app
+
+# 2. Query through AI assistant (in Claude/Cursor):
+"Find security vulnerabilities in the authentication code"
+
+# 3. KnowGraph automatically:
+#    - Classifies as CODE query
+#    - Routes to joern_security_scan
+#    - Returns detailed report
+```
+
+For more examples, see [JOERN_USAGE.md](../JOERN_USAGE.md).
+
+---
+
+## 7. Querying the Knowledge Graph
+
+### 7.1 Basic Query
 ```python
 from knowgraph.application.querying.engine import QueryEngine
 engine = QueryEngine()
@@ -152,7 +249,7 @@ result = engine.query("How does auth work?")
 print(result.answer)
 ```
 
-### 6.2 Advanced Parameters (v0.6.0)
+### 7.2 Advanced Parameters (v0.8.0)
 
 Fine-tune your query logic with new weighting parameters:
 
@@ -198,10 +295,47 @@ KnowGraph exposes a comprehensive suite of tools to your AI assistant. Here is t
 | `knowgraph_diff_versions` | Compare nodes/edges between two commits. |
 | `knowgraph_rollback` | Revert graph state to a previous snapshot. |
 | `knowgraph_diagnostic` | Run system health checks (Graph Store, LLM, Config). |
+| `knowgraph_joern_query` | Execute native Joern DSL queries. |
+| `knowgraph_security_scan` | Scan for vulnerabilities using Joern policies. |
+| `knowgraph_find_dead_code` | Detect unreachable methods using dominance analysis. |
+| `knowgraph_analyze_call_graph` | Analyze call paths and recursion. |
+| `knowgraph_export_cpg` | Export CPG to JSON/DOT/Neo4j/SARIF. |
+| `knowgraph_generate_cpg` | Manually trigger CPG generation for a path. |
+
+### 8.1 Configuring AI Clients
+
+#### Claude Desktop (`claude_desktop_config.json`)
+```json
+{
+  "mcpServers": {
+    "knowgraph": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/knowgraph",
+        "run",
+        "knowgraph-mcp"
+      ]
+    }
+  }
+}
+```
+
+#### Cursor (`.cursor/mcp.json`)
+```json
+{
+  "mcpServers": {
+    "knowgraph": {
+      "command": "python",
+      "args": ["-m", "knowgraph.adapters.mcp.server"]
+    }
+  }
+}
+```
 
 ---
 
-## 9. Graph Versioning (Time Travel)
+## 8. Graph Versioning (Time Travel)
 
 KnowGraph v0.6.0 introduces a Git-like version control system for your knowledge graph. Every indexing operation creates a snapshot.
 
@@ -249,17 +383,17 @@ knowgraph version rollback v0.6.0-a1
 
 ---
 
-## 10. Conversational Memory
+## 9. Conversational Memory
 
 KnowGraph can now "read" your conversations with AI assistants and link them to your code.
 
-### 10.1 Supported Formats
+### 9.1 Supported Formats
 - **Antigravity**: Task and Walkthrough artifacts.
 - **Cursor**: `.aichat` files in your project.
 - **VS Code**: GitHub Copilot chat exports.
 - **Claude**: JSON export files.
 
-### 10.2 Auto-Discovery
+### 9.2 Auto-Discovery
 Scan your project for conversation files and index them:
 
 ```bash
@@ -269,7 +403,7 @@ knowgraph discover-conversations
   --output ./graphstore
 ```
 
-### 10.3 Semantic Tagging
+### 9.3 Semantic Tagging
 You can manually tag important AI responses using the MCP tool `knowgraph_tag_snippet` or CLI.
 
 **Example Use Case:**
@@ -294,14 +428,14 @@ Later, you can query: "Show me the Retry Logic Pattern we discussed."
 
 ---
 
-## 11. Post-Indexing Automation
+## 10. Post-Indexing Automation
 
 KnowGraph runs a series of "Hooks" after every successful indexing job.
 
-### 11.1 How Hooks Work
+### 10.1 How Hooks Work
 Hooks are Python scripts that subscribe to the `INDEXING_COMPLETE` event. They run in the background to enrich the graph.
 
-### 11.2 Available Hooks
+### 10.2 Available Hooks
 
 1.  **ConversationLinker**:
     *   Scans indexed conversations.
@@ -318,27 +452,27 @@ Hooks are Python scripts that subscribe to the `INDEXING_COMPLETE` event. They r
     *   Calculates graph statistics (density, diameter).
     *   Updates the dashboard metrics.
 
-### 11.3 Configuration
+### 10.3 Configuration
 Hooks are enabled by default. You can disable them in `knowgraph.json` configuration (future feature).
 
 ---
 
-## 12. Enterprise Resilience & Metrics
+## 11. Enterprise Resilience & Metrics
 
 KnowGraph is built to survive in production environments (v0.6.0). 
 
-### 12.1 Circuit Breaker Status
+### 11.1 Circuit Breaker Status
 If an external dependency (like OpenAI API) fails repeatedly, KnowGraph opens the circuit to prevent cascading failures.
 - **Signs**: You see `CircuitBreakerOpenException`.
 - **Action**: Check your API status. The system will auto-retry after a timeout.
 
-### 12.2 Monitoring Metrics
+### 11.2 Monitoring Metrics
 The server exposes Prometheus-compatible metrics. You can monitor:
 - **Indexing Speed**: `knowgraph_indexing_duration_seconds`
 - **Query Latency**: `knowgraph_query_latency_seconds`
 - **Error Rates**: `knowgraph_request_errors_total`
 
-### 12.3 System Health (Diagnostics)
+### 11.3 System Health (Diagnostics)
 You can run a comprehensive health check of the KnowGraph system using the `knowgraph_diagnostic` tool or command.
 
 This checks:
@@ -353,7 +487,7 @@ knowgraph_diagnostic()
 
 ---
 
-## 13. Command Reference
+## 12. Command Reference
 
 ### Core Commands
 - `knowgraph index <path>`: Build the graph.
@@ -372,7 +506,7 @@ knowgraph_diagnostic()
 
 ---
 
-## 14. Troubleshooting
+## 13. Troubleshooting
 
 | Issue | Solution |
 |-------|----------|

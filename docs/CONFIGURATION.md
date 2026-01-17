@@ -1,8 +1,8 @@
-# KnowGraph v0.6.1 Configuration Guide
+# KnowGraph v0.8.0 Configuration Guide
 
 ## Overview
 
-This document describes the new configuration options introduced in v0.6.1 for performance optimization. Most configurations have sensible defaults and are optional to modify.
+This document describes the configuration options for KnowGraph v0.8.0, including the new **Joern Code Analysis** engine.
 
 ---
 
@@ -221,7 +221,29 @@ max_workers=5  # Reduce to avoid overwhelming storage
 
 ---
 
-## Environment Variables (Future)
+## 6. Joern Integration Configuration (v0.8.0)
+
+**Modules:** `knowgraph.infrastructure.indexing.code_index_integration`, `knowgraph.infrastructure.caching.cpg_cache`
+
+### Performance Tunables
+
+```python
+# Parallel Processing Thresholds (code_index_integration.py)
+PARALLEL_FILE_THRESHOLD = 50     # Use parallel gen if >50 files
+PARALLEL_LANG_THRESHOLD = 3      # Use parallel gen if >3 languages
+MAX_WORKERS = 4                  # CPU cores for parallel generation
+
+# Cache Configuration
+CPG_CACHE_TTL_HOURS = 24         # Keep CPGs for 24 hours
+```
+
+### Usage
+
+These are currently internal constants. To modify behavior in production, you can use environment variables (future) or modify `knowgraph.json`.
+
+---
+
+## 7. Environment Variables (Future)
 
 Currently, configurations are code-level constants. For production deployment, consider creating a `.env` file:
 
@@ -366,5 +388,5 @@ If you see critical errors:
 
 ---
 
-**Last Updated:** 2025-12-19  
-**Version:** 0.6.1
+**Last Updated:** 2025-12-27  
+**Version:** 0.8.0

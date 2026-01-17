@@ -5,7 +5,7 @@ Focuses on core functionality with extensive mocking.
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -59,7 +59,7 @@ class TestAnalyzeTrendingTopics:
         node1.content = "FastAPI is great"
         node1.metadata = {"type": "conversation", "timestamp": datetime.now().isoformat()}
         node1.created_at = datetime.now().timestamp()
-        
+
         mock_list_nodes.return_value = ["conv1"]
         mock_read_node.return_value = node1
         mock_extract.return_value = ["FastAPI", "Python"]
@@ -116,13 +116,13 @@ class TestAnalyzeTrendingTopics:
         code_node.content = "def main(): pass"
         code_node.metadata = {"type": "code"}
         code_node.created_at = datetime.now().timestamp()
-        
+
         conv_node = Mock()
         conv_node.id = "conv1"
         conv_node.content = "FastAPI discussion"
         conv_node.metadata = {"type": "conversation", "timestamp": datetime.now().isoformat()}
         conv_node.created_at = datetime.now().timestamp()
-        
+
         mock_list_nodes.return_value = ["code1", "conv1"]
         mock_read_node.side_effect = [code_node, conv_node]
         mock_extract.return_value = ["FastAPI"]
@@ -148,7 +148,7 @@ class TestIdentifyEmergingTechnologies:
     ):
         """Test basic emerging technology detection."""
         now = datetime.now()
-        
+
         # Create baseline nodes (old)
         old_node = Mock()
         old_node.id = "old1"
@@ -158,7 +158,7 @@ class TestIdentifyEmergingTechnologies:
             "timestamp": (now - timedelta(days=20)).isoformat(),
         }
         old_node.created_at = (now - timedelta(days=20)).timestamp()
-        
+
         # Create recent nodes
         new_node = Mock()
         new_node.id = "new1"
@@ -168,7 +168,7 @@ class TestIdentifyEmergingTechnologies:
             "timestamp": (now - timedelta(days=2)).isoformat(),
         }
         new_node.created_at = (now - timedelta(days=2)).timestamp()
-        
+
         mock_list_nodes.return_value = ["old1", "new1"]
         mock_read_node.side_effect = [old_node, new_node]
         mock_extract.return_value = ["FastAPI"]
@@ -205,7 +205,7 @@ class TestGetKnowledgeTimeline:
         node.content = "FastAPI is great for building APIs"
         node.metadata = {"type": "conversation", "timestamp": datetime.now().isoformat()}
         node.created_at = datetime.now().timestamp()
-        
+
         mock_list_nodes.return_value = ["conv1"]
         mock_read_node.return_value = node
 
@@ -227,7 +227,7 @@ class TestGetKnowledgeTimeline:
         node.content = "FastAPI is great"
         node.metadata = {"type": "conversation", "timestamp": datetime.now().isoformat()}
         node.created_at = datetime.now().timestamp()
-        
+
         mock_list_nodes.return_value = ["conv1"]
         mock_read_node.return_value = node
 
@@ -247,7 +247,7 @@ class TestGetKnowledgeTimeline:
         node.content = "React and TypeScript"
         node.metadata = {"type": "conversation", "timestamp": datetime.now().isoformat()}
         node.created_at = datetime.now().timestamp()
-        
+
         mock_list_nodes.return_value = ["conv1"]
         mock_read_node.return_value = node
 
@@ -270,7 +270,7 @@ class TestAnalyzeKnowledgeAccumulation:
         node1.id = "conv1"
         node1.metadata = {"type": "conversation", "timestamp": datetime.now().isoformat()}
         node1.created_at = datetime.now().timestamp()
-        
+
         node2 = Mock()
         node2.id = "conv2"
         node2.metadata = {
@@ -278,7 +278,7 @@ class TestAnalyzeKnowledgeAccumulation:
             "timestamp": (datetime.now() - timedelta(days=5)).isoformat(),
         }
         node2.created_at = (datetime.now() - timedelta(days=5)).timestamp()
-        
+
         mock_list_nodes.return_value = ["conv1", "conv2"]
         mock_read_node.side_effect = [node1, node2]
 
@@ -299,7 +299,7 @@ class TestAnalyzeKnowledgeAccumulation:
         code_node.id = "code1"
         code_node.metadata = {"type": "code"}
         code_node.created_at = datetime.now().timestamp()
-        
+
         mock_list_nodes.return_value = ["code1"]
         mock_read_node.return_value = code_node
 
@@ -328,15 +328,15 @@ class TestMCPHandlerIntegration:
     ):
         """Test MCP handler for trending topics."""
         from knowgraph.adapters.mcp.handlers import handle_analyze_conversations
-        
+
         mock_resolve_path.return_value = mock_graph_store
-        
+
         node = Mock()
         node.id = "conv1"
         node.content = "FastAPI is great"
         node.metadata = {"type": "conversation", "timestamp": datetime.now().isoformat()}
         node.created_at = datetime.now().timestamp()
-        
+
         mock_list_nodes.return_value = ["conv1"]
         mock_read_node.return_value = node
         mock_extract.return_value = ["FastAPI"]
@@ -362,15 +362,15 @@ class TestMCPHandlerIntegration:
     ):
         """Test MCP handler for topic timeline."""
         from knowgraph.adapters.mcp.handlers import handle_analyze_conversations
-        
+
         mock_resolve_path.return_value = mock_graph_store
-        
+
         node = Mock()
         node.id = "conv1"
         node.content = "FastAPI authentication"
         node.metadata = {"type": "conversation", "timestamp": datetime.now().isoformat()}
         node.created_at = datetime.now().timestamp()
-        
+
         mock_list_nodes.return_value = ["conv1"]
         mock_read_node.return_value = node
 
@@ -392,7 +392,7 @@ class TestMCPHandlerIntegration:
     ):
         """Test error handling in MCP handler."""
         from knowgraph.adapters.mcp.handlers import handle_analyze_conversations
-        
+
         mock_resolve_path.return_value = mock_graph_store
         mock_list_nodes.side_effect = Exception("Graph store error")
 
@@ -418,7 +418,7 @@ class TestEdgeCases:
         node.content = "Test"
         node.metadata = {"type": "conversation", "timestamp": "invalid"}
         node.created_at = None
-        
+
         mock_list_nodes.return_value = ["conv1"]
         mock_read_node.return_value = node
 
@@ -438,7 +438,7 @@ class TestEdgeCases:
         node.content = "FastAPI test"
         node.metadata = {"type": "conversation"}  # No timestamp
         node.created_at = None
-        
+
         mock_list_nodes.return_value = ["conv1"]
         mock_read_node.return_value = node
 
@@ -457,7 +457,7 @@ class TestEdgeCases:
         node.id = "conv1"
         node.metadata = {"type": "conversation"}
         node.created_at = None
-        
+
         mock_list_nodes.return_value = ["conv1"]
         mock_read_node.return_value = node
 

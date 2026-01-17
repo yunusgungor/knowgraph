@@ -481,11 +481,19 @@ async def build_knowledge_graph(chunks, input_path, graph_store_path, provider, 
         # Cache each file's nodes with the correct file hash
         for file_path_str, file_nodes in nodes_by_file.items():
             try:
-                file_path = Path(file_path_str)
+                # Convert relative path from node to absolute path
+                # nodes store relative paths (e.g. "knowgraph/utils.py")
+                # file_hash_map uses absolute paths (e.g. "/abs/path/knowgraph/utils.py")
+                full_path = (base_path / file_path_str).resolve()
+
                 # Get the correct file hash from our mapping
-                file_hash = file_hash_map.get(str(file_path))
+                file_hash = file_hash_map.get(str(full_path))
+
                 if file_hash and file_nodes:
-                    cache.cache_result(file_path, file_hash, file_nodes)
+                    # Use absolute path for cache key to match is_cached()
+                    cache.cache_result(full_path, file_hash, file_nodes)
+                else:
+                    _log_verbose(verbose, f"Debug: Hash miss for {full_path}. Map has {len(file_hash_map)} keys.")
             except Exception as e:
                 _log_verbose(verbose, f"Warning: Could not cache {file_path_str}: {e}")
 

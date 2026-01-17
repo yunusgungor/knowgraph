@@ -5,7 +5,6 @@ in the knowledge graph.
 """
 
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 
@@ -48,7 +47,7 @@ def sample_code_nodes():
             hash="c" * 40,
             title="authenticate",
             type="code",
-            content='function authenticate(token) {\n    return verifyJWT(token);\n}',
+            content="function authenticate(token) {\n    return verifyJWT(token);\n}",
             path="src/utils/auth.js",
             token_count=30,
             created_at=int(datetime.now(timezone.utc).timestamp()),

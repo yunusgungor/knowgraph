@@ -15,6 +15,19 @@ This document defines the **Rules of Engagement** for interacting with KnowGraph
 5.  **Preserve Knowledge (RAG)**: If you generate a valuable insight, solve a hard problem, or receive critical instruction, use `knowgraph_tag_snippet` to save it via Semantic Bookmarking.
 6.  **Respect Time**: Use Version Control (`knowgraph_version_*`) features to understand evolution and regressions.
 
+### 1.1 Strict Coding Standards (Zero Tolerance)
+*   **Type Safety**: All Python code **must** be fully typed and pass `mypy --strict`.
+    *   Explicitly handle `None` (e.g., `if x is not None:`).
+    *   No `Any` unless absolutely necessary and documented.
+*   **Linting & Style**: Code must pass `ruff check .` with zero errors.
+    *   No unused imports or variables (use `_`).
+    *   No bare `except:` clauses.
+    *   Security: No hardcoded secrets, shell injections (`shell=True`), or weak crypto (`md5/sha1`) in production code.
+*   **Path Handling**: ALWAYS use `pathlib.Path`. NEVER use string concatenation (`+`) for paths.
+    *   Bad: `os.path.join(root, "file.txt")`
+    *   Good: `Path(root) / "file.txt"`
+*   **Integrity**: Critical file operations must use atomic writes or locking (`aiofiles`, `tenacity`).
+
 ---
 
 ## 🛠️ 2. Tool Selection Decision Tree
@@ -23,16 +36,22 @@ Choose the right tool for the job to optimize strictness and token usage.
 
 | User Intent | Recommended Tool | Why? |
 | :--- | :--- | :--- |
-| **"How does X work?"** | `knowgraph_query` | Semantic search finds concepts even if keywords don't match exactly. |
-| **"Find specific class/func"** | `knowgraph_query` | Use `expand_query=False` for precision when you know the name. |
+| **"Find security issues"** | `knowgraph_security_scan` | **(NEW)** Runs 10+ specific vulnerability checks (SQLi, XSS, etc.). |
+| **"Is this code used?"** | `knowgraph_find_dead_code` | **(NEW)** Uses Reachability Analysis to find unused methods. |
+| **"Who calls this function?"** | `knowgraph_analyze_call_graph` | **(NEW)** Generates precise call chain paths. |
+| **"Find infinite loops"** | `knowgraph_analyze_call_graph` | Uses `analysis_type="recursive"` to find cycles. |
+| **"How does X work?"** | `knowgraph_query` | Semantic search + Smart Routing (automatically uses Joern if needed). |
 | **"What happens if I change X?"** | `knowgraph_analyze_impact` | Deterministic dependency graph traversal (Reverse BFS). |
 | **"Explain the whole system"** | `knowgraph_batch_query` | Run 5-10 specific questions in parallel to build a comprehensive view. |
 | **"I found a bug in X"** | `knowgraph_query` (trace) | Use `with_explanation=True` to trace the data flow path. |
+| **"Custom code query"** | `knowgraph_joern_query` | **(Advanced)** Execute raw Joern/CPG queries for custom analysis. |
 | **"Save this solution"** | `knowgraph_tag_snippet` | Explicitly indexes the current context as a high-value node. |
 | **"What did we discuss about X?"** | `knowgraph_search_bookmarks` | Retrieves previously tagged insights or conversations. |
 | **"What changed since yesterday?"** | `knowgraph_diff_versions` | Compares graph snapshots to pinpoint regression sources. |
 | **"Load past chats"** | `knowgraph_discover_conversations`| Ingests context from previous editor sessions. |
 | **"Undo bad indexing"** | `knowgraph_rollback` | **(Admin)** Reverts graph to a previous safe state. |
+| **"Regenerate code graph"** | `knowgraph_generate_cpg` | **(Admin)** Manually triggers CPG regeneration for a path. |
+| **"Export graph data"** | `knowgraph_export_cpg` | **(Admin)** Exports CPG to JSON/DOT/Neo4j for external tools. |
 
 ---
 
@@ -127,6 +146,46 @@ Follow these step-by-step sequences for complex engineering tasks.
     ```
 3.  **Analyze Diffs**: Look for `[~] Modified` nodes in core logic. Use `knowgraph_version_info` to get author/message details.
 
+### 🛡️ Workflow E: Security Audit (NEW)
+**Goal**: Ensure new code doesn't introduce vulnerabilities.
+
+1.  **Scan for Issues**:
+    ```python
+    knowgraph_security_scan(severity_filter="MEDIUM")
+    ```
+2.  **Verify Data Flow**:
+    For any flagged sink (e.g., `db.execute`), trace the source:
+    ```python
+    knowgraph_analyze_call_graph(
+        method_name="unsafe_input",
+        target_method="db.execute",
+        analysis_type="call_chain"
+    )
+    ```
+3.  **Dead Code Check**:
+    Clean up before commiting:
+    ```python
+    knowgraph_find_dead_code()
+    ```
+
+### ⚙️ Workflow F: Advanced CPG Management (Admin)
+**Goal**: Manual control over the Code Property Graph (CPG) layer.
+
+1.  **Force Regeneration**:
+    If code intelligence feels stale:
+    ```python
+    knowgraph_generate_cpg(source_path="/path/to/src", timeout=600)
+    ```
+2.  **Export for Visualization**:
+    Generate a visualizable graph file:
+    ```python
+    knowgraph_export_cpg(
+        cpg_path="/path/to/cpg.bin",
+        output_path="/path/to/graph_export.dot",
+        format="dot"
+    )
+    ```
+
 ### 🧠 Workflow D: Context Loading (Start of Session)
 **Goal**: Sync up with what other agents/users have done and understand trending topics.
 
@@ -185,5 +244,7 @@ Use these workflows only when necessary to maintain graph integrity.
 *   **Topic Modeling**: Use `knowgraph_analyze_conversations(topic="security")` to see how a specific concept has evolved in discussions over time.
 *   **Pattern Matching**: Use `knowgraph_analyze_impact` in `semantic` mode to find logical concepts affected, not just files. Example: `element="User Authentication"` instead of `auth.py`.
 *   **Live Indexing**: If the USER edits a file significantly, *proactively* call `knowgraph_index(input_path=file_path)` to keep memory fresh.
+*   **Incremental Intelligence**: The system automatically uses caching and MD5 checks. You don't need to force CPG regeneration unless structure completely changes.
+*   **Daemon Awareness**: The `JoernDaemon` runs in the background. If queries are slow, check if the daemon is warming up (first query often takes longer).
 *   **Noise Filtering**: When indexing large repos, use exclude patterns: `knowgraph_index(..., exclude_patterns=["*.lock", "node_modules/*"])`.
 *   **Batch Efficiency**: Always use `knowgraph_batch_query` when you need to answer >2 related questions. It's ~15x faster.

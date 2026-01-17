@@ -276,7 +276,7 @@ class TestDiffReportFormatting:
     def test_format_diff_report_time_minutes(self, diff_engine):
         """Test time formatting in minutes."""
         file_changes = FileChangeSummary(added=[], modified=[], deleted=[])
-        
+
         # Create snapshots with small time difference
         timestamp_base = int(time.time())
         v1 = VersionSnapshot(
@@ -309,7 +309,7 @@ class TestDiffReportFormatting:
     def test_format_diff_report_time_hours(self, diff_engine):
         """Test time formatting in hours."""
         file_changes = FileChangeSummary(added=[], modified=[], deleted=[])
-        
+
         timestamp_base = int(time.time())
         v1 = VersionSnapshot(
             version_id="v1",
@@ -341,7 +341,7 @@ class TestDiffReportFormatting:
     def test_format_diff_report_time_days(self, diff_engine):
         """Test time formatting in days."""
         file_changes = FileChangeSummary(added=[], modified=[], deleted=[])
-        
+
         timestamp_base = int(time.time())
         v1 = VersionSnapshot(
             version_id="v1",
