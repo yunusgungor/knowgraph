@@ -68,6 +68,11 @@ class CodeQueryHandler:
 
         # Method/function search (generic)
         r"(show|list|find|get).*(function|method|class|fonksiyon|metot)": "joern_query",
+
+        # Metadata Lists (Files, Namespaces, Types)
+        r"(list files|show files|all files|dosyalar)": "list_files",
+        r"(list packages|show packages|namespaces|paketler)": "list_namespaces",
+        r"(list types|show types|defined types|tipler)": "list_types",
     }
 
     def __init__(self, graph_path: Path):
@@ -299,6 +304,19 @@ class CodeQueryHandler:
                 pattern = ".*"
             result = provider.analyze_structures(cpg_path, pattern)
             return self._format_structure_results(result)
+
+        elif tool == "list_files":
+            result = provider.list_files(cpg_path)
+            # Wrap in list for consistency
+            return [{"type": "file_list", "files": result["files"]}]
+
+        elif tool == "list_namespaces":
+            result = provider.list_namespaces(cpg_path)
+            return [{"type": "namespace_list", "namespaces": result["namespaces"]}]
+
+        elif tool == "list_types":
+            result = provider.list_types(cpg_path)
+            return [{"type": "type_list", "types": result["types"]}]
 
         else:
             return []
@@ -721,6 +739,28 @@ class CodeQueryHandler:
                 for i, item in enumerate(results, 1):
                     if item['loops'] > 0 or item['ifs'] > 0:
                         output += f"{i}. {item['method']} ({item['filename']}): Loops={item['loops']}, Ifs={item['ifs']}\\n"
+
+        elif item_type == "file_list":
+             files = results[0].get("files", [])
+             output += f"Found {len(files)} Source Files:\\n\\n"
+             for f in files[:50]: # Limit display
+                 output += f"  - {f}\\n"
+             if len(files) > 50:
+                 output += f"  ... and {len(files)-50} more.\\n"
+
+        elif item_type == "namespace_list":
+             ns = results[0].get("namespaces", [])
+             output += f"Found {len(ns)} Namespaces/Packages:\\n\\n"
+             for n in ns:
+                 output += f"  - {n}\\n"
+
+        elif item_type == "type_list":
+             types = results[0].get("types", [])
+             output += f"Found {len(types)} Defined Types:\\n\\n"
+             for t in types[:50]:
+                 output += f"  - {t}\\n"
+             if len(types) > 50:
+                 output += f"  ... and {len(types)-50} more.\\n"
 
         else: # joern_query
             output += f"Found {len(results)} matches:\\n\\n"

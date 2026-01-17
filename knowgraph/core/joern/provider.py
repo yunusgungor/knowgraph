@@ -672,7 +672,7 @@ class JoernProvider:
             val method = i.method.name
             val line = i.lineNumber.getOrElse(-1)
             val file = i.method.filename
-            s"$method|$line|$file"
+            s"$method__KG_SEP__$line__KG_SEP__$file"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -680,9 +680,9 @@ class JoernProvider:
         usages = []
         for item in result.results:
             raw = item.get("raw", "")
-            if "|" in raw:
+            if "__KG_SEP__" in raw:
                 try:
-                    parts = raw.split("|")
+                    parts = raw.split("__KG_SEP__")
                     method = parts[0]
                     line = parts[1]
                     filename = parts[2]
@@ -709,7 +709,7 @@ class JoernProvider:
             val line = c.lineNumber.getOrElse(-1)
             val file = c.method.filename
             val code = c.code.replace("\\"", "'") // Escape quotes
-            s"$method|$line|$file|$code"
+            s"$method__KG_SEP__$line__KG_SEP__$file__KG_SEP__$code"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -717,13 +717,13 @@ class JoernProvider:
         slice_lines = []
         for item in result.results:
             raw = item.get("raw", "")
-            if "|" in raw:
+            if "__KG_SEP__" in raw:
                 try:
-                    parts = raw.split("|")
+                    parts = raw.split("__KG_SEP__")
                     method = parts[0]
                     line = parts[1]
                     filename = parts[2]
-                    code = "|".join(parts[3:]) 
+                    code = "__KG_SEP__".join(parts[3:]) 
                     slice_lines.append({
                         "method": method, 
                         "line": int(line),
@@ -747,7 +747,7 @@ class JoernProvider:
              val method = l.method.name.headOption.getOrElse("<unknown>")
              val line = l.lineNumber.getOrElse(-1)
              val file = l.file.name.headOption.getOrElse("<unknown>")
-             s"$method|$line|$file|$code"
+             s"$method__KG_SEP__$line__KG_SEP__$file__KG_SEP__$code"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -755,13 +755,13 @@ class JoernProvider:
         literals = []
         for item in result.results:
             raw = item.get("raw", "")
-            if "|" in raw:
+            if "__KG_SEP__" in raw:
                 try:
-                    parts = raw.split("|")
+                    parts = raw.split("__KG_SEP__")
                     method = parts[0]
                     line = parts[1]
                     filename = parts[2]
-                    code = "|".join(parts[3:])
+                    code = "__KG_SEP__".join(parts[3:])
                     literals.append({
                         "method": method,
                         "line": int(line),
@@ -788,7 +788,7 @@ class JoernProvider:
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
             val sig = m.signature
-            s"$name|$line|$file|$sig"
+            s"$name__KG_SEP__$line__KG_SEP__$file__KG_SEP__$sig"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -796,9 +796,9 @@ class JoernProvider:
         methods = []
         for item in result.results:
             raw = item.get("raw", "")
-            if "|" in raw:
+            if "__KG_SEP__" in raw:
                 try:
-                    parts = raw.split("|")
+                    parts = raw.split("__KG_SEP__")
                     methods.append({
                         "method": parts[0],
                         "line": int(parts[1]),
@@ -821,7 +821,7 @@ class JoernProvider:
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
             val annots = m.annotation.name.mkString(", ")
-            s"$name|$line|$file|$annots"
+            s"$name__KG_SEP__$line__KG_SEP__$file__KG_SEP__$annots"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -829,9 +829,9 @@ class JoernProvider:
         findings = []
         for item in result.results:
             raw = item.get("raw", "")
-            if "|" in raw:
+            if "__KG_SEP__" in raw:
                 try:
-                    parts = raw.split("|")
+                    parts = raw.split("__KG_SEP__")
                     findings.append({
                         "method": parts[0],
                         "line": int(parts[1]),
@@ -853,7 +853,7 @@ class JoernProvider:
         cpg.imports.code("(?i).*{import_pattern}.*").map{{ i =>
             val code = i.code
             val file = i.file.name.headOption.getOrElse("unknown") 
-            s"$code|$file"
+            s"$code__KG_SEP__$file"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -861,9 +861,9 @@ class JoernProvider:
         imports = []
         for item in result.results:
             raw = item.get("raw", "")
-            if "|" in raw:
+            if "__KG_SEP__" in raw:
                 try:
-                    parts = raw.split("|")
+                    parts = raw.split("__KG_SEP__")
                     imports.append({
                         "import": parts[0],
                         "filename": parts[1]
@@ -892,7 +892,7 @@ class JoernProvider:
             val name = m.name
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
-            s"$name|$line|$file|$loops|$ifs"
+            s"$name__KG_SEP__$line__KG_SEP__$file__KG_SEP__$loops__KG_SEP__$ifs"
         }}.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -900,9 +900,9 @@ class JoernProvider:
         structures = []
         for item in result.results:
             raw = item.get("raw", "")
-            if "|" in raw:
+            if "__KG_SEP__" in raw:
                 try:
-                    parts = raw.split("|")
+                    parts = raw.split("__KG_SEP__")
                     structures.append({
                         "method": parts[0],
                         "line": int(parts[1]),
@@ -914,3 +914,51 @@ class JoernProvider:
                     continue
                     
         return {"pattern": method_pattern, "structures": structures}
+
+    def list_files(self, cpg_path: Path) -> dict:
+        """List all source files in the CPG."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = 'cpg.file.name.dedup.l'
+        result = executor.execute_query(cpg_path, query)
+        
+        files = []
+        for item in result.results:
+             f = item.get("raw", "").strip()
+             if f and f != "<unknown>":
+                 files.append(f)
+                 
+        return {"files": sorted(files)}
+
+    def list_namespaces(self, cpg_path: Path) -> dict:
+        """List all namespaces/packages."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = 'cpg.namespace.name.dedup.l'
+        result = executor.execute_query(cpg_path, query)
+        
+        namespaces = []
+        for item in result.results:
+             ns = item.get("raw", "").strip()
+             if ns and ns != "<global>":
+                 namespaces.append(ns)
+                 
+        return {"namespaces": sorted(namespaces)}
+
+    def list_types(self, cpg_path: Path) -> dict:
+        """List all defined types/classes."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+        executor = JoernQueryExecutor(Path(self.joern_path))
+        
+        query = 'cpg.typeDecl.fullName.dedup.l'
+        result = executor.execute_query(cpg_path, query)
+        
+        types = []
+        for item in result.results:
+             t = item.get("raw", "").strip()
+             if t:
+                 types.append(t)
+                 
+        return {"types": sorted(types)}
