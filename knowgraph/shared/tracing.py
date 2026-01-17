@@ -68,7 +68,7 @@ class TracingConfig:
     def __init__(
         self,
         service_name: str = "knowgraph",
-        service_version: str = "0.8.0",
+        service_version: str = "0.8.1",
         environment: str = "development",
         enabled: bool = True,
         console_export: bool = False,
@@ -272,7 +272,7 @@ def get_tracer(config: TracingConfig | None = None) -> KnowGraphTracer:
 
 def configure_tracing(
     service_name: str = "knowgraph",
-    service_version: str = "0.8.0",
+    service_version: str = "0.8.1",
     environment: str = "development",
     enabled: bool = True,
     console_export: bool = False,
