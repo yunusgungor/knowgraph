@@ -125,6 +125,17 @@ Open an issue with:
 - **Discussions**: Ask questions in GitHub Discussions
 - **Email**: mail@yunusgungor.com
 
+## 🚢 Release Process
+
+If you're a maintainer creating a release:
+
+1. Update version in `pyproject.toml`
+2. Update `CHANGELOG.md` with release notes
+3. Run the release script: `./scripts/release.sh`
+4. Or manually: `git tag -a vX.Y.Z -m "Release vX.Y.Z" && git push origin vX.Y.Z`
+
+For detailed instructions, see [RELEASE.md](RELEASE.md).
+
 ## 📄 License
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
