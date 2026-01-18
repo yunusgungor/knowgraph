@@ -57,17 +57,17 @@ check_prerequisites() {
 
 # Check if we're on main branch
 check_branch() {
-    local current_branch=$(git rev-parse --abbrev-ref HEAD)
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
     
-    if [ "$current_branch" != "main" ] && [ "$current_branch" != "master" ]; then
-        print_warning "You are not on main/master branch (current: $current_branch)"
+    if [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
+        print_warning "You are not on main/master branch (current: $CURRENT_BRANCH)"
         read -p "Continue anyway? (y/N) " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             exit 1
         fi
     else
-        print_success "On $current_branch branch"
+        print_success "On $CURRENT_BRANCH branch"
     fi
 }
 
@@ -83,13 +83,18 @@ check_clean() {
 # Pull latest changes
 pull_latest() {
     print_info "Pulling latest changes..."
-    git pull origin $(git rev-parse --abbrev-ref HEAD)
+    git pull origin "$CURRENT_BRANCH"
     print_success "Pulled latest changes"
 }
 
 # Get version from pyproject.toml
 get_current_version() {
-    grep -E '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/'
+    local version=$(grep -E '^version = "' pyproject.toml | head -n1 | sed -E 's/version = "(.*)"/\1/')
+    if [ -z "$version" ]; then
+        print_error "Could not extract version from pyproject.toml"
+        exit 1
+    fi
+    echo "$version"
 }
 
 # Check if tag already exists

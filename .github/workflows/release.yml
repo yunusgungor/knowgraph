@@ -38,13 +38,13 @@ jobs:
           
           # Extract release notes from CHANGELOG.md
           awk -v ver="$VERSION" '
-            /^## \['"$VERSION"'\]/ { flag=1; next }
+            $0 ~ "^## \\[" ver "\\]" { flag=1; next }
             /^## \[/ { if (flag) exit }
             flag { print }
           ' CHANGELOG.md > release_notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
           files: |
