@@ -1,3 +1,5 @@
+
+
 # 🧠 KnowGraph: Graph RAG & MCP Server for Code (v1.0.0 🚀)
 
 [![CI](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml)
@@ -41,7 +43,7 @@ KnowGraph is an **MCP (Model Context Protocol) server** that enhances AI coding 
 ```bash
 pip install knowgraph
 
-# Setup Joern for advanced code analysis (recommended)
+# Setup Joern for advanced code analysis (requires Java 21+)
 knowgraph-setup-joern
 ```
 
