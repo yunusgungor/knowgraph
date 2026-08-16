@@ -66,7 +66,7 @@ Key points:
     # Test 2: Index the snippet
     print("\n2️⃣ Indexing tagged snippet...")
 
-    graph_path = Path("/Users/yunusgungor/knowrag/test_e2e_graphstore")
+    graph_path = Path(__file__).resolve().parent / "test_e2e_graphstore"
 
     try:
         await index_tagged_snippet(node, graph_path)

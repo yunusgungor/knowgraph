@@ -1,8 +1,13 @@
 
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
+from conftest import requires_joern
+
 from knowgraph.core.joern import JoernProvider
+
+pytestmark = requires_joern
 
 # Test code constant
 TEST_CODE = """
@@ -40,11 +45,11 @@ class TestJoernComprehensive:
             test_dir = Path(tmpdir)
             test_file = test_dir / "test.c"
             test_file.write_text(TEST_CODE)
-            
+
             provider = JoernProvider()
             cpg = provider.generate_cpg(test_dir)
             yield cpg
-            # Cleanup is handled by TemporaryDirectory, but CPG might be outside? 
+            # Cleanup is handled by TemporaryDirectory, but CPG might be outside?
             # JoernProvider usually puts cpg in a temp location too.
 
     def test_phase1_cpg_generation(self, cpg_path):
@@ -56,7 +61,7 @@ class TestJoernComprehensive:
         """Test Phase 3: Native Joern queries."""
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
         executor = JoernQueryExecutor()
-        
+
         result = executor.execute_query(
             cpg_path=cpg_path,
             query="cpg.method.name.l"
@@ -71,10 +76,10 @@ class TestJoernComprehensive:
         """Test Phase 4: Dominance/Dead code."""
         from knowgraph.application.analysis.dominance_analyzer import DominanceAnalyzer
         analyzer = DominanceAnalyzer()
-        
+
         dead_code = analyzer.find_dead_code(cpg_path)
         dead_names = [m["name"] for m in dead_code]
-        
+
         # Note: dead_function might not always be detected depending on Joern's exact internal CFG analysis
         # But we check that it runs without error.
         assert isinstance(dead_code, list)
@@ -89,11 +94,11 @@ class TestJoernComprehensive:
         """Test Phase 4: Call graph."""
         from knowgraph.application.analysis.call_graph_analyzer import CallGraphAnalyzer
         analyzer = CallGraphAnalyzer()
-        
+
         # Validation
         cg_result = analyzer.validate_call_graph(cpg_path)
         assert cg_result.is_valid
-        
+
         # Recursion
         recursive = analyzer.find_recursive_calls(cpg_path)
         recursive_names = [m["name"] for m in recursive]
@@ -103,11 +108,11 @@ class TestJoernComprehensive:
         """Test Phase 4: Policies."""
         from knowgraph.application.security.policy_engine import PolicyEngine, Severity
         engine = PolicyEngine()
-        
+
         # Test library loading
         summary = engine.get_policy_summary()
         assert summary["total_policies"] >= 0
-        
+
         # Validation
         # The C code has strcpy (buffer overflow), so it might trigger if policy exists
         # We just check execution success here
@@ -117,10 +122,10 @@ class TestJoernComprehensive:
     def test_phase4_repl(self):
         """Test Phase 4: REPL (No CPG needed)."""
         from knowgraph.application.analysis.joern_repl import JoernREPL, ScriptManager
-        
+
         repl = JoernREPL()
         assert repl.joern_path is not None
-        
+
         manager = ScriptManager()
         script_path = manager.save_script("test_pytest_script", "cpg.method.l", "Test")
         assert script_path.exists()

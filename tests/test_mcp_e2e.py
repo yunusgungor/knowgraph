@@ -8,6 +8,10 @@ import asyncio
 import tempfile
 from pathlib import Path
 
+from conftest import requires_joern
+
+pytestmark = requires_joern
+
 
 async def test_mcp_index_with_code():
     """Test 1: Index a code repository through MCP."""
@@ -17,7 +21,7 @@ async def test_mcp_index_with_code():
     from knowgraph.adapters.mcp import methods
     from knowgraph.domain.intelligence.provider import IntelligenceProvider
 
-    test_dir = Path("/Users/yunusgungor/knowrag/knowgraph/domain/intelligence")
+    test_dir = Path(__file__).resolve().parent.parent / "knowgraph" / "domain" / "intelligence"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir) / "graph"
@@ -63,7 +67,7 @@ async def test_mcp_code_query():
 
     from knowgraph.adapters.mcp import methods
 
-    test_dir = Path("/Users/yunusgungor/knowrag/knowgraph/domain/intelligence")
+    test_dir = Path(__file__).resolve().parent.parent / "knowgraph" / "domain" / "intelligence"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir) / "graph"
@@ -109,7 +113,7 @@ async def test_mcp_hybrid_query():
 
     from knowgraph.adapters.mcp import methods
 
-    test_dir = Path("/Users/yunusgungor/knowrag/knowgraph/domain/intelligence")
+    test_dir = Path(__file__).resolve().parent.parent / "knowgraph" / "domain" / "intelligence"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir) / "graph"
@@ -155,7 +159,7 @@ async def test_mcp_incremental_reindex():
 
     from knowgraph.adapters.mcp import methods
 
-    test_dir = Path("/Users/yunusgungor/knowrag/knowgraph/domain/intelligence")
+    test_dir = Path(__file__).resolve().parent.parent / "knowgraph" / "domain" / "intelligence"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir) / "graph"
@@ -206,7 +210,7 @@ async def test_mcp_performance():
 
     from knowgraph.adapters.mcp import methods
 
-    test_dir = Path("/Users/yunusgungor/knowrag/knowgraph/domain/intelligence")
+    test_dir = Path(__file__).resolve().parent.parent / "knowgraph" / "domain" / "intelligence"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir) / "graph"

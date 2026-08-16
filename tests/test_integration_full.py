@@ -8,6 +8,10 @@ import asyncio
 import tempfile
 from pathlib import Path
 
+from conftest import requires_joern
+
+pytestmark = requires_joern
+
 
 async def test_code_indexing_integration():
     """Test full code indexing pipeline."""
@@ -17,7 +21,7 @@ async def test_code_indexing_integration():
     from knowgraph.infrastructure.indexing.code_index_integration import CodeIndexIntegration
 
     # Use knowgraph/domain/intelligence as test project
-    test_dir = Path("/Users/yunusgungor/knowrag/knowgraph/domain/intelligence")
+    test_dir = Path(__file__).resolve().parent.parent / "knowgraph" / "domain" / "intelligence"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir) / "test_graph"
@@ -117,7 +121,7 @@ async def test_end_to_end_workflow():
     from knowgraph.application.query.query_classifier import QueryClassifier, QueryType
     from knowgraph.infrastructure.indexing.code_index_integration import CodeIndexIntegration
 
-    test_dir = Path("/Users/yunusgungor/knowrag/knowgraph/domain/intelligence")
+    test_dir = Path(__file__).resolve().parent.parent / "knowgraph" / "domain" / "intelligence"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir) / "test_graph"
@@ -168,7 +172,7 @@ async def test_performance_benchmarks():
 
     from knowgraph.infrastructure.indexing.code_index_integration import CodeIndexIntegration
 
-    test_dir = Path("/Users/yunusgungor/knowrag/knowgraph/domain/intelligence")
+    test_dir = Path(__file__).resolve().parent.parent / "knowgraph" / "domain" / "intelligence"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir) / "test_graph"

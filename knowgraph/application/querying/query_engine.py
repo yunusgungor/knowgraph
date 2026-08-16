@@ -17,11 +17,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from knowgraph.application.query.code_query_handler import CodeQueryHandler
+from knowgraph.application.query.query_classifier import QueryClassifier, QueryType
 from knowgraph.application.querying.context_assembly import assemble_context
 from knowgraph.application.querying.explanation import ExplanationObject, generate_explanation
 from knowgraph.application.querying.retriever import QueryRetriever
-from knowgraph.application.query.code_query_handler import CodeQueryHandler
-from knowgraph.application.query.query_classifier import QueryClassifier, QueryType
 from knowgraph.config import (
     DEFAULT_CENTRALITY_SCORE,
     MAX_CONCURRENT_QUERIES,
@@ -139,7 +139,7 @@ class QueryEngine:
         """
         self.graph_store_path = graph_store_path
         self.retriever = QueryRetriever(graph_store_path)
-        
+
         # Smart Routing Components
         self.classifier = QueryClassifier()
         self.code_handler = CodeQueryHandler(graph_store_path)
@@ -727,15 +727,15 @@ class QueryEngine:
                     # Step 0: Smart Routing (Joern Analysis)
                     # Check if query requires specialized code analysis tool
                     query_type = self.classifier.classify(query_text)
-                    
+
                     if query_type in (QueryType.CODE, QueryType.HYBRID):
                         # Try to handle with specialized code tool
                         code_result = await self.code_handler.handle(query_text)
-                        
+
                         # If successful and returned actual results
                         if code_result["success"] and code_result["results"]:
                             formatted_answer = self.code_handler.format_results(code_result)
-                            
+
                             # Return immediately for specific analysis results
                             return QueryResult(
                                 query=query_text,
@@ -755,10 +755,10 @@ class QueryEngine:
                     elif query_type == QueryType.DATAFLOW:
                         # Extract source and sink using regex patterns
                         import re
-                        
+
                         source = None
                         sink = None
-                        
+
                         # Try to match patterns to extract entities
                         for pattern in self.classifier.DATAFLOW_PATTERNS:
                             match = re.search(pattern, query_text, re.IGNORECASE)
@@ -768,7 +768,7 @@ class QueryEngine:
                                     source = match_dict["source"]
                                     sink = match_dict["sink"]
                                     break
-                                    
+
                         if source and sink:
                             # Execute dataflow query
                             dataflow_result = await self.query_dataflow(
@@ -776,13 +776,13 @@ class QueryEngine:
                                 sink_pattern=sink,
                                 edge_types=["data_flow", "taint", "reachability"] # Broaden types
                             )
-                            
+
                             # Format result as context
-                            df_context = f"Dataflow Analysis Result:\\n"
+                            df_context = "Dataflow Analysis Result:\\n"
                             df_context += f"Source: {dataflow_result.source_pattern}\\n"
                             df_context += f"Sink: {dataflow_result.sink_pattern}\\n"
                             df_context += f"Paths Found: {dataflow_result.path_count}\\n\\n"
-                            
+
                             if dataflow_result.path_count > 0:
                                 df_context += "Path Visualization (Mermaid):\\n"
                                 df_context += "```mermaid\\n"

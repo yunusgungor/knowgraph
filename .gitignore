@@ -41,10 +41,15 @@ venv.bak/
 .pytest_cache/
 .coverage
 .coverage.*
+coverage.xml
 htmlcov/
 .tox/
 .nox/
 .hypothesis/
+
+# Backup files
+*.bak
+*.orig
 
 # Type checking
 .mypy_cache/
@@ -95,3 +100,11 @@ graphstore/
 .pypirc
 
 test_suite/
+
+# Test-generated graph store artifacts (tests should use tmp_path, but some
+# write into the working tree — ignore them so they never get committed).
+test_mcp_graphstore/
+tests/test_e2e_graphstore/
+tests/test_graphs/
+**/bookmarks.db
+**/.indexing_cache/

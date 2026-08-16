@@ -55,7 +55,7 @@ class TestSQLInjectionDetection:
         engine = QueryEngine(graph_store_path=vulnerable_app_graph)
 
         result = await engine.query_async("show taint flow from request.form to execute")
-        
+
         assert "Data Flow Paths" in result.answer or "Found" in result.answer
         assert "execute" in result.answer
 
@@ -66,7 +66,7 @@ class TestSQLInjectionDetection:
         engine = QueryEngine(graph_store_path=vulnerable_app_graph)
 
         result = await engine.query_async("show taint flow from request.args to execute")
-        
+
         # Should find search endpoint vulnerability
         assert "Data Flow Paths" in result.answer or "Found" in result.answer
 
@@ -79,7 +79,7 @@ class TestSQLInjectionDetection:
         # Analyze safe_login specifically - implies no flow found
         # We query for flow, expect "No data flow paths found"
         result = await engine.query_async("show taint flow from safe_input to execute")
-        
+
         assert "No data flow paths found" in result.answer or "Found 0" in result.answer
 
 
@@ -93,7 +93,7 @@ class TestXSSDetection:
         engine = QueryEngine(graph_store_path=vulnerable_app_graph)
 
         result = await engine.query_async("show taint flow from request.args to render_template_string")
-        
+
         assert "Data Flow Paths" in result.answer or "Found" in result.answer
 
     @pytest.mark.asyncio
@@ -102,7 +102,7 @@ class TestXSSDetection:
         # This is complex flow.
         from knowgraph.application.querying.query_engine import QueryEngine
         engine = QueryEngine(graph_store_path=vulnerable_app_graph)
-        
+
         result = await engine.query_async("show taint flow from request.form to HttpResponse")
         # Assuming HttpResponse is sink
         assert result.answer # Just check non-empty response/attempt
@@ -125,7 +125,7 @@ class TestCommandInjectionDetection:
         """Verify taint path includes subprocess.call."""
         from knowgraph.application.querying.query_engine import QueryEngine
         engine = QueryEngine(graph_store_path=vulnerable_app_graph)
-        
+
         result = await engine.query_async("show taint flow from request.args to subprocess.call")
         assert "subprocess.call" in result.answer
 
@@ -137,7 +137,7 @@ class TestPathTraversalDetection:
         """Should detect path traversal in file operations."""
         from knowgraph.application.querying.query_engine import QueryEngine
         engine = QueryEngine(graph_store_path=vulnerable_app_graph)
-        
+
 
 
 
@@ -151,7 +151,7 @@ class TestDataflowQuery:
         engine = QueryEngine(graph_store_path=vulnerable_app_graph)
         result = await engine.query_async("show taint flow from request to execute")
         assert "Data Flow Paths" in result.answer or "Found" in result.answer
-        
+
     @pytest.mark.asyncio
     async def test_dataflow_result_to_mermaid(self, vulnerable_app_graph):
         from knowgraph.application.querying.query_engine import QueryEngine
@@ -166,7 +166,10 @@ class TestVulnerabilityPatterns:
         assert len(VULNERABILITY_PATTERNS) > 0
 
     def test_pattern_has_sanitizers(self):
-        from knowgraph.application.security.vulnerability_patterns import VULNERABILITY_PATTERNS, VulnerabilityType
+        from knowgraph.application.security.vulnerability_patterns import (
+            VULNERABILITY_PATTERNS,
+            VulnerabilityType,
+        )
         sql_pattern = VULNERABILITY_PATTERNS[VulnerabilityType.SQL_INJECTION]
         assert len(sql_pattern.sanitizers) > 0
 

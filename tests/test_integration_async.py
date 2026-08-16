@@ -15,7 +15,7 @@ from knowgraph.application.querying.query_engine import QueryEngine
 @pytest.fixture
 def graph_store_path():
     """Path to test graph store."""
-    return Path("/Users/yunusgungor/knowrag/graphstore")
+    return Path(__file__).resolve().parent / "graphstore"
 
 
 @pytest.fixture

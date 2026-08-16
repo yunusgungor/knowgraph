@@ -27,7 +27,7 @@ class TestTracingConfig:
         config = TracingConfig()
 
         assert config.service_name == "knowgraph"
-        assert config.service_version == "0.8.1"
+        assert config.service_version == "1.0.0"
         assert config.environment == "development"
         assert config.console_export is False
 

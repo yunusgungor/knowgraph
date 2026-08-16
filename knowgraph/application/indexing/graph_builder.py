@@ -603,7 +603,10 @@ class SmartGraphBuilder:
                             *[load_metadata(n_id) for n_id in node_ids],
                             return_exceptions=True
                         )
-                        existing_metadata = [m for m in metadata_results if m is not None and not isinstance(m, Exception)]
+                        existing_metadata = [
+                        m for m in metadata_results
+                        if m is not None and not isinstance(m, BaseException)
+                    ]
                     except Exception as e:
                         logger.warning(
                             f"Could not load existing node metadata for reference context: {e}"
@@ -624,16 +627,16 @@ class SmartGraphBuilder:
                 # existing_metadata nodes are FAKE nodes (metadata-only) used for symbol resolution
                 # We must NOT create edges pointing to these fake nodes!
                 new_node_ids = {n.id for n in final_nodes}
-                
+
                 # Get IDs of all real nodes in the graph store (for validation)
                 existing_real_node_ids = set()
                 if existing_metadata:
                     # existing_metadata contains fake nodes, but we need real node IDs
                     # We already have them from list_all_nodes() call above (line 575)
                     existing_real_node_ids = {n.id for n in existing_metadata}
-                
+
                 all_real_node_ids = new_node_ids | existing_real_node_ids
-                
+
                 relevant_reference_edges = [
                     e
                     for e in reference_edges
@@ -652,7 +655,7 @@ class SmartGraphBuilder:
                     for e in cpg_edges
                     if e.source in new_node_ids and e.target in new_node_ids
                 ]
-                
+
                 if len(cpg_edges) != len(valid_cpg_edges):
                     logger.warning(
                         f"Filtered {len(cpg_edges) - len(valid_cpg_edges)} invalid CPG edges "

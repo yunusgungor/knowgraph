@@ -5,6 +5,7 @@ knowledge graphs with explainable reasoning paths.
 """
 
 from .version import __version__
+
 __author__ = "Yunus Güngör"
 __license__ = "MIT"
 

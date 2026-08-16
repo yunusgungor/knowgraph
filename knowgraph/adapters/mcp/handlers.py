@@ -697,7 +697,7 @@ async def handle_get_stats(
         # Override node/edge counts with real-time values
         manifest.node_count = len(node_ids)
         manifest.edge_count = len(edges)
-        
+
         # Count semantic edges
         semantic_edges = [e for e in edges if e.type == "semantic"]
         manifest.semantic_edge_count = len(semantic_edges)

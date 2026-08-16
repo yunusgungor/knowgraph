@@ -19,7 +19,7 @@ license = { text = "MIT" }
 authors = [{ name = "Yunus Güngör", email = "mail@yunusgungor.com" }]
 keywords = ["graph", "rag", "code-analysis", "knowledge-graph", "ml"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -37,9 +37,13 @@ dependencies = [
     "click>=8.1.0",
     "rich>=13.7.0",
     "tqdm>=4.66.0",
-    "mcp>=1.0.0",
+    # MCP 2.0 removed the decorator-based Server API (@app.call_tool etc.)
+    # that server.py relies on. Pin to <2.0 until the migration is done.
+    "mcp>=1.0.0,<2.0",
     "openai>=1.0.0",
     "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",  # Required by knowgraph/config.py (BaseSettings)
     "tiktoken>=0.5.0",
     "gitingest>=0.3.1",
     "tenacity>=8.2.0",      # Retry logic for async operations
@@ -111,7 +115,10 @@ ensure_newline_before_comments = true
 skip_glob = ["**/graph_store/**", "**/.venv/**"]
 
 [tool.mypy]
-python_version = "3.10"
+# Target 3.12 so mypy can parse the stubs shipped with modern numpy (2.x uses
+# `type` statements, a 3.12+ syntax). Runtime compatibility with 3.10/3.11 is
+# still verified by the CI pytest matrix; mypy only does static checking here.
+python_version = "3.12"
 strict = false
 warn_return_any = false
 warn_unused_configs = true
@@ -146,31 +153,17 @@ module = ["networkx.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["tests", "tests.*"]
-disallow_untyped_defs = false
-disallow_untyped_calls = false
-check_untyped_defs = false
-warn_return_any = false
-no_implicit_optional = false
-
-[[tool.mypy.overrides]]
-module = ["opentelemetry.*", "psutil", "aiofiles", "aiofiles.*"]
+module = ["opentelemetry.*", "psutil", "aiofiles"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
+# NOTE: keep coverage threshold in sync with pytest.ini (single source of truth).
+# pytest.ini takes precedence when both define addopts, so the threshold lives
+# there to avoid the previous 0-vs-3 mismatch.
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "-v",
-    "--strict-markers",
-    "--tb=short",
-    "--cov=knowgraph",
-    "--cov-report=html",
-    "--cov-report=term-missing",
-    "--cov-fail-under=0",
-]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",

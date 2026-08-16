@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Simplified MCP end-to-end test - tests actual integration."""
 
-import sys
-
-sys.path.insert(0, "/Users/yunusgungor/knowrag")
-
 import asyncio
+import sys
 import tempfile
 from pathlib import Path
+
+from conftest import requires_joern
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+pytestmark = requires_joern
 
 
 async def test_code_integration_e2e():
@@ -17,7 +20,7 @@ async def test_code_integration_e2e():
 
     from knowgraph.infrastructure.indexing.code_index_integration import CodeIndexIntegration
 
-    test_dir = Path("/Users/yunusgungor/knowrag/knowgraph/domain/intelligence")
+    test_dir = Path(__file__).resolve().parent.parent / "knowgraph" / "domain" / "intelligence"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_path = Path(tmpdir) / "graph"

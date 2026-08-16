@@ -4,7 +4,6 @@ Validates performance improvements, search quality, and backward compatibility.
 """
 
 import time
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -246,10 +245,12 @@ class TestIntegration:
 
     @pytest.mark.asyncio
     @pytest.mark.skip(reason="Flaky test - timing issues with filesystem sync")
-    async def test_end_to_end_workflow(self):
+    async def test_end_to_end_workflow(self, tmp_path):
         """Test creating snippet and searching it immediately."""
         # Create unique tag to avoid conflicts
         unique_tag = f"test-integration-{uuid4().hex[:8]}"
+        graph_path = tmp_path / "graphstore"
+        graph_path.mkdir(parents=True, exist_ok=True)
 
         # Create snippet
         snippet = create_tagged_snippet(
@@ -258,10 +259,10 @@ class TestIntegration:
         )
 
         # Index it (should write to both filesystem and FTS5)
-        await index_tagged_snippet(snippet, GRAPH_PATH)
+        await index_tagged_snippet(snippet, graph_path)
 
         # Search immediately
-        results = search_bookmarks(unique_tag, GRAPH_PATH, top_k=5)
+        results = search_bookmarks(unique_tag, graph_path, top_k=5)
 
         # Should find the snippet
         assert len(results) > 0

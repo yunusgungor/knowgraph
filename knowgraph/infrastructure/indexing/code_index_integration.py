@@ -235,9 +235,9 @@ class CodeIndexIntegration:
                 try:
                     logger.info("Skipping code edge generation (requires node ID mapping)")
                     results["code_edges_written"] = 0
-                    
+
                     # The following code is commented out until proper node ID mapping is implemented:
-                    # 
+                    #
                     # import time
                     # from uuid import uuid4
                     # from knowgraph.domain.models.edge import Edge
@@ -339,7 +339,7 @@ class CodeIndexIntegration:
                                 content_hash = hashlib.sha1(content_for_hash.encode()).hexdigest()
 
                                 node_metadata = node_dict["metadata"].copy()
-                                
+
                                 # CRITICAL FIX: create_semantic_edges requires "entities" in metadata
                                 # For code nodes, the node itself IS the entity.
                                 # So we add itself as the single entity in the list.
@@ -426,18 +426,20 @@ class CodeIndexIntegration:
                             logger.info("Generating semantic and reference edges for code entities...")
                             try:
                                 from knowgraph.application.indexing.graph_builder import (
-                                    create_semantic_edges,
                                     create_reference_edges,
+                                    create_semantic_edges,
                                 )
-                                from knowgraph.infrastructure.storage.filesystem import append_edge_jsonl
+                                from knowgraph.infrastructure.storage.filesystem import (
+                                    append_edge_jsonl,
+                                )
 
                                 # Create semantic edges
                                 semantic_edges = create_semantic_edges(created_nodes, threshold=0.1)
                                 logger.info(f"Created {len(semantic_edges)} semantic edges")
-                                
+
                                 for edge in semantic_edges:
                                     append_edge_jsonl(edge, graph_path)
-                                
+
                                 # Create reference edges
                                 # Note: Reference edges benefit from global context, but here we only have
                                 # the current batch of code nodes. This is still useful for internal
@@ -447,10 +449,10 @@ class CodeIndexIntegration:
 
                                 for edge in reference_edges:
                                     append_edge_jsonl(edge, graph_path)
-                                
+
                                 total_edges = len(semantic_edges) + len(reference_edges)
                                 logger.info(f"✅ Written {total_edges} new edges to graphstore")
-                                
+
                                 # Update manifest
                                 if manifest and total_edges > 0:
                                     manifest.edge_count += total_edges

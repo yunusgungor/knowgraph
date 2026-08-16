@@ -13,6 +13,10 @@ import asyncio
 import tempfile
 from pathlib import Path
 
+from conftest import requires_joern
+
+pytestmark = requires_joern
+
 
 # Simple MCP client simulation
 async def test_mcp_server():

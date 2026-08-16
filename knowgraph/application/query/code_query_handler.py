@@ -171,7 +171,6 @@ class CodeQueryHandler:
             List of results
         """
         from knowgraph.core.joern import JoernProvider
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
 
         provider = JoernProvider()
 
@@ -194,15 +193,15 @@ class CodeQueryHandler:
             # Generic method search with pattern
             # Prioritize composite prefixes to avoid capturing 'function' as the name in 'find function X'
             prefixes = [
-                "find function", "find method", "find class", "show function", "show method", 
+                "find function", "find method", "find class", "show function", "show method",
                 "list functions", "list methods", "get function", "search function",
-                "find", "show", "list", "get", "search", "ara", "bul", "göster", 
+                "find", "show", "list", "get", "search", "ara", "bul", "göster",
                 "function", "method", "class", "fonksiyon", "metot"
             ]
             pattern = self._extract_method_name(query, prefixes)
             if not pattern:
                 pattern = query.split()[-1]
-            
+
             result = provider.find_methods(cpg_path, pattern)
             return self._format_generic_results(result)
 
@@ -217,7 +216,7 @@ class CodeQueryHandler:
             method_name = self._extract_method_name(query, ["who calls", "callers of", "usage of", "references to", "kim çağırıyor", "kullanımı"])
             if not method_name:
                 return [{"error": "Could not extract method name"}]
-            
+
             result = provider.analyze_method_callers(cpg_path, method_name)
             return self._format_impact_results(result)
 
@@ -226,7 +225,7 @@ class CodeQueryHandler:
             source, target = self._extract_chain_params(query)
             if not source or not target:
                 return [{"error": "Could not extract source and target methods"}]
-                
+
             chains = provider.find_call_chains(cpg_path, source, target)
             return self._format_chain_results(chains, source, target)
 
@@ -256,13 +255,13 @@ class CodeQueryHandler:
         elif tool in ["get_cfg", "get_pdg", "get_cdg"]:
             graph_type = tool.split("_")[1].upper() # CFG, PDG, CDG
             method_name = self._extract_method_name(query, [
-                f"{graph_type.lower()} of", f"{graph_type.lower()} for", 
+                f"{graph_type.lower()} of", f"{graph_type.lower()} for",
                 "control flow of", "dependence of", "grafiği"
             ])
-            
+
             if not method_name:
                 return [{"error": f"Could not extract method name for {graph_type}"}]
-                
+
             if tool == "get_cfg":
                 result = provider.get_cfg(cpg_path, method_name)
             elif tool == "get_pdg":
@@ -271,7 +270,7 @@ class CodeQueryHandler:
                 result = provider.get_ddg(cpg_path, method_name)
             else:
                 result = provider.get_cdg(cpg_path, method_name)
-                
+
             return [{"type": "dot_graph", "graph_type": graph_type, "data": result}]
 
         elif tool == "find_variable_usages":
@@ -279,7 +278,7 @@ class CodeQueryHandler:
             # Fallback: try to find the last word if regex fails
             if not var_name:
                  var_name = query.split()[-1]
-            
+
             result = provider.find_variable_usages(cpg_path, var_name)
             return self._format_usage_results(result)
 
@@ -287,7 +286,7 @@ class CodeQueryHandler:
             var_name = self._extract_method_name(query, ["slice of", "slice", "backwards slice", "dilimle", "code affecting"])
             if not var_name:
                  var_name = query.split()[-1]
-            
+
             result = provider.perform_slicing(cpg_path, var_name)
             return self._format_slicing_results(result)
 
@@ -295,7 +294,7 @@ class CodeQueryHandler:
             lit_pattern = self._extract_method_name(query, ["literal containing", "string containing", "hardcoded", "sabit"])
             if not lit_pattern:
                 lit_pattern = query.split()[-1]
-                
+
             result = provider.find_literals(cpg_path, lit_pattern)
             return self._format_literal_results(result)
 
@@ -338,25 +337,28 @@ class CodeQueryHandler:
             source, sink = self._extract_chain_params(query)
             if not source or not sink:
                  return [{"error": "Could not identify source and sink. Use 'flow from X to Y'"}]
-            
+
             result = provider.analyze_taint_flow(cpg_path, source, sink)
             return [{"type": "taint_flow", "data": result}]
 
         elif tool == "get_params":
             method = self._extract_method_name(query, ["parameters of", "args of", "arguments of"])
-            if not method: method = query.split()[-1]
+            if not method:
+                method = query.split()[-1]
             result = provider.get_method_params(cpg_path, method)
             return [{"type": "method_params", "data": result}]
 
         elif tool == "get_locals":
             method = self._extract_method_name(query, ["locals of", "local variables", "variables in"])
-            if not method: method = query.split()[-1]
+            if not method:
+                method = query.split()[-1]
             result = provider.get_method_locals(cpg_path, method)
             return [{"type": "method_locals", "data": result}]
 
         elif tool == "find_comments":
             pattern = self._extract_method_name(query, ["comments", "todos", "fixmes"])
-            if not pattern: pattern = "TODO" # Default to finding TODOs if generic
+            if not pattern:
+                pattern = "TODO"  # Default to finding TODOs if generic
             result = provider.find_comments(cpg_path, pattern)
             return [{"type": "comment_list", "data": result}]
 
@@ -365,7 +367,7 @@ class CodeQueryHandler:
             return [{"type": "tag_list", "tags": result["tags"]}]
 
         elif tool == "run_custom_query":
-            # Extract the actual query string. 
+            # Extract the actual query string.
             # Expecting "run query cpg.method.name.l" -> extract "cpg.method.name.l"
             # Logic: Split by tool keywords and take the rest
             clean_query = query
@@ -376,13 +378,13 @@ class CodeQueryHandler:
                      idx = clean_query.lower().find(kw) + len(kw)
                      clean_query = clean_query[idx:].strip()
                      break
-            
+
             # Remove potential quotes if user wrapped query in quotes
             if clean_query.startswith('"') and clean_query.endswith('"'):
                 clean_query = clean_query[1:-1]
             if clean_query.startswith("'") and clean_query.endswith("'"):
                 clean_query = clean_query[1:-1]
-                
+
             result = provider.run_custom_query(cpg_path, clean_query)
             return [{"type": "custom_query_result", "data": result}]
 
@@ -425,7 +427,7 @@ class CodeQueryHandler:
         recursive_methods = results.get("recursive_methods", [])
         if not recursive_methods:
             return []
-            
+
         formatted = []
         for m in recursive_methods:
             formatted.append({
@@ -439,7 +441,7 @@ class CodeQueryHandler:
         """Format impact analysis results."""
         if not results:
             return []
-            
+
         return [{
             "type": "impact_analysis",
             "target_method": results.get("method"),
@@ -451,7 +453,7 @@ class CodeQueryHandler:
         """Format call chain results."""
         if not chains:
             return []
-            
+
         formatted = []
         for chain in chains:
             formatted.append({
@@ -478,7 +480,7 @@ class CodeQueryHandler:
     def _format_usage_results(self, results: dict) -> list:
         if not results.get("usages"):
             return [{"type": "usage", "variable": results.get("variable"), "error": "No usages found"}]
-        
+
         formatted = []
         for usage in results["usages"]:
             formatted.append({
@@ -493,7 +495,7 @@ class CodeQueryHandler:
     def _format_slicing_results(self, results: dict) -> list:
         if not results.get("slice"):
             return [{"type": "slice", "variable": results.get("variable"), "error": "Slice is empty"}]
-            
+
         formatted = []
         for item in results["slice"]:
             formatted.append({
@@ -509,7 +511,7 @@ class CodeQueryHandler:
     def _format_literal_results(self, results: dict) -> list:
         if not results.get("literals"):
              return [{"type": "literal", "pattern": results.get("pattern"), "error": "No literals found"}]
-        
+
         formatted = []
         for item in results["literals"]:
             formatted.append({
@@ -525,7 +527,7 @@ class CodeQueryHandler:
     def _format_annotation_results(self, results: dict) -> list:
         if not results.get("findings"):
             return [{"type": "annotation", "pattern": results.get("pattern"), "error": "No matching annotations found"}]
-        
+
         formatted = []
         for item in results["findings"]:
             formatted.append({
@@ -540,7 +542,7 @@ class CodeQueryHandler:
     def _format_import_results(self, results: dict) -> list:
         if not results.get("imports"):
              return [{"type": "import", "pattern": results.get("pattern"), "error": "No imports found"}]
-        
+
         formatted = []
         for item in results["imports"]:
             formatted.append({
@@ -554,7 +556,7 @@ class CodeQueryHandler:
     def _format_structure_results(self, results: dict) -> list:
         if not results.get("structures"):
              return [{"type": "structure", "pattern": results.get("pattern"), "error": "No structures found"}]
-        
+
         formatted = []
         for item in results["structures"]:
             formatted.append({
@@ -571,7 +573,7 @@ class CodeQueryHandler:
         """Extract method name from query removing prefixes."""
         lower_query = query.lower()
         extracted = None
-        
+
         for prefix in prefixes:
             if prefix in lower_query:
                 # Find the prefix in original case to preserve method casing
@@ -585,17 +587,17 @@ class CodeQueryHandler:
                 else:
                      extracted = candidate
                 break
-        
+
         if extracted:
             # SANITIZATION: Remove quotes to prevent script injection in Scala
-            return extracted.replace('"', '').replace("'", "")
-            
+            return extracted.replace('"', "").replace("'", "")
+
         return None
 
     def _format_generic_results(self, results: dict) -> list:
         if not results.get("methods"):
              return [{"type": "generic", "pattern": results.get("pattern"), "error": "No methods found"}]
-        
+
         formatted = []
         for item in results["methods"]:
             formatted.append({
@@ -698,7 +700,7 @@ class CodeQueryHandler:
         elif tool == "analyze_impact":
             for item in results:
                 output += f"Method '{item['target_method']}' is called by {item['count']} methods:\\n"
-                for caller in item['callers']:
+                for caller in item["callers"]:
                     output += f"  <- {caller}\\n"
 
         elif tool == "analyze_chain":
@@ -716,13 +718,13 @@ class CodeQueryHandler:
                 pattern = results[0].get("pattern", "unknown")
                 output += f"Methods matching '{pattern}':\\n\\n"
                 for i, item in enumerate(results, 1):
-                    sig = f" ({item['signature']})" if item.get('signature') else ""
+                    sig = f" ({item['signature']})" if item.get("signature") else ""
                     output += f"{i}. {item['method']}{sig} - {item['filename']}:{item['line']}\\n"
 
         elif tool == "analyze_complexity":
             output += "Cyclomatic Complexity Results:\\n\\n"
             for item in results:
-                score = item.get('score', 0)
+                score = item.get("score", 0)
                 rating = "Low" if score < 5 else "Medium" if score < 10 else "High"
                 output += f"Method: {item['method']}\\n"
                 output += f"  Score: {score} ({rating})\\n"
@@ -741,7 +743,7 @@ class CodeQueryHandler:
              if "error" in item:
                  output += f"Error: {item['error']}\\n"
              else:
-                 output += f"Type Hierarchy:\\n"
+                 output += "Type Hierarchy:\\n"
                  output += f"  Base Types: {', '.join(item['base_types']) or 'None'}\\n"
                  output += f"  Derived Types: {', '.join(item['derived_types']) or 'None'}\\n"
 
@@ -761,7 +763,7 @@ class CodeQueryHandler:
                 var = results[0].get("variable", "unknown")
                 output += f"Variable Usage: '{var}'\\n\\n"
                 for i, item in enumerate(results, 1):
-                    file_info = f" ({item['filename']})" if item.get('filename') != 'unknown' else ""
+                    file_info = f" ({item['filename']})" if item.get("filename") != "unknown" else ""
                     output += f"{i}. {item['method']}:{item['line']}{file_info}\\n"
 
         elif item_type == "slice":
@@ -771,7 +773,7 @@ class CodeQueryHandler:
                 var = results[0].get("variable", "unknown")
                 output += f"Backwards Slice (Code affecting '{var}'):\\n\\n"
                 # Sort by line number for readability
-                sorted_results = sorted(results, key=lambda x: x.get('line', 0))
+                sorted_results = sorted(results, key=lambda x: x.get("line", 0))
                 for item in sorted_results:
                     file_info = f"[{item.get('filename', 'unknown')}] "
                     output += f"{file_info}[{item['method']}:{item['line']}] {item['code']}\\n"
@@ -808,9 +810,9 @@ class CodeQueryHandler:
              if "error" in results[0]:
                  output += f"Error: {results[0]['error']}\\n"
              else:
-                output += f"Control Structures Analysis:\\n\\n"
+                output += "Control Structures Analysis:\\n\\n"
                 for i, item in enumerate(results, 1):
-                    if item['loops'] > 0 or item['ifs'] > 0:
+                    if item["loops"] > 0 or item["ifs"] > 0:
                         output += f"{i}. {item['method']} ({item['filename']}): Loops={item['loops']}, Ifs={item['ifs']}\\n"
 
         elif item_type == "file_list":
@@ -864,8 +866,8 @@ class CodeQueryHandler:
              if not locals_:
                  output += "  (No local variables)\\n"
              else:
-                 for l in locals_:
-                     output += f"  - {l['name']} ({l['type']})\\n"
+                 for local_var in locals_:
+                     output += f"  - {local_var['name']} ({local_var['type']})\\n"
 
         elif item_type == "comment_list":
              data = results[0].get("data", {})
@@ -889,7 +891,7 @@ class CodeQueryHandler:
              query_str = data.get("query", "")
              res_list = data.get("results", [])
              count = data.get("count", 0)
-             
+
              output += f"Custom Query Execution ('{query_str}'):\\n"
              output += f"Count: {count}\\n\\n"
              if not res_list:

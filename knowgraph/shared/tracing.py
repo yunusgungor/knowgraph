@@ -74,14 +74,14 @@ class TracingConfig:
         console_export: bool = False,
     ):
         self.service_name = service_name
-        
+
         if service_version is None:
             try:
                 from knowgraph.version import __version__
                 service_version = __version__
             except ImportError:
                 service_version = "1.0.0"
-                
+
         self.service_version = service_version
         self.environment = environment
         self.enabled = enabled and OPENTELEMETRY_AVAILABLE
