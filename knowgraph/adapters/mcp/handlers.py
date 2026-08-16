@@ -343,6 +343,11 @@ async def handle_index(
         "mcp_index", metadata={"input_path": arguments.get("input_path", "")[:100]}
     ) as trace:
         try:
+            # Accept `source_path` as a backward-compatible alias so callers can
+            # use the same argument name as knowgraph_generate_cpg.
+            if not arguments.get("input_path") and arguments.get("source_path"):
+                arguments["input_path"] = arguments["source_path"]
+
             if error := validate_required_argument(arguments, "input_path"):
                 trace.add_event("validation_error", {"error": error})
                 return [types.TextContent(type="text", text=error)]
@@ -1600,8 +1605,9 @@ async def handle_generate_cpg(arguments: dict[str, Any], PROJECT_ROOT: Path) -> 
     try:
         from knowgraph.core.joern import JoernProvider
 
-        # Required parameters
-        source_path_str = arguments.get("source_path")
+        # Required parameters. Accept `input_path` as a backward-compatible
+        # alias so callers can use the same argument name as knowgraph_index.
+        source_path_str = arguments.get("source_path") or arguments.get("input_path")
         if not source_path_str:
             return [types.TextContent(type="text", text="Error: source_path is required")]
 

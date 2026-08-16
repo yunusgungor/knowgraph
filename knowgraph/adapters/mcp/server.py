@@ -444,7 +444,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "input_path": {
                         "type": "string",
-                        "description": "Path to markdown files, local directory, or Git repository URL (GitHub, GitLab, Bitbucket).",
+                        "description": "Path to markdown files, local directory, or Git repository URL (GitHub, GitLab, Bitbucket). `source_path` is accepted as an alias.",
                     },
                     "output_path": {
                         "type": "string",
@@ -473,7 +473,7 @@ async def list_tools() -> list[types.Tool]:
                         "description": "GitHub Personal Access Token for private repositories.",
                     },
                 },
-                "required": ["input_path"],
+                "required": [],
             },
         ),
         types.Tool(
@@ -844,7 +844,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "source_path": {
                         "type": "string",
-                        "description": "Path to source code directory or file (required).",
+                        "description": "Path to source code directory or file (required). `input_path` is accepted as an alias.",
                     },
                     "language": {
                         "type": "string",
@@ -855,7 +855,7 @@ async def list_tools() -> list[types.Tool]:
                         "description": "Generation timeout in seconds (default: 600).",
                     },
                 },
-                "required": ["source_path"],
+                "required": [],
             },
         ),
     ]

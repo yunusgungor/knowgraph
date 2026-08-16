@@ -55,3 +55,17 @@ queries. Python 3.10–3.13 supported.
   `for item in result.results` loop before use (was an F821 undefined name).
 - Hardcoded developer paths (`/Users/yunusgungor/...`) were removed; always use
   `Path(__file__).resolve().parent.parent / ...` for repo-relative paths in tests.
+
+## MCP / CLI conventions
+- **Graph-store path argument** is uniformly named `graph_path` across MCP tools.
+- **Source/input path argument** has two accepted names: `knowgraph_index`
+  uses `input_path` (canonical) and `knowgraph_generate_cpg` uses `source_path`
+  (canonical). Each accepts the other as a backward-compatible alias, so callers
+  may use either name. The tool `inputSchema` declares `required: []` for these
+  two tools on purpose — validation lives in the handler
+  (`validate_required_argument` / explicit checks) so the alias can resolve
+  before the "required" check. Do not re-add `input_path`/`source_path` to the
+  schema `required` list, or the alias will be rejected at schema validation.
+- **`version rollback`** prompts for confirmation only when stdin is a TTY. In
+  non-interactive/CI shells it aborts with a clear message unless `--force` is
+  passed. `--force` both skips the prompt and bypasses validation checks.

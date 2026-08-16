@@ -191,15 +191,26 @@ def diff_versions(version1: str, version2: str, graph_store: Path):
 @click.option(
     "--force",
     is_flag=True,
-    help="Force rollback without validation checks",
+    help="Skip the interactive confirmation prompt and bypass validation checks "
+    "(required in non-interactive/CI environments where no TTY is attached).",
 )
 def rollback_version(version_id: str, graph_store: Path, no_backup: bool, force: bool):
     """Rollback to a previous version (manifest metadata only)."""
     from knowgraph.infrastructure.storage.version_rollback import RollbackManager
 
     try:
-        # Confirmation prompt
+        # Confirmation prompt (only when a TTY is attached so CI/non-interactive
+        # runs never block on stdin). Without --force in a non-interactive shell
+        # we abort explicitly instead of hanging on a prompt nobody can answer.
         if not force:
+            if not click.get_text_stream("stdin").isatty():
+                click.echo(
+                    "❌ Rollback requires confirmation, but stdin is not a TTY. "
+                    "Re-run with --force to skip the prompt in non-interactive "
+                    "environments.",
+                    err=True,
+                )
+                raise click.Abort()
             click.confirm(
                 f"⚠️  This will rollback manifest to {version_id}. "
                 "Note: This is metadata-only. "
