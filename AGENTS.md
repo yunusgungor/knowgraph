@@ -25,10 +25,15 @@ queries. Python 3.10–3.13 supported.
 - Joern CLI is an external dependency. Tests that require it are guarded by the
   `requires_joern` marker defined in `tests/conftest.py` (module-level
   `pytestmark = requires_joern`). They skip when Joern is absent. Do NOT remove
-  this guard — the e2e tests also call `methods.index_graph({...})` with a dict
-  signature that doesn't match the real async signature, and instantiate the
-  abstract `IntelligenceProvider`; they only run correctly with a live Joern +
-  MCP server.
+  this guard.
+- **Exception:** `tests/test_mcp_e2e.py` is permanently skipped via
+  `pytest.mark.skip` (NOT `requires_joern`). It targets a legacy MCP methods
+  API that no longer exists: `methods.handle_query()` was removed,
+  `index_graph()` changed from a single dict arg to keyword args, and it
+  instantiates the abstract `IntelligenceProvider`. With `requires_joern` alone
+  it would run (and fail with TypeError/AttributeError) once Joern is installed
+  in CI. The up-to-date equivalent lives in `test_mcp_server_e2e.py`. If this
+  suite is revived it must be rewritten against the current API.
 - Test artifacts (`test_mcp_graphstore/`, `tests/test_e2e_graphstore/`,
   `tests/test_graphs/`, `bookmarks.db`, `.indexing_cache/`) are gitignored.
   Prefer `tmp_path` in new tests; don't write graph stores into the worktree.
