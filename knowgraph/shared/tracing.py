@@ -10,6 +10,39 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any
 
+
+class MockSpan:
+    """Mock span for when OpenTelemetry is not available or tracing is disabled."""
+
+    def set_attribute(self, key: str, value: Any) -> None:
+        pass
+
+    def set_status(self, status: Any) -> None:
+        pass
+
+    def record_exception(self, exception: Exception) -> None:
+        pass
+
+    def add_event(self, name: str, attributes: dict[str, Any] | None = None) -> None:
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
+class MockTracer:
+    """Mock tracer for when OpenTelemetry is not available or tracing is disabled."""
+
+    def start_as_current_span(self, name: str, **kwargs):
+        return MockSpan()
+
+    def start_span(self, name: str, **kwargs):
+        return MockSpan()
+
+
 try:
     from opentelemetry import trace
     from opentelemetry.sdk.resources import Resource
@@ -20,37 +53,6 @@ try:
     OPENTELEMETRY_AVAILABLE = True
 except ImportError:
     OPENTELEMETRY_AVAILABLE = False
-
-    # Provide mock classes for when OpenTelemetry is not installed
-    class MockSpan:
-        """Mock span for when OpenTelemetry is not available."""
-
-        def set_attribute(self, key: str, value: Any) -> None:
-            pass
-
-        def set_status(self, status: Any) -> None:
-            pass
-
-        def record_exception(self, exception: Exception) -> None:
-            pass
-
-        def add_event(self, name: str, attributes: dict[str, Any] | None = None) -> None:
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            pass
-
-    class MockTracer:
-        """Mock tracer for when OpenTelemetry is not available."""
-
-        def start_as_current_span(self, name: str, **kwargs):
-            return MockSpan()
-
-        def start_span(self, name: str, **kwargs):
-            return MockSpan()
 
 
 class TracingConfig:

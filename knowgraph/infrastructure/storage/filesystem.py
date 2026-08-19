@@ -6,6 +6,7 @@ to eliminate blocking in the async event loop.
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from uuid import UUID
 
@@ -123,8 +124,8 @@ async def write_node_json_async(node: Node, graph_store_path: Path) -> None:
         async with aiofiles.open(temp_file, "w", encoding="utf-8") as file:
             await file.write(node_json)
 
-        # Rename is sync but fast (atomic on most filesystems)
-        await asyncio.to_thread(temp_file.rename, node_file)
+        # os.replace() works on all platforms (Windows Path.rename() fails if target exists)
+        await asyncio.to_thread(os.replace, str(temp_file), str(node_file))
 
         # Trigger cache invalidation after successful write
         invalidate_all_caches()
@@ -167,7 +168,7 @@ def write_node_json(node: Node, graph_store_path: Path) -> None:
         # Atomic write: write to temp file, then rename
         with open(temp_file, "w", encoding="utf-8") as file:
             json.dump(node.to_dict(), file, indent=2, ensure_ascii=False)
-        temp_file.rename(node_file)
+        os.replace(str(temp_file), str(node_file))
 
         # Trigger cache invalidation after successful write
         invalidate_all_caches()
@@ -506,7 +507,7 @@ async def write_all_edges_async(edges: list[Edge], graph_store_path: Path) -> No
                 edge_json = json.dumps(edge.to_dict(), ensure_ascii=False)
                 await file.write(edge_json + "\n")
 
-        await asyncio.to_thread(temp_file.rename, edges_file)
+        await asyncio.to_thread(os.replace, str(temp_file), str(edges_file))
     except Exception as error:
         if await asyncio.to_thread(temp_file.exists):
             await asyncio.to_thread(temp_file.unlink)
@@ -540,7 +541,7 @@ def write_all_edges(edges: list[Edge], graph_store_path: Path) -> None:
             for edge in edges:
                 json.dump(edge.to_dict(), file, ensure_ascii=False)
                 file.write("\n")
-        temp_file.rename(edges_file)
+        os.replace(str(temp_file), str(edges_file))
     except Exception as error:
         if temp_file.exists():
             temp_file.unlink()

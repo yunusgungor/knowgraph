@@ -104,13 +104,14 @@ class TestRollbackResult:
         assert result.backup_path is None
         assert len(result.errors) == 2
 
-    def test_to_dict(self):
+    def test_to_dict(self, tmp_path):
         """Test serialization to dictionary."""
+        backup = tmp_path / "backup"
         result = RollbackResult(
             success=True,
             from_version="v3",
             to_version="v2",
-            backup_path=Path("/tmp/backup"),
+            backup_path=backup,
             message="Success",
             errors=[],
         )
@@ -119,7 +120,7 @@ class TestRollbackResult:
         assert data["success"] is True
         assert data["from_version"] == "v3"
         assert data["to_version"] == "v2"
-        assert data["backup_path"] == "/tmp/backup"
+        assert data["backup_path"] == str(backup)
         assert "errors" in data
 
 

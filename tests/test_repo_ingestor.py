@@ -1,6 +1,6 @@
 """Tests for repository ingestor module."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -58,7 +58,7 @@ class TestIngestRepository:
     """Tests for repository ingestion."""
 
     @pytest.mark.asyncio
-    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async")
+    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async", new_callable=AsyncMock)
     async def test_ingest_repository_success(self, mock_ingest):
         """Test successful repository ingestion."""
         # Mock gitingest response
@@ -81,7 +81,7 @@ class TestIngestRepository:
         output_path.unlink()
 
     @pytest.mark.asyncio
-    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async")
+    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async", new_callable=AsyncMock)
     async def test_ingest_repository_with_patterns(self, mock_ingest):
         """Test repository ingestion with include/exclude patterns."""
         mock_ingest.return_value = ("Summary", "tree", "content")
@@ -97,7 +97,7 @@ class TestIngestRepository:
         output_path.unlink()
 
     @pytest.mark.asyncio
-    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async")
+    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async", new_callable=AsyncMock)
     async def test_ingest_repository_with_access_token(self, mock_ingest):
         """Test repository ingestion with access token."""
         mock_ingest.return_value = ("Summary", "tree", "content")
@@ -112,7 +112,7 @@ class TestIngestRepository:
         output_path.unlink()
 
     @pytest.mark.asyncio
-    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async")
+    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async", new_callable=AsyncMock)
     async def test_ingest_repository_to_specific_path(self, mock_ingest, tmp_path):
         """Test repository ingestion to specific output path."""
         mock_ingest.return_value = ("Summary", "tree", "content")
@@ -134,7 +134,7 @@ class TestIngestRepository:
             await ingest_repository("https://github.com/user/repo")
 
     @pytest.mark.asyncio
-    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async")
+    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async", new_callable=AsyncMock)
     async def test_ingest_repository_error(self, mock_ingest):
         """Test error handling during ingestion."""
         mock_ingest.side_effect = Exception("Network error")
@@ -149,7 +149,7 @@ class TestIngestSource:
     """Tests for intelligent source ingestion."""
 
     @pytest.mark.asyncio
-    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async")
+    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async", new_callable=AsyncMock)
     async def test_ingest_source_repository(self, mock_ingest):
         """Test ingesting a repository URL."""
         mock_ingest.return_value = ("Summary", "tree", "content")
@@ -176,7 +176,7 @@ class TestIngestSource:
         assert output_path == md_file
 
     @pytest.mark.asyncio
-    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async")
+    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async", new_callable=AsyncMock)
     async def test_ingest_source_code_directory(self, mock_ingest, tmp_path):
         """Test ingesting a code directory."""
         code_dir = tmp_path / "code"
@@ -194,7 +194,7 @@ class TestIngestSource:
         output_path.unlink()
 
     @pytest.mark.asyncio
-    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async")
+    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async", new_callable=AsyncMock)
     async def test_ingest_source_force_type(self, mock_ingest, tmp_path):
         """Test forcing source type detection."""
         md_file = tmp_path / "test.md"
@@ -214,7 +214,7 @@ class TestIngestSource:
         output_path.unlink()
 
     @pytest.mark.asyncio
-    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async")
+    @patch("knowgraph.infrastructure.parsing.repo_ingestor.ingest_async", new_callable=AsyncMock)
     async def test_ingest_source_with_all_options(self, mock_ingest):
         """Test ingesting with all options specified."""
         mock_ingest.return_value = ("Summary", "tree", "content")

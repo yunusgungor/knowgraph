@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import sqlite3
 import threading
 from pathlib import Path
@@ -104,7 +105,7 @@ class CacheManager:
                 # Backup corrupted DB (for debugging)
                 if self.db_path.exists():
                     backup_path = self.db_path.with_suffix(".db.corrupted")
-                    self.db_path.rename(backup_path)
+                    os.replace(str(self.db_path), str(backup_path))
                     logger.info(f"Corrupted cache backed up to {backup_path}")
 
                 # Reinitialize

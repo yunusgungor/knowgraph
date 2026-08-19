@@ -9,7 +9,10 @@ import pytest
 
 def test_project_root_auto_detection():
     """Test that PROJECT_ROOT is auto-detected when no env var is set."""
-    with patch.dict(os.environ, {}, clear=True):
+    # Preserve HOME/PATH so Path.home() and subprocess work on all platforms
+    safe_env = {k: v for k, v in os.environ.items()
+                if k in ("HOME", "PATH", "HOMEDRIVE", "HOMEPATH", "USERPROFILE")}
+    with patch.dict(os.environ, safe_env, clear=True):
         # Remove any env vars
         os.environ.pop("KNOWGRAPH_PROJECT_ROOT", None)
 
@@ -24,28 +27,30 @@ def test_project_root_auto_detection():
         assert isinstance(server_module.PROJECT_ROOT, Path)
 
 
-def test_resolve_graph_path_with_project_root():
+def test_resolve_graph_path_with_project_root(tmp_path):
     """Test that resolve_graph_path uses PROJECT_ROOT correctly."""
     from knowgraph.adapters.mcp.utils import resolve_graph_path
 
-    project_root = Path("/Users/test/my-project")
+    project_root = tmp_path / "my-project"
+    project_root.mkdir()
     relative_path = "./graphstore"
 
     result = resolve_graph_path(relative_path, project_root)
 
-    assert result == Path("/Users/test/my-project/graphstore")
+    assert result == project_root / "graphstore"
 
 
-def test_resolve_graph_path_with_absolute_path():
+def test_resolve_graph_path_with_absolute_path(tmp_path):
     """Test that resolve_graph_path handles absolute paths correctly."""
     from knowgraph.adapters.mcp.utils import resolve_graph_path
 
-    project_root = Path("/Users/test/my-project")
-    absolute_path = "/custom/graphstore/location"
+    project_root = tmp_path / "my-project"
+    project_root.mkdir()
+    absolute_path = str(tmp_path / "custom" / "graphstore" / "location")
 
     result = resolve_graph_path(absolute_path, project_root)
 
-    assert result == Path("/custom/graphstore/location")
+    assert result == Path(absolute_path)
 
 
 @pytest.mark.skip(reason="Complex env reload test - auto-detection tested in other tests")
@@ -54,7 +59,9 @@ async def test_mcp_tools_use_auto_detected_root():
     """Test that MCP tools use auto-detected PROJECT_ROOT."""
     from knowgraph.adapters.mcp.server import call_tool
 
-    with patch.dict(os.environ, {}, clear=True):
+    safe_env = {k: v for k, v in os.environ.items()
+                if k in ("HOME", "PATH", "HOMEDRIVE", "HOMEPATH", "USERPROFILE")}
+    with patch.dict(os.environ, safe_env, clear=True):
         # Re-import to pick up the change
         import importlib
 
@@ -77,17 +84,19 @@ async def test_mcp_tools_use_auto_detected_root():
             assert mock_resolve.called
 
 
-def test_multiple_projects_isolation():
+def test_multiple_projects_isolation(tmp_path):
     """Test that different working directories result in different graphstore paths."""
     from knowgraph.adapters.mcp.utils import resolve_graph_path
     from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 
-    project_a = Path("/Users/test/project-a")
-    project_b = Path("/Users/test/project-b")
+    project_a = tmp_path / "project-a"
+    project_a.mkdir()
+    project_b = tmp_path / "project-b"
+    project_b.mkdir()
 
     graphstore_a = resolve_graph_path(DEFAULT_GRAPH_STORE_PATH, project_a)
     graphstore_b = resolve_graph_path(DEFAULT_GRAPH_STORE_PATH, project_b)
 
-    assert graphstore_a == Path("/Users/test/project-a/graphstore")
-    assert graphstore_b == Path("/Users/test/project-b/graphstore")
+    assert graphstore_a == project_a / "graphstore"
+    assert graphstore_b == project_b / "graphstore"
     assert graphstore_a != graphstore_b

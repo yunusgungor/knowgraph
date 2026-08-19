@@ -3,6 +3,7 @@
 Uses gitingest to clone and convert repositories to markdown format.
 """
 
+import inspect
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -137,7 +138,7 @@ async def ingest_repository(
             "repo_ingestor.ingest_repository",
             source=repo_url_or_path,
         ):
-            if ingest_async is None:
+            if ingest_async is None or not inspect.iscoroutinefunction(ingest_async):
                 msg = "gitingest is not installed. Install it with: pip install gitingest>=0.3.1"
                 raise GitingestNotInstalledError(msg)
 

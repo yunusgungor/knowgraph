@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -261,7 +262,7 @@ def write_manifest(manifest: Manifest, graph_store_path: Path) -> None:
         try:
             with open(temp_file, "w", encoding="utf-8") as file:
                 json.dump(manifest.to_dict(), file, indent=2, ensure_ascii=False)
-            temp_file.rename(manifest_file)
+            os.replace(str(temp_file), str(manifest_file))
 
             # Create version snapshot in history (only if file hashes actually changed)
             if existing_manifest is None or existing_manifest.file_hashes != manifest.file_hashes:

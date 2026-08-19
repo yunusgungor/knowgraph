@@ -20,7 +20,7 @@ class TestDetectGitRoot:
     def test_detect_git_root_in_git_repo(self, tmp_path):
         """Test detection in a git repository."""
         # Create a git repo
-        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True)
 
         # Create subdirectory
         subdir = tmp_path / "src" / "app"
@@ -119,7 +119,7 @@ class TestDetectProjectRoot:
     def test_detect_with_git_root(self, tmp_path):
         """Test detection prioritizes git root."""
         # Create git repo
-        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True)
 
         subdir = tmp_path / "src"
         subdir.mkdir()
@@ -155,7 +155,7 @@ class TestDetectProjectRoot:
     def test_detect_priority_git_over_markers(self, tmp_path):
         """Test that git root takes priority over markers."""
         # Create git repo at root
-        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True)
 
         # Create marker file in subdirectory
         subdir = tmp_path / "subproject"
@@ -176,7 +176,10 @@ class TestMCPServerIntegration:
 
     def test_project_root_auto_detection_in_server(self):
         """Test that server auto-detects project root."""
-        with patch.dict(os.environ, {}, clear=True):
+        # Preserve HOME/PATH so Path.home() and subprocess work on all platforms
+        safe_env = {k: v for k, v in os.environ.items()
+                    if k in ("HOME", "PATH", "HOMEDRIVE", "HOMEPATH", "USERPROFILE")}
+        with patch.dict(os.environ, safe_env, clear=True):
             # Re-import to pick up changes
             import importlib
 
@@ -279,7 +282,7 @@ class TestRealWorldScenarios:
         This is the expected behavior.
         """
         # Create monorepo with git at root
-        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True)
 
         # Create sub-projects with subdirectories
         frontend = tmp_path / "frontend"

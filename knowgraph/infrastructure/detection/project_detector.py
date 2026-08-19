@@ -59,10 +59,13 @@ def detect_git_root(start_path: Path | None = None) -> Path | None:
             start_path = start_path.parent
             logger.debug(f"Start path is not a directory, using parent: {start_path}")
 
-        result = subprocess.run(
+        # NOTE: capture_output=True triggers WinError 6 on Python 3.14 + Windows,
+        # so we use PIPE explicitly.
+        result = subprocess.run(  # noqa: UP022
             ["git", "rev-parse", "--show-toplevel"],
             cwd=str(start_path),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             check=False,
             timeout=5,
