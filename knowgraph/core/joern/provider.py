@@ -819,8 +819,12 @@ class JoernProvider:
         # FIX: Track flow to BOTH the call arguments AND the call node itself (for builtins/identifiers)
 
         # Clean pattern for string literal
-        src_clean = source_pattern.replace('"', '\\"')
-        sink_clean = sink_pattern.replace('"', '\\"')
+        # Clean patterns for a Scala string literal: patterns are regex text that
+        # may contain backslashes (e.g. re.escape("read(") -> "read\\(") and quotes.
+        # Both must be escaped so the embedded Scala string stays valid (an
+        # unescaped "\(" raises "invalid escape character" in Scala).
+        src_clean = source_pattern.replace("\\", "\\\\").replace('"', '\\"')
+        sink_clean = sink_pattern.replace("\\", "\\\\").replace('"', '\\"')
 
         query = f"""
         def src = cpg.call.filter(c => c.name.contains("{src_clean}") || c.methodFullName.contains("{src_clean}") || c.code.contains("{src_clean}")) ++ cpg.identifier.filter(_.name.contains("{src_clean}"))
@@ -828,10 +832,20 @@ class JoernProvider:
 
         dst.reachableByFlows(src).map{{ path =>
             val flow = path.elements.map{{ e =>
-                val method = e.method.name
+                // AstNode has no .method member in Joern 4; it exists only on the
+                // concrete node subtypes (Method, Call, Identifier, ...). Resolve
+                // the enclosing method via a pattern match so the script compiles.
+                // AstNode has no .method member in Joern 4; it exists only on
+                // concrete node subtypes (Method, Call, Identifier, ...).
+                // Resolve the enclosing method + filename via a pattern match.
+                val (method, file) = e match {{
+                    case m: Method => (m.name, m.filename)
+                    case c: Call => (c.method.name, c.method.filename)
+                    case i: Identifier => (i.method.name, i.method.filename)
+                    case _ => ("", "")
+                }}
                 val line = e.lineNumber.getOrElse(-1)
                 val code = e.code.replace("\\"", "'")
-                val file = e.method.filename
                 s"${{method}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$code"
             }}.mkString("__KS_FLOW__")
             flow
