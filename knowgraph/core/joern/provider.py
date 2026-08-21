@@ -674,7 +674,7 @@ class JoernProvider:
             val method = i.method.name
             val line = i.lineNumber.getOrElse(-1)
             val file = i.method.filename
-            s"$method__KG_SEP__$line__KG_SEP__$file"
+            s"${{method}}__KG_SEP__${{line}}__KG_SEP__$file"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -710,7 +710,7 @@ class JoernProvider:
             val line = c.lineNumber.getOrElse(-1)
             val file = c.method.filename
             val code = c.code.replace("\\"", "'") // Escape quotes
-            s"$method__KG_SEP__$line__KG_SEP__$file__KG_SEP__$code"
+            s"${{method}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$code"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -747,7 +747,7 @@ class JoernProvider:
              val method = l.method.name.headOption.getOrElse("<unknown>")
              val line = l.lineNumber.getOrElse(-1)
              val file = l.file.name.headOption.getOrElse("<unknown>")
-             s"$method__KG_SEP__$line__KG_SEP__$file__KG_SEP__$code"
+             s"${{method}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$code"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -787,7 +787,7 @@ class JoernProvider:
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
             val sig = m.signature
-            s"$name__KG_SEP__$line__KG_SEP__$file__KG_SEP__$sig"
+            s"${{name}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$sig"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -832,7 +832,7 @@ class JoernProvider:
                 val line = e.lineNumber.getOrElse(-1)
                 val code = e.code.replace("\\"", "'")
                 val file = e.method.filename
-                s"$method__KG_SEP__$line__KG_SEP__$file__KG_SEP__$code"
+                s"${{method}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$code"
             }}.mkString("__KS_FLOW__")
             flow
         }}.dedup.l
@@ -869,7 +869,7 @@ class JoernProvider:
             val name = p.name
             val type = p.typeFullName
             val index = p.index
-            s"$name__KG_SEP__$type__KG_SEP__$index"
+            s"${{name}}__KG_SEP__${{type}}__KG_SEP__$index"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -899,7 +899,7 @@ class JoernProvider:
         cpg.method.name("{method_pattern}").local.map{{ l =>
             val name = l.name
             val type = l.typeFullName
-            s"$name__KG_SEP__$type"
+            s"${{name}}__KG_SEP__$type"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -943,7 +943,7 @@ class JoernProvider:
             val file = c.file.name.headOption.getOrElse("<unknown>")
             val line = c.lineNumber.getOrElse(-1)
             val content = c.code.replace("\\"", "'")
-            s"$file__KG_SEP__$line__KG_SEP__$content"
+            s"${{file}}__KG_SEP__${{line}}__KG_SEP__$content"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -990,7 +990,7 @@ class JoernProvider:
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
             val annots = m.annotation.name.mkString(", ")
-            s"$name__KG_SEP__$line__KG_SEP__$file__KG_SEP__$annots"
+            s"${{name}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$annots"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -1021,7 +1021,7 @@ class JoernProvider:
         cpg.imports.code("(?i).*{import_pattern}.*").map{{ i =>
             val code = i.code
             val file = i.file.name.headOption.getOrElse("unknown")
-            s"$code__KG_SEP__$file"
+            s"${{code}}__KG_SEP__$file"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -1059,7 +1059,7 @@ class JoernProvider:
             val name = m.name
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
-            s"$name__KG_SEP__$line__KG_SEP__$file__KG_SEP__$loops__KG_SEP__$ifs"
+            s"${{name}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__${{loops}}__KG_SEP__$ifs"
         }}.l
         """
         result = executor.execute_query(cpg_path, query)
