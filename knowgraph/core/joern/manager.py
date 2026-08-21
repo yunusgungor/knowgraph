@@ -4,6 +4,7 @@ This module handles downloading, installing, and verifying the Joern CLI.
 """
 
 import logging
+import os
 import platform
 import shutil
 import subprocess
@@ -267,6 +268,13 @@ def install_joern() -> bool:
         True if installation successful
 
     """
+    # Emoji status messages require UTF-8 output; fall back gracefully on
+    # terminals with a restrictive codepage (e.g. cp1254 on some Windows).
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
     print("\n" + "="*60)
     print("🧠 KnowGraph - Joern Integration Setup")
     print("="*60 + "\n")
@@ -345,6 +353,10 @@ class PostInstallCommand(install):
         # First run the standard install
         if install != object:
             install.run(self)
+
+        # Allow CI/packaging to skip the Joern download (e.g. python -m build).
+        if os.getenv("KNOWGRAPH_SKIP_JOERN"):
+            return
 
         # Then run Joern setup
         try:
