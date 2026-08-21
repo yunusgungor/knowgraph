@@ -49,6 +49,10 @@ class JoernProvider:
         """
         if platform.system() == "Windows":
             cmd = ["cmd.exe", "/c"] + cmd
+            # Avoid spawning a console window and reduce inherited handles —
+            # this prevents _winapi.DuplicateHandle OSErrors when many Joern
+            # subprocesses run in quick succession (e.g. under pytest capture).
+            kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return subprocess.run(cmd, **kwargs)
 
     def __init__(self, joern_path: str | None = None):
@@ -162,10 +166,15 @@ class JoernProvider:
         logger.info(f"Generating CPG: {' '.join(cmd)}")
 
         try:
+            # stdout -> DEVNULL, stderr -> PIPE: capturing stdout is unnecessary
+            # (joern-parse prints nothing useful) and the extra pipe handles make
+            # Windows _winapi.DuplicateHandle fail under pytest's capture.
             result = self._joern_subprocess(
                 cmd,
                 timeout=timeout,
-                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 text=True,
             )
 
@@ -174,7 +183,7 @@ class JoernProvider:
                 raise subprocess.CalledProcessError(
                     result.returncode,
                     cmd,
-                    result.stdout,
+                    result.stdout or "",
                     result.stderr,
                 )
 
@@ -224,6 +233,7 @@ class JoernProvider:
             result = self._joern_subprocess(
                 cmd,
                 timeout=timeout,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
             )
@@ -393,12 +403,13 @@ class JoernProvider:
         logger.info(f"Exporting CPG to {format.value}: {' '.join(cmd)}")
 
         try:
-            result = subprocess.run(
+            result = self._joern_subprocess(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
                 cwd=str(self.joern_path),
+                stdin=subprocess.DEVNULL,
             )
 
             if result.returncode != 0:
