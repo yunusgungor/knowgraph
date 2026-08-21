@@ -5,7 +5,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 include-package-data = true
 
-# Post-install hook for Joern setup
+# Post-install hook for Joern setup — opt-in via KNOWGRAPH_INSTALL_JOERN=1.
+# A plain `pip install knowgraph` skips the ~200MB Joern download so installs
+# stay fast and offline-friendly; users run `knowgraph-setup-joern` when needed.
 [tool.setuptools.cmdclass]
 install = "knowgraph.core.joern.manager.PostInstallCommand"
 
@@ -37,9 +39,7 @@ dependencies = [
     "click>=8.1.0",
     "rich>=13.7.0",
     "tqdm>=4.66.0",
-    # MCP 2.0 removed the decorator-based Server API (@app.call_tool etc.)
-    # that server.py relies on. Pin to <2.0 until the migration is done.
-    "mcp>=1.0.0,<2.0",
+    "mcp>=2.0.0",
     "openai>=1.0.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",

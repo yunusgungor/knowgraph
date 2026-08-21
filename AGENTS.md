@@ -14,8 +14,9 @@ queries. Python 3.10–3.13 supported.
   threshold (pytest.ini takes precedence). Keep it this way.
 
 ## Dependencies / version pins
-- `mcp` MUST stay `<2.0`. MCP 2.0 removed the decorator-based Server API that
-  `knowgraph/adapters/mcp/server.py` relies on. Pinned in `pyproject.toml`.
+- `mcp` is pinned `>=2.0.0`. The MCP server (`knowgraph/adapters/mcp/server.py`)
+  uses FastMCP (`mcp.server.fastmcp.FastMCP`) — the decorator-based low-level
+  `Server` API was removed in 2.0.
 - `pydantic-settings` is required by `knowgraph/config.py` (`BaseSettings`).
 
 ## Testing

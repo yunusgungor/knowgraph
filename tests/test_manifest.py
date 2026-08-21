@@ -8,7 +8,7 @@ from knowgraph.infrastructure.storage.manifest import (
 
 def test_manifest_creation():
     m = Manifest.create_new("edges.jsonl", "index")
-    assert m.version == "1.0.0"
+    assert m.version == "1.0.1"
     assert m.node_count == 0
     assert m.edges_filename == "edges.jsonl"
 

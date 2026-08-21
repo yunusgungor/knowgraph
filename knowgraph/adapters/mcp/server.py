@@ -3,11 +3,12 @@ import logging
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 
 import mcp.types as types
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
+from pydantic import Field
 
 from knowgraph.adapters.mcp.diagnostic_handler import handle_diagnostic
 from knowgraph.adapters.mcp.handlers import (
@@ -43,8 +44,11 @@ from knowgraph.shared.versioning import (
     register_version,
 )
 
-app = Server("knowgraph-mcp")
+app = MCPServer("knowgraph-mcp")
 logger = logging.getLogger(__name__)
+
+# Background LLM-detection task reference, kept alive across the server lifetime
+_init_task: asyncio.Task | None = None
 
 
 # Register API versions on module load
@@ -232,633 +236,360 @@ async def _initialize_llm_detection():
         logger.warning(f"Failed to initialize LLM detection: {e}", exc_info=True)
 
 
-@app.call_tool()  # type: ignore
-async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
-    """Route tool calls to appropriate handlers."""
-    provider = get_llm_provider(app)
-
-    if name == "knowgraph_query":
-        return await handle_query(arguments, provider, PROJECT_ROOT, server=app)
-
-    elif name == "knowgraph_index":
-        return await handle_index(arguments, provider, PROJECT_ROOT, server=app)
-
-    elif name == "knowgraph_analyze_impact":
-        return await handle_analyze_impact(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_validate":
-        return await handle_validate(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_get_stats":
-        return await handle_get_stats(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_discover_conversations":
-        return await handle_discover_conversations(arguments, provider, PROJECT_ROOT)
-
-    elif name == "knowgraph_tag_snippet":
-        return await handle_tag_snippet(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_batch_query":
-        return await handle_batch_query(arguments, provider, PROJECT_ROOT)
-
-    elif name == "knowgraph_search_bookmarks":
-        return await handle_search_bookmarks(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_analyze_conversations":
-        return await handle_analyze_conversations(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_list_versions":
-        return await handle_list_versions(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_version_info":
-        return await handle_version_info(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_diff_versions":
-        return await handle_diff_versions(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_rollback":
-        return await handle_rollback(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_diagnostic":
-        return await handle_diagnostic(arguments, PROJECT_ROOT)
-
-    # Joern-specific tools
-    elif name == "knowgraph_joern_query":
-        return await handle_joern_query(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_security_scan":
-        return await handle_security_scan(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_find_dead_code":
-        return await handle_find_dead_code(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_analyze_call_graph":
-        return await handle_analyze_call_graph(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_export_cpg":
-        return await handle_export_cpg(arguments, PROJECT_ROOT)
-
-    elif name == "knowgraph_generate_cpg":
-        return await handle_generate_cpg(arguments, PROJECT_ROOT)
-
-    return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
+def _join(items: list[types.TextContent]) -> str:
+    return "\n".join(item.text for item in items)
 
 
-@app.list_resources()  # type: ignore
-async def list_resources() -> list[types.Resource]:
+@app.tool(description="Retrieve relevant context from the KnowGraph knowledge graph to answer a query.")
+async def knowgraph_query(
+    query: Annotated[str, Field(description="The natural language query to retrieve context for.")],
+    ctx: Context | None = None,
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    with_explanation: Annotated[bool, Field(description="Include an explanation of how the answer was derived (default: false).")] = False,
+    top_k: Annotated[int, Field(description="Number of top results to return (default: 20).")] = 20,
+    max_hops: Annotated[int, Field(description="Maximum number of hops for graph traversal (default: 4).")] = 4,
+    expand_query: Annotated[bool, Field(description="Uses AI to expand query with synonyms and technical terms (default: false).")] = False,
+    max_tokens: Annotated[int, Field(description="Maximum token count for the context window (default: 3000).")] = 3000,
+    enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
+    lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
+) -> str:
+    arguments: dict[str, Any] = {
+        "query": query,
+        "graph_path": graph_path,
+        "with_explanation": with_explanation,
+        "top_k": top_k,
+        "max_hops": max_hops,
+        "expand_query": expand_query,
+        "max_tokens": max_tokens,
+        "enable_hierarchical_lifting": enable_hierarchical_lifting,
+        "lift_levels": lift_levels,
+    }
+    kwargs: dict[str, Any] = {}
+    if ctx is not None:
+        kwargs["server"] = ctx
+    return _join(
+        await handle_query(arguments, get_llm_provider(), PROJECT_ROOT, **kwargs)
+    )
+
+
+@app.tool(description="Trigger indexing of markdown files, Git repositories, or code directories.")
+async def knowgraph_index(
+    ctx: Context | None = None,
+    input_path: Annotated[str, Field(description="Path to markdown files, local directory, or Git repository URL (GitHub, GitLab, Bitbucket). `source_path` is accepted as an alias.")] = None,
+    output_path: Annotated[str, Field(description="Path to graph storage (optional).")] = None,
+    resume: Annotated[bool, Field(description="Resume indexing from checkpoint if interrupted (default: false). Only works for local files.")] = False,
+    gc: Annotated[bool, Field(description="Garbage collect deleted nodes during update (default: false).")] = False,
+    include_patterns: Annotated[list[str], Field(description="File patterns to include (e.g., ['*.py', '*.md']). Only for repositories and code directories.")] = None,
+    exclude_patterns: Annotated[list[str], Field(description="File patterns to exclude (e.g., ['node_modules/*', '*.lock']). Only for repositories and code directories.")] = None,
+    access_token: Annotated[str, Field(description="GitHub Personal Access Token for private repositories.")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "input_path": input_path,
+        "output_path": output_path,
+        "resume": resume,
+        "gc": gc,
+        "include_patterns": include_patterns,
+        "exclude_patterns": exclude_patterns,
+        "access_token": access_token,
+    }
+    kwargs: dict[str, Any] = {}
+    if ctx is not None:
+        kwargs["server"] = ctx
+    return _join(
+        await handle_index(arguments, get_llm_provider(), PROJECT_ROOT, **kwargs)
+    )
+
+
+@app.tool(description="Analyze the impact of changing a specific element (code, function, etc.) in the graph.")
+async def knowgraph_analyze_impact(
+    element: Annotated[str, Field(description="The element (name or query) to analyze impact for.")],
+    max_hops: Annotated[int, Field(description="Maximum depth of dependency traversal (default: 4).")] = 4,
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    mode: Annotated[Literal["semantic", "path"], Field(description="Analysis mode: 'semantic' (concept) or 'path' (file path pattern). Default: semantic.")] = "semantic",
+) -> str:
+    arguments: dict[str, Any] = {
+        "element": element,
+        "max_hops": max_hops,
+        "graph_path": graph_path,
+        "mode": mode,
+    }
+    return _join(await handle_analyze_impact(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Validate the consistency and health of the knowledge graph.")
+async def knowgraph_validate(
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {"graph_path": graph_path}
+    return _join(await handle_validate(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Get basic statistics about the stored knowledge graph.")
+async def knowgraph_get_stats(
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {"graph_path": graph_path}
+    return _join(await handle_get_stats(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Auto-discover and index conversations from AI code editors (Antigravity, Cursor, GitHub Copilot). No manual export required!")
+async def knowgraph_discover_conversations(
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    editor: Annotated[Literal["all", "antigravity", "cursor", "github_copilot"], Field(description="Which editor's conversations to index (default: all).")] = "all",
+) -> str:
+    arguments: dict[str, Any] = {
+        "graph_path": graph_path,
+        "editor": editor,
+    }
+    return _join(
+        await handle_discover_conversations(
+            arguments, get_llm_provider(), PROJECT_ROOT
+        )
+    )
+
+
+@app.tool(description="Tag and index an important snippet for later retrieval. Use this to bookmark important AI responses or code examples.")
+async def knowgraph_tag_snippet(
+    tag: Annotated[str, Field(description="Tag for the snippet (e.g., 'fastapi jwt detayı', 'important config')")],
+    snippet: Annotated[str, Field(description="The content to tag and index")],
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    conversation_id: Annotated[str, Field(description="Optional conversation ID for context")] = None,
+    user_question: Annotated[str, Field(description="Optional user question that prompted this response")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "tag": tag,
+        "snippet": snippet,
+        "graph_path": graph_path,
+        "conversation_id": conversation_id,
+        "user_question": user_question,
+    }
+    return _join(await handle_tag_snippet(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Execute multiple queries in batch for efficient processing.")
+async def knowgraph_batch_query(
+    queries: Annotated[list[str], Field(description="List of natural language queries to process.")],
+    ctx: Context | None = None,
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    top_k: Annotated[int, Field(description="Number of top results to return per query (default: 20).")] = 20,
+    max_hops: Annotated[int, Field(description="Maximum number of hops for graph traversal (default: 4).")] = 4,
+    max_tokens: Annotated[int, Field(description="Maximum token count for the context window (default: 3000).")] = 3000,
+    enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
+    lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
+) -> str:
+    arguments: dict[str, Any] = {
+        "queries": queries,
+        "graph_path": graph_path,
+        "top_k": top_k,
+        "max_hops": max_hops,
+        "max_tokens": max_tokens,
+        "enable_hierarchical_lifting": enable_hierarchical_lifting,
+        "lift_levels": lift_levels,
+    }
+    kwargs: dict[str, Any] = {}
+    if ctx is not None:
+        kwargs["server"] = ctx
+    return _join(
+        await handle_batch_query(arguments, get_llm_provider(), PROJECT_ROOT, **kwargs)
+    )
+
+
+@app.tool(description="Search tagged bookmarks/snippets with semantic matching. Find previously saved code snippets, examples, and important notes.")
+async def knowgraph_search_bookmarks(
+    query: Annotated[str, Field(description="Search query for finding bookmarks")],
+    top_k: Annotated[int, Field(description="Number of bookmarks to return (default: 10)")] = 10,
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "query": query,
+        "top_k": top_k,
+        "graph_path": graph_path,
+    }
+    return _join(await handle_search_bookmarks(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Analyze conversation patterns for topics and trends. Discover what topics are trending, when they were discussed, and knowledge evolution over time.")
+async def knowgraph_analyze_conversations(
+    topic: Annotated[str, Field(description="Optional specific topic to analyze (omit for trending topics)")] = None,
+    time_window_days: Annotated[int, Field(description="Number of days to analyze (default: 7)")] = 7,
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "topic": topic,
+        "time_window_days": time_window_days,
+        "graph_path": graph_path,
+    }
+    return _join(await handle_analyze_conversations(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="List all versions in the knowledge graph history.")
+async def knowgraph_list_versions(
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    limit: Annotated[int, Field(description="Maximum number of versions to return (default: 50)")] = 50,
+) -> str:
+    arguments: dict[str, Any] = {
+        "graph_path": graph_path,
+        "limit": limit,
+    }
+    return _join(await handle_list_versions(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Get detailed information about a specific version.")
+async def knowgraph_version_info(
+    version_id: Annotated[str, Field(description="Version identifier (e.g., 'v1', 'v2', 'v3')")],
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "version_id": version_id,
+        "graph_path": graph_path,
+    }
+    return _join(await handle_version_info(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Compare two versions and show differences in nodes, edges, and files.")
+async def knowgraph_diff_versions(
+    version1: Annotated[str, Field(description="First version ID (e.g., 'v1')")],
+    version2: Annotated[str, Field(description="Second version ID (e.g., 'v3')")],
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "version1": version1,
+        "version2": version2,
+        "graph_path": graph_path,
+    }
+    return _join(await handle_diff_versions(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Rollback manifest to a previous version (metadata only). Creates backup and requires confirmation.")
+async def knowgraph_rollback(
+    version_id: Annotated[str, Field(description="Version to rollback to (e.g., 'v3')")],
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    create_backup: Annotated[bool, Field(description="Create backup before rollback (default: true)")] = True,
+    force: Annotated[bool, Field(description="Skip validation checks (default: false)")] = False,
+) -> str:
+    arguments: dict[str, Any] = {
+        "version_id": version_id,
+        "graph_path": graph_path,
+        "create_backup": create_backup,
+        "force": force,
+    }
+    return _join(await handle_rollback(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Run diagnostic checks on the KnowGraph system. Check graph store status, LLM provider configuration, and get recommendations.")
+async def knowgraph_diagnostic(
+    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {"graph_path": graph_path}
+    return _join(await handle_diagnostic(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Execute native Joern DSL queries for advanced code analysis. Use predefined templates or custom queries.")
+async def knowgraph_joern_query(
+    cpg_path: Annotated[str, Field(description="Path to CPG binary file (required).")],
+    query: Annotated[str, Field(description="Native Joern DSL query string (e.g., 'cpg.method.name.l').")] = None,
+    query_name: Annotated[str, Field(description="Use predefined query template (e.g., 'find_sql_injections', 'find_buffer_overflows').")] = None,
+    timeout: Annotated[int, Field(description="Query timeout in seconds (default: 60).")] = 60,
+) -> str:
+    arguments: dict[str, Any] = {
+        "cpg_path": cpg_path,
+        "query": query,
+        "query_name": query_name,
+        "timeout": timeout,
+    }
+    return _join(await handle_joern_query(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Run security policy validation with 10 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc. Auto-detects CPG from graph_path if not explicitly provided.")
+async def knowgraph_security_scan(
+    cpg_path: Annotated[str, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
+    severity_filter: Annotated[Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"], Field(description="Minimum severity level for violations (default: MEDIUM).")] = "MEDIUM",
+    policy_names: Annotated[list[str], Field(description="Specific policies to run (e.g., ['buffer_overflow', 'sql_injection']). Omit to run all.")] = None,
+    graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional, defaults to ./graphstore).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "cpg_path": cpg_path,
+        "severity_filter": severity_filter,
+        "policy_names": policy_names,
+        "graph_path": graph_path,
+    }
+    return _join(await handle_security_scan(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Detect unreachable methods using dominance analysis. Find methods that have no callers (potential dead code).")
+async def knowgraph_find_dead_code(
+    cpg_path: Annotated[str, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
+    include_internal: Annotated[bool, Field(description="Include internal methods starting with underscore (default: false).")] = False,
+    graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "cpg_path": cpg_path,
+        "include_internal": include_internal,
+        "graph_path": graph_path,
+    }
+    return _join(await handle_find_dead_code(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Analyze call graph structure and relationships. Supports validation, recursive call detection, and call chain analysis.")
+async def knowgraph_analyze_call_graph(
+    cpg_path: Annotated[str, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
+    analysis_type: Annotated[Literal["validate", "recursive", "call_chain"], Field(description="Type of analysis: 'validate' (health check), 'recursive' (find recursion), 'call_chain' (paths between methods).")] = None,
+    method_name: Annotated[str, Field(description="Source method name (required for call_chain analysis).")] = None,
+    target_method: Annotated[str, Field(description="Target method name (required for call_chain analysis).")] = None,
+    graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "cpg_path": cpg_path,
+        "analysis_type": analysis_type,
+        "method_name": method_name,
+        "target_method": target_method,
+        "graph_path": graph_path,
+    }
+    return _join(await handle_analyze_call_graph(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Export CPG to various formats for visualization and CI/CD integration. Supports JSON, SARIF, Neo4j, DOT, and GraphML.")
+async def knowgraph_export_cpg(
+    cpg_path: Annotated[str, Field(description="Path to source CPG binary file (required).")],
+    output_path: Annotated[str, Field(description="Export destination path (required).")],
+    format: Annotated[Literal["json", "sarif", "neo4j", "dot", "graphml"], Field(description="Export format (default: json).")] = "json",
+    graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
+) -> str:
+    arguments: dict[str, Any] = {
+        "cpg_path": cpg_path,
+        "output_path": output_path,
+        "format": format,
+        "graph_path": graph_path,
+    }
+    return _join(await handle_export_cpg(arguments, PROJECT_ROOT))
+
+
+@app.tool(description="Generate Code Property Graph dynamically from source code. Automatically detects language and generates CPG for analysis.")
+async def knowgraph_generate_cpg(
+    source_path: Annotated[str, Field(description="Path to source code directory or file (required). `input_path` is accepted as an alias.")] = None,
+    language: Annotated[str, Field(description="Language hint for CPG generation (optional, auto-detected if not provided).")] = None,
+    timeout: Annotated[int, Field(description="Generation timeout in seconds (default: 600).")] = 600,
+) -> str:
+    arguments: dict[str, Any] = {
+        "source_path": source_path,
+        "language": language,
+        "timeout": timeout,
+    }
+    return _join(await handle_generate_cpg(arguments, PROJECT_ROOT))
+
+
+@app.resource(
+    "knowgraph://default/manifest",
+    name="Default Graph Manifest",
+    description="Manifest file of the default knowledge graph",
+    mime_type="application/json",
+)
+async def _manifest() -> str:
     graph_path = resolve_graph_path(DEFAULT_GRAPH_STORE_PATH, PROJECT_ROOT)
     manifest_path = graph_path / "metadata" / "manifest.json"
-
-    resources = []
-    if manifest_path.exists():
-        resources.append(
-            types.Resource(
-                uri=types.AnyUrl("knowgraph://default/manifest"),  # type: ignore
-                name="Default Graph Manifest",
-                description="Manifest file of the default knowledge graph",
-                mimeType="application/json",
-            )
-        )
-    return resources
-
-
-@app.read_resource()  # type: ignore
-async def read_resource(uri: Any) -> str | bytes:
-    if str(uri) == "knowgraph://default/manifest":
-        graph_path = resolve_graph_path(DEFAULT_GRAPH_STORE_PATH, PROJECT_ROOT)
-        manifest_path = graph_path / "metadata" / "manifest.json"
-        if manifest_path.exists():
-            return manifest_path.read_text(encoding="utf-8")
+    if not manifest_path.exists():
         raise ValueError("Manifest not found")
-
-    raise ValueError(f"Unknown resource: {uri}")
-
-
-@app.list_tools()  # type: ignore
-async def list_tools() -> list[types.Tool]:
-    return [
-        types.Tool(
-            name="knowgraph_query",
-            description="Retrieve relevant context from the KnowGraph knowledge graph to answer a query.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The natural language query to retrieve context for.",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                    "with_explanation": {
-                        "type": "boolean",
-                        "description": "Include an explanation of how the answer was derived (default: false).",
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "Number of top results to return (default: 20).",
-                    },
-                    "max_hops": {
-                        "type": "integer",
-                        "description": "Maximum number of hops for graph traversal (default: 4).",
-                    },
-                    "expand_query": {
-                        "type": "boolean",
-                        "description": "Uses AI to expand query with synonyms and technical terms (default: false).",
-                    },
-                    "max_tokens": {
-                        "type": "integer",
-                        "description": "Maximum token count for the context window (default: 3000).",
-                    },
-                    "enable_hierarchical_lifting": {
-                        "type": "boolean",
-                        "description": "Enable hierarchical context lifting for broader context (default: true).",
-                    },
-                    "lift_levels": {
-                        "type": "integer",
-                        "description": "Number of directory levels to lift context from (default: 2).",
-                    },
-                },
-                "required": ["query"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_analyze_impact",
-            description="Analyze the impact of changing a specific element (code, function, etc.) in the graph.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "element": {
-                        "type": "string",
-                        "description": "The element (name or query) to analyze impact for.",
-                    },
-                    "max_hops": {
-                        "type": "integer",
-                        "description": "Maximum depth of dependency traversal (default: 4).",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                    "mode": {
-                        "type": "string",
-                        "enum": ["semantic", "path"],
-                        "description": "Analysis mode: 'semantic' (concept) or 'path' (file path pattern). Default: semantic.",
-                    },
-                },
-                "required": ["element"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_validate",
-            description="Validate the consistency and health of the knowledge graph.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional).",
-                    },
-                },
-            },
-        ),
-        types.Tool(
-            name="knowgraph_get_stats",
-            description="Get basic statistics about the stored knowledge graph.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional).",
-                    },
-                },
-            },
-        ),
-        types.Tool(
-            name="knowgraph_index",
-            description="Trigger indexing of markdown files, Git repositories, or code directories.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "input_path": {
-                        "type": "string",
-                        "description": "Path to markdown files, local directory, or Git repository URL (GitHub, GitLab, Bitbucket). `source_path` is accepted as an alias.",
-                    },
-                    "output_path": {
-                        "type": "string",
-                        "description": "Path to graph storage (optional).",
-                    },
-                    "resume": {
-                        "type": "boolean",
-                        "description": "Resume indexing from checkpoint if interrupted (default: false). Only works for local files.",
-                    },
-                    "gc": {
-                        "type": "boolean",
-                        "description": "Garbage collect deleted nodes during update (default: false).",
-                    },
-                    "include_patterns": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "File patterns to include (e.g., ['*.py', '*.md']). Only for repositories and code directories.",
-                    },
-                    "exclude_patterns": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "File patterns to exclude (e.g., ['node_modules/*', '*.lock']). Only for repositories and code directories.",
-                    },
-                    "access_token": {
-                        "type": "string",
-                        "description": "GitHub Personal Access Token for private repositories.",
-                    },
-                },
-                "required": [],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_batch_query",
-            description="Execute multiple queries in batch for efficient processing.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "queries": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of natural language queries to process.",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "Number of top results to return per query (default: 20).",
-                    },
-                    "max_hops": {
-                        "type": "integer",
-                        "description": "Maximum number of hops for graph traversal (default: 4).",
-                    },
-                    "max_tokens": {
-                        "type": "integer",
-                        "description": "Maximum token count for the context window (default: 3000).",
-                    },
-                    "enable_hierarchical_lifting": {
-                        "type": "boolean",
-                        "description": "Enable hierarchical context lifting for broader context (default: true).",
-                    },
-                    "lift_levels": {
-                        "type": "integer",
-                        "description": "Number of directory levels to lift context from (default: 2).",
-                    },
-                },
-                "required": ["queries"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_discover_conversations",
-            description="Auto-discover and index conversations from AI code editors (Antigravity, Cursor, GitHub Copilot). No manual export required!",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                    "editor": {
-                        "type": "string",
-                        "enum": ["all", "antigravity", "cursor", "github_copilot"],
-                        "description": "Which editor's conversations to index (default: all).",
-                    },
-                },
-            },
-        ),
-        types.Tool(
-            name="knowgraph_tag_snippet",
-            description="Tag and index an important snippet for later retrieval. Use this to bookmark important AI responses or code examples.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "tag": {
-                        "type": "string",
-                        "description": "Tag for the snippet (e.g., 'fastapi jwt detayı', 'important config')",
-                    },
-                    "snippet": {
-                        "type": "string",
-                        "description": "The content to tag and index",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                    "conversation_id": {
-                        "type": "string",
-                        "description": "Optional conversation ID for context",
-                    },
-                    "user_question": {
-                        "type": "string",
-                        "description": "Optional user question that prompted this response",
-                    },
-                },
-                "required": ["tag", "snippet"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_search_bookmarks",
-            description="Search tagged bookmarks/snippets with semantic matching. Find previously saved code snippets, examples, and important notes.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query for finding bookmarks",
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "Number of bookmarks to return (default: 10)",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                },
-                "required": ["query"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_analyze_conversations",
-            description="Analyze conversation patterns for topics and trends. Discover what topics are trending, when they were discussed, and knowledge evolution over time.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "topic": {
-                        "type": "string",
-                        "description": "Optional specific topic to analyze (omit for trending topics)",
-                    },
-                    "time_window_days": {
-                        "type": "integer",
-                        "description": "Number of days to analyze (default: 7)",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                },
-            },
-        ),
-        types.Tool(
-            name="knowgraph_list_versions",
-            description="List all versions in the knowledge graph history.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Maximum number of versions to return (default: 50)",
-                    },
-                },
-            },
-        ),
-        types.Tool(
-            name="knowgraph_version_info",
-            description="Get detailed information about a specific version.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "version_id": {
-                        "type": "string",
-                        "description": "Version identifier (e.g., 'v1', 'v2', 'v3')",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                },
-                "required": ["version_id"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_diff_versions",
-            description="Compare two versions and show differences in nodes, edges, and files.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "version1": {
-                        "type": "string",
-                        "description": "First version ID (e.g., 'v1')",
-                    },
-                    "version2": {
-                        "type": "string",
-                        "description": "Second version ID (e.g., 'v3')",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                },
-                "required": ["version1", "version2"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_rollback",
-            description="Rollback manifest to a previous version (metadata only). Creates backup and requires confirmation.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "version_id": {
-                        "type": "string",
-                        "description": "Version to rollback to (e.g., 'v3')",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                    "create_backup": {
-                        "type": "boolean",
-                        "description": "Create backup before rollback (default: true)",
-                    },
-                    "force": {
-                        "type": "boolean",
-                        "description": "Skip validation checks (default: false)",
-                    },
-                },
-                "required": ["version_id"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_diagnostic",
-            description="Run diagnostic checks on the KnowGraph system. Check graph store status, LLM provider configuration, and get recommendations.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to the graph storage directory (optional, defaults to ./graphstore).",
-                    },
-                },
-            },
-        ),
-        # Joern-specific tools
-        types.Tool(
-            name="knowgraph_joern_query",
-            description="Execute native Joern DSL queries for advanced code analysis. Use predefined templates or custom queries.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "cpg_path": {
-                        "type": "string",
-                        "description": "Path to CPG binary file (required).",
-                    },
-                    "query": {
-                        "type": "string",
-                        "description": "Native Joern DSL query string (e.g., 'cpg.method.name.l').",
-                    },
-                    "query_name": {
-                        "type": "string",
-                        "description": "Use predefined query template (e.g., 'find_sql_injections', 'find_buffer_overflows').",
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Query timeout in seconds (default: 60).",
-                    },
-                },
-                "required": ["cpg_path"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_security_scan",
-            description="Run security policy validation with 10 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc. Auto-detects CPG from graph_path if not explicitly provided.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "cpg_path": {
-                        "type": "string",
-                        "description": "Path to CPG binary file (optional if graph_path is provided).",
-                    },
-                    "severity_filter": {
-                        "type": "string",
-                        "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
-                        "description": "Minimum severity level for violations (default: MEDIUM).",
-                    },
-                    "policy_names": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Specific policies to run (e.g., ['buffer_overflow', 'sql_injection']). Omit to run all.",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to graph storage for automatic CPG detection (optional, defaults to ./graphstore).",
-                    },
-                },
-            },
-        ),
-        types.Tool(
-            name="knowgraph_find_dead_code",
-            description="Detect unreachable methods using dominance analysis. Find methods that have no callers (potential dead code).",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "cpg_path": {
-                        "type": "string",
-                        "description": "Path to CPG binary file (optional if graph_path is provided).",
-                    },
-                    "include_internal": {
-                        "type": "boolean",
-                        "description": "Include internal methods starting with underscore (default: false).",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to graph storage for automatic CPG detection (optional).",
-                    },
-                },
-                "required": [],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_analyze_call_graph",
-            description="Analyze call graph structure and relationships. Supports validation, recursive call detection, and call chain analysis.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "cpg_path": {
-                        "type": "string",
-                        "description": "Path to CPG binary file (optional if graph_path is provided).",
-                    },
-                    "analysis_type": {
-                        "type": "string",
-                        "enum": ["validate", "recursive", "call_chain"],
-                        "description": "Type of analysis: 'validate' (health check), 'recursive' (find recursion), 'call_chain' (paths between methods).",
-                    },
-                    "method_name": {
-                        "type": "string",
-                        "description": "Source method name (required for call_chain analysis).",
-                    },
-                    "target_method": {
-                        "type": "string",
-                        "description": "Target method name (required for call_chain analysis).",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to graph storage for automatic CPG detection (optional).",
-                    },
-                },
-                "required": [],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_export_cpg",
-            description="Export CPG to various formats for visualization and CI/CD integration. Supports JSON, SARIF, Neo4j, DOT, and GraphML.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "cpg_path": {
-                        "type": "string",
-                        "description": "Path to source CPG binary file (required).",
-                    },
-                    "output_path": {
-                        "type": "string",
-                        "description": "Export destination path (required).",
-                    },
-                    "format": {
-                        "type": "string",
-                        "enum": ["json", "sarif", "neo4j", "dot", "graphml"],
-                        "description": "Export format (default: json).",
-                    },
-                    "graph_path": {
-                        "type": "string",
-                        "description": "Path to graph storage for automatic CPG detection (optional).",
-                    },
-                },
-                "required": ["cpg_path", "output_path"],
-            },
-        ),
-        types.Tool(
-            name="knowgraph_generate_cpg",
-            description="Generate Code Property Graph dynamically from source code. Automatically detects language and generates CPG for analysis.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "source_path": {
-                        "type": "string",
-                        "description": "Path to source code directory or file (required). `input_path` is accepted as an alias.",
-                    },
-                    "language": {
-                        "type": "string",
-                        "description": "Language hint for CPG generation (optional, auto-detected if not provided).",
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Generation timeout in seconds (default: 600).",
-                    },
-                },
-                "required": [],
-            },
-        ),
-    ]
+    return manifest_path.read_text(encoding="utf-8")
 
 
 def _configure_logging():
@@ -872,14 +603,12 @@ def _configure_logging():
 
 async def main() -> None:
     _configure_logging()
-    async with stdio_server() as (read_stream, write_stream):
-        # Start background LLM detection task (fire and forget)
-        _ = asyncio.create_task(_initialize_llm_detection())  # noqa: RUF006
-
-        init_options = app.create_initialization_options()
-        await app.run(read_stream, write_stream, init_options)
+    # Start background LLM detection task (fire and forget); keep a module ref
+    # to avoid the task being garbage-collected.
+    global _init_task
+    _init_task = asyncio.create_task(_initialize_llm_detection())
+    await app.run_stdio_async()
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-# Version management tools added below

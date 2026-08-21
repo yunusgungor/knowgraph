@@ -1,5 +1,6 @@
 """Tests for cache health checks and corruption detection."""
 
+import gc
 import tempfile
 
 import pytest
@@ -12,6 +13,10 @@ def temp_cache_dir():
     """Create temporary cache directory."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield tmpdir
+        # Force outstanding CacheManager.__del__ finalizers to run so open
+        # SQLite handles are closed before the temp directory is removed
+        # (otherwise rmtree() on Windows hits PermissionError on the .db file).
+        gc.collect()
 
 
 def test_cache_integrity_healthy(temp_cache_dir):

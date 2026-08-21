@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
-from mcp.server import Server
 
 from knowgraph.domain.intelligence.provider import IntelligenceProvider
 from knowgraph.infrastructure.intelligence.mcp_sampling_provider import MCPSamplingProvider
@@ -38,9 +38,13 @@ def resolve_graph_path(path_arg: str | None, root_dir: Path) -> Path:
     return path_obj.resolve()
 
 
-def get_llm_provider(server: Server) -> IntelligenceProvider:
+def get_llm_provider(_server: Any = None) -> IntelligenceProvider:
     """Factory function to create an LLM provider based on environment variables.
     Prioritizes OpenAI/OpenRouter via env vars, falls back to MCP Sampling.
+
+    Args:
+        _server: Ignored. Kept for call-site compatibility; MCP Sampling reads
+            the live session from ``mcp.request_context()`` at call time.
     """
     load_dotenv()
 
@@ -51,8 +55,4 @@ def get_llm_provider(server: Server) -> IntelligenceProvider:
     if api_key:
         return OpenAIProvider(api_key=api_key, api_base=api_base, model=llm_model)
     else:
-        provider = MCPSamplingProvider(server=server)
-        # Hack: Inject request context if available (mcp >= 1.0)
-        if hasattr(server, "request_context"):
-            provider.request_context = server.request_context
-        return provider
+        return MCPSamplingProvider()

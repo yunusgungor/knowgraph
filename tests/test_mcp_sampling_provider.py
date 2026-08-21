@@ -19,7 +19,8 @@ def mock_request_context():
 
 @pytest.mark.asyncio
 async def test_extract_entities_batch(mock_server, mock_request_context):
-    provider = MCPSamplingProvider(mock_server, mock_request_context)
+    provider = MCPSamplingProvider()
+    provider.request_context = mock_request_context
 
     # Mock extract_entities behavior by mocking session.create_message return value
     # _sample expects result.content to be TextContent or list of TextContent

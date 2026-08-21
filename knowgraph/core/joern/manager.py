@@ -354,8 +354,10 @@ class PostInstallCommand(install):
         if install != object:
             install.run(self)
 
-        # Allow CI/packaging to skip the Joern download (e.g. python -m build).
-        if os.getenv("KNOWGRAPH_SKIP_JOERN"):
+        # Joern is opt-in: a plain `pip install knowgraph` must stay fast and
+        # offline-friendly. Set KNOWGRAPH_INSTALL_JOERN=1 to download Joern at
+        # install time (or run the `knowgraph-setup-joern` CLI command later).
+        if os.getenv("KNOWGRAPH_INSTALL_JOERN") != "1":
             return
 
         # Then run Joern setup
