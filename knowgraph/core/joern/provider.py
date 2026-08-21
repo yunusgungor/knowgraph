@@ -25,6 +25,32 @@ class JoernProvider:
     and entity extraction for KnowGraph integration.
     """
 
+    def _joern_cmd(self, name: str) -> str:
+        """Return the platform-correct Joern executable path.
+
+        On Windows the Joern frontend scripts are ``.bat`` files (e.g.
+        ``joern-parse.bat``); invoking the bare name fails with WinError 193
+        (not a valid Win32 application). Linux/macOS use the bare script.
+        """
+        exe = Path(self.joern_path) / name
+        if platform.system() == "Windows":
+            bat = exe.with_suffix(".bat")
+            if bat.exists():
+                return str(bat)
+        return str(exe)
+
+    def _joern_subprocess(self, cmd: list[str], **kwargs):
+        """Run a Joern command cross-platform.
+
+        On Windows, ``.bat`` frontend scripts cannot be launched directly by
+        CreateProcess (they are not PE images); they must go through
+        ``cmd.exe /c``. ``subprocess.run([...bat...])`` would raise WinError 193,
+        so wrap the command list accordingly.
+        """
+        if platform.system() == "Windows":
+            cmd = ["cmd.exe", "/c"] + cmd
+        return subprocess.run(cmd, **kwargs)
+
     def __init__(self, joern_path: str | None = None):
         """Initialize Joern provider.
 
@@ -127,17 +153,16 @@ class JoernProvider:
 
         # Build joern-parse command
         # joern_path is now the joern-cli directory
-        joern_parse = str(Path(self.joern_path) / "joern-parse")
+        joern_parse = self._joern_cmd("joern-parse")
         cmd = [joern_parse, str(repo_path), "--output", str(output_file)]
 
         if language:
             cmd.extend(["--language", language])
 
         logger.info(f"Generating CPG: {' '.join(cmd)}")
-        print("🔧 Generating Code Property Graph...")
 
         try:
-            result = subprocess.run(
+            result = self._joern_subprocess(
                 cmd,
                 timeout=timeout,
                 capture_output=True,
@@ -184,7 +209,7 @@ class JoernProvider:
 
         # Build joern-export command
         # Note: -o expects a DIRECTORY that DOESN'T EXIST YET in Joern v4.x
-        joern_export = str(Path(self.joern_path) / "joern-export")
+        joern_export = self._joern_cmd("joern-export")
         cmd = [
             joern_export,
             "--repr", "all",  # "all" works with GraphML (cpg14 doesn't!)
@@ -194,10 +219,9 @@ class JoernProvider:
         ]
 
         logger.info(f"Exporting GraphML: {' '.join(cmd)}")
-        print("📤 Exporting to GraphML...")
 
         try:
-            result = subprocess.run(
+            result = self._joern_subprocess(
                 cmd,
                 timeout=timeout,
                 capture_output=True,
@@ -352,7 +376,7 @@ class JoernProvider:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Build joern-export command
-        joern_export = str(Path(self.joern_path) / "joern-export")
+        joern_export = self._joern_cmd("joern-export")
 
         cmd = [
             joern_export,

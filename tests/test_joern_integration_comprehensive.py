@@ -38,8 +38,9 @@ int main() {
 """
 
 class TestJoernComprehensive:
+    @staticmethod
     @pytest.fixture(scope="class")
-    def cpg_path(self):
+    def cpg_path():
         """Generate CPG once for all tests in this class."""
         with tempfile.TemporaryDirectory(prefix="joern_test_") as tmpdir:
             test_dir = Path(tmpdir)
