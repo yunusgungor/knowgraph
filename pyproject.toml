@@ -73,7 +73,7 @@ dev = [
 
 [project.scripts]
 knowgraph = "knowgraph.adapters.cli.main:cli"
-knowgraph-setup-joern = "knowgraph.core.joern.manager:install_joern"
+knowgraph-setup-joern = "knowgraph.core.joern.manager:cli_main"
 
 [project.urls]
 Homepage = "https://github.com/yunusgungor/knowgraph"

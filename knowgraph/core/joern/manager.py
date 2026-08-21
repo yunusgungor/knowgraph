@@ -370,9 +370,17 @@ class PostInstallCommand(install):
             print("   You can retry with: knowgraph-setup-joern")
 
 
-if __name__ == "__main__":
-    # Enable logging for standalone execution
-    logging.basicConfig(level=logging.INFO)
+def cli_main() -> None:
+    """Console-script entry point for ``knowgraph-setup-joern``.
 
+    ``install_joern`` returns a bool; as a ``setuptools`` console script the
+    return value becomes the exit code, which would invert failure/success
+    (False -> exit 0). Wrap it so a failure is reported as a non-zero exit.
+    """
+    logging.basicConfig(level=logging.INFO)
     success = install_joern()
     sys.exit(0 if success else 1)
+
+
+if __name__ == "__main__":
+    cli_main()
