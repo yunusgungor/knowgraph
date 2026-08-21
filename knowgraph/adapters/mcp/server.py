@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -44,7 +46,21 @@ from knowgraph.shared.versioning import (
     register_version,
 )
 
-app = MCPServer("knowgraph-mcp")
+from knowgraph.version import __version__
+
+app = MCPServer(
+    "knowgraph-mcp",
+    title="KnowGraph MCP",
+    description="Code knowledge graph: index source code, answer security/impact/code queries over a semantic graph, and expose graph resources and reusable prompt templates.",
+    instructions=(
+        "KnowGraph indexes source code (markdown, Git repos, code directories) into a "
+        "knowledge graph and answers queries over it. Use knowgraph_index to build a "
+        "graph, then knowgraph_query / knowgraph_analyze_impact / knowgraph_security_scan "
+        "to interrogate it. Graph data is exposed as resources under knowgraph://graph/."
+    ),
+    website_url="https://github.com/yunusgungor/knowgraph",
+    version=__version__,
+)
 logger = logging.getLogger(__name__)
 
 # Background LLM-detection task reference, kept alive across the server lifetime
@@ -592,6 +608,99 @@ async def _manifest() -> str:
     return manifest_path.read_text(encoding="utf-8")
 
 
+@app.resource(
+    "knowgraph://graph/{graph_path}/manifest",
+    name="Graph Manifest",
+    description="Manifest (stats) of a specific knowledge graph at graph_path.",
+    mime_type="application/json",
+)
+async def _graph_manifest(graph_path: str) -> str:
+    resolved = resolve_graph_path(graph_path, PROJECT_ROOT)
+    manifest_path = resolved / "metadata" / "manifest.json"
+    if not manifest_path.exists():
+        raise ValueError(f"Manifest not found at {resolved}")
+    return manifest_path.read_text(encoding="utf-8")
+
+
+@app.resource(
+    "knowgraph://graph/{graph_path}/nodes",
+    name="Graph Nodes",
+    description="All node IDs stored in a specific knowledge graph at graph_path.",
+    mime_type="application/json",
+)
+async def _graph_nodes(graph_path: str) -> str:
+    from knowgraph.infrastructure.storage.filesystem import list_all_nodes
+
+    resolved = resolve_graph_path(graph_path, PROJECT_ROOT)
+    return json.dumps(list_all_nodes(resolved), ensure_ascii=False)
+
+
+@app.resource(
+    "knowgraph://graph/{graph_path}/stats",
+    name="Graph Statistics",
+    description="Live node/edge counts for a specific knowledge graph at graph_path.",
+    mime_type="application/json",
+)
+async def _graph_stats(graph_path: str) -> str:
+    import os
+
+    resolved = resolve_graph_path(graph_path, PROJECT_ROOT)
+    nodes_dir = resolved / "nodes"
+    edges_file = resolved / "edges" / "edges.jsonl"
+    stats = {
+        "graph_path": str(resolved),
+        "node_count": len(list(nodes_dir.glob("*.json"))) if nodes_dir.exists() else 0,
+        "edge_count": (
+            sum(1 for _ in open(edges_file, encoding="utf-8")) if edges_file.exists() else 0
+        ),
+    }
+    return json.dumps(stats, ensure_ascii=False)
+
+
+@app.prompt(
+    name="graph_summary",
+    title="Knowledge Graph Summary",
+    description="Summarize what is stored in a KnowGraph instance.",
+)
+async def graph_summary_prompt(graph_path: str | None = None) -> str:
+    """Produce a prompt that summarizes the default (or given) graph."""
+    gp = graph_path or DEFAULT_GRAPH_STORE_PATH
+    return (
+        f"Summarize the knowledge graph at {gp}: list its overall size, the main "
+        f"entities/topics stored, and anything notable. Read the manifest resource "
+        f"knowgraph://graph/{gp}/manifest first."
+    )
+
+
+@app.prompt(
+    name="security_scan",
+    title="Security Scan Guide",
+    description="Guide the agent to run a security scan and interpret results.",
+)
+async def security_scan_prompt(graph_path: str | None = None) -> str:
+    """Produce a prompt that drives a security scan."""
+    gp = graph_path or DEFAULT_GRAPH_STORE_PATH
+    return (
+        f"Run a security scan on the knowledge graph at {gp} using "
+        f"knowgraph_security_scan, then summarize the vulnerabilities found by "
+        f"severity and explain the highest-confidence findings."
+    )
+
+
+@app.prompt(
+    name="impact_analysis",
+    title="Impact Analysis Guide",
+    description="Guide the agent to analyze the impact of changing an element.",
+)
+async def impact_analysis_prompt(element: str, graph_path: str | None = None) -> str:
+    """Produce a prompt that drives impact analysis."""
+    gp = graph_path or DEFAULT_GRAPH_STORE_PATH
+    return (
+        f"Analyze the impact of changing '{element}' in the knowledge graph at {gp} "
+        f"using knowgraph_analyze_impact, and explain which files/nodes would be affected."
+    )
+
+
 def _configure_logging():
     """Configure logging to suppress noisy libraries."""
     # Suppress mcp internal logs
@@ -607,7 +716,19 @@ async def main() -> None:
     # to avoid the task being garbage-collected.
     global _init_task
     _init_task = asyncio.create_task(_initialize_llm_detection())
-    await app.run_stdio_async()
+
+    transport = os.getenv("KNOWGRAPH_MCP_TRANSPORT", "stdio").lower()
+    if transport == "http":
+        # Streamable HTTP transport (e.g. for remote MCP access).
+        host = os.getenv("KNOWGRAPH_MCP_HOST", "127.0.0.1")
+        port = int(os.getenv("KNOWGRAPH_MCP_PORT", "8000"))
+        await app.run_streamable_http_async(host=host, port=port)
+    elif transport == "sse":
+        host = os.getenv("KNOWGRAPH_MCP_HOST", "127.0.0.1")
+        port = int(os.getenv("KNOWGRAPH_MCP_PORT", "8000"))
+        await app.run_sse_async(host=host, port=port)
+    else:
+        await app.run_stdio_async()
 
 
 if __name__ == "__main__":
