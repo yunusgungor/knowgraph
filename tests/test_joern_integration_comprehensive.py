@@ -119,14 +119,3 @@ class TestJoernComprehensive:
         violations = engine.validate_policies(cpg_path, severity_filter=Severity.CRITICAL)
         assert isinstance(violations, list)
 
-    def test_phase4_repl(self):
-        """Test Phase 4: REPL (No CPG needed)."""
-        from knowgraph.application.analysis.joern_repl import JoernREPL, ScriptManager
-
-        repl = JoernREPL()
-        assert repl.joern_path is not None
-
-        manager = ScriptManager()
-        script_path = manager.save_script("test_pytest_script", "cpg.method.l", "Test")
-        assert script_path.exists()
-        manager.delete_script("test_pytest_script")

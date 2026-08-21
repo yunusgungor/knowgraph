@@ -202,7 +202,6 @@ class KnowGraphMetrics:
     def _init_mock_metrics(self) -> None:
         """Initialize mock metrics when Prometheus not available."""
 
-        # Create mock metric instance locally in case module-level MockMetric not available
         class _MockMetric:
             def inc(self, amount: float = 1) -> None:
                 pass
@@ -226,20 +225,13 @@ class KnowGraphMetrics:
                 pass
 
         mock = _MockMetric()
-        self.requests_total = mock
-        self.request_duration = mock
-        self.queries_total = mock
-        self.query_duration = mock
-        self.query_results = mock
-        self.cache_hits = mock
-        self.cache_misses = mock
-        self.cache_size = mock
-        self.nodes_total = mock
-        self.edges_total = mock
-        self.graph_operations = mock
-        self.errors_total = mock
-        self.indexed_documents = mock
-        self.indexing_duration = mock
+        for name in (
+            "requests_total", "request_duration", "queries_total", "query_duration",
+            "query_results", "cache_hits", "cache_misses", "cache_size",
+            "nodes_total", "edges_total", "graph_operations", "errors_total",
+            "indexed_documents", "indexing_duration",
+        ):
+            setattr(self, name, mock)
 
     def record_request(self, operation: str, status: str = "success") -> None:
         """Record a request.
