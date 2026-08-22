@@ -243,7 +243,9 @@ LLM_MAX_INPUT_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_INPUT_TOKENS", "32000"))
 MAX_HOPS = 4
 
 # Context Assembly Configuration
-MAX_TOKENS = 50000
+# Single source of truth for the LLM context/output budget, shared by the CLI,
+# the engine and the MCP server so they cannot diverge.
+MAX_TOKENS = LLM_MAX_TOKENS
 
 # Node Activation Scoring Weights
 ALPHA = 0.6

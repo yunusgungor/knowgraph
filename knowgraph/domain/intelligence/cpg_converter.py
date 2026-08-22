@@ -62,6 +62,10 @@ class CPGConverter:
         -------
             CPGConversionResult with entity nodes (cpg_edges empty).
         """
+        from knowgraph.config import CPG_NODE_TYPES
+
+        enabled_types = {t.upper() for t in CPG_NODE_TYPES}
+
         entity_nodes = []
         seen = set()
 
@@ -71,6 +75,9 @@ class CPGConverter:
             description = getattr(ent, "description", "")
 
             if not name or name in seen:
+                continue
+            # Respect the configured set of CPG node types (KNOWGRAPH_CPG_NODE_TYPES).
+            if enabled_types and etype.upper() not in enabled_types:
                 continue
             seen.add(name)
 

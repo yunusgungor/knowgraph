@@ -173,18 +173,13 @@ async def handle_query(
                 return [types.TextContent(type="text", text=output)]
 
             elif query_type == QueryType.HYBRID:
-                # HYBRID query → Run both text and code search in parallel
+                # HYBRID query → Run both text and code search
                 if progress:
                     await progress.update(1, f'🔄 Hybrid Search: "{query[:50]}..."')
 
-                logger.info("Running parallel text + code search")
-
-                # Run code analysis (non-blocking)
-                code_handler = CodeQueryHandler(graph_path)
-                code_task = code_handler.handle(query)
-
-                # Continue with text search below
-                # Code results will be merged after text search completes
+                # Code analysis is run inside QueryEngine.query_async, which
+                # awaits CodeQueryHandler.handle() for CODE/HYBRID queries and
+                # returns the combined result. No separate coroutine here.
 
             # TEXT or HYBRID queries continue with normal semantic search
 
@@ -197,7 +192,7 @@ async def handle_query(
                 if progress:
                     await progress.update(2, "🔧 Initializing query engine...")
 
-                engine = QueryEngine(graph_path)
+                engine = QueryEngine(graph_path, provider=provider)
                 params = extract_query_parameters(arguments)
 
                 # Query Expansion (now supports generic provider)
@@ -363,7 +358,7 @@ async def handle_batch_query(
         enable_hierarchical_lifting = arguments.get("enable_hierarchical_lifting", True)
         lift_levels = arguments.get("lift_levels", 2)
 
-        engine = QueryEngine(graph_path)
+        engine = QueryEngine(graph_path, provider=provider)
 
         # Use async batch query for better performance
         results_list = await engine.batch_query_async(

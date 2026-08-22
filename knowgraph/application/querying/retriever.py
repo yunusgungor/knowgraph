@@ -8,16 +8,17 @@ Supports both sync and async modes for backward compatibility.
 
 import asyncio
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from knowgraph.application.querying.query_expansion import QueryExpander
 from knowgraph.config import (
-    ENABLE_QUERY_EXPANSION,
     MAX_HOPS,
     MAX_QUERY_PREVIEW_LENGTH,
     TOP_K,
+    get_settings,
 )
 from knowgraph.domain.algorithms.traversal import traverse_graph_reference_aware
 from knowgraph.domain.models.edge import Edge
@@ -47,12 +48,19 @@ class QueryRetriever:
 
     """
 
-    def __init__(self: "QueryRetriever", graph_store_path: Path) -> None:
+    def __init__(
+        self: "QueryRetriever",
+        graph_store_path: Path,
+        intelligence_provider: Any | None = None,
+    ) -> None:
         """Initialize retriever.
 
         Args:
         ----
             graph_store_path: Root graph storage directory
+            intelligence_provider: Optional LLM provider for query expansion.
+                When set, expansion runs against the real provider instead of
+                the hardcoded mock that returns terms for only a few keywords.
 
         Raises:
         ------
@@ -69,9 +77,26 @@ class QueryRetriever:
             # Often index might not exist yet if fresh, but log/raise if critical
             pass
 
-        if ENABLE_QUERY_EXPANSION:
-            # Use "mock" provider for now if no API key, or default from config
-            self.expander = QueryExpander(provider="mock")
+        # Query expansion is wired end-to-end: the caller (MCP/CLI) expands the
+        # raw query with the LLM provider before calling retrieve(). Only install
+        # an expander here when a real provider is supplied, so it never falls
+        # back to the toy "mock" provider that returns terms for a few keywords.
+        if intelligence_provider and self._query_expansion_enabled():
+            self.expander = QueryExpander(intelligence_provider=intelligence_provider)
+
+    @staticmethod
+    def _query_expansion_enabled() -> bool:
+        """Return whether LLM query expansion is enabled via settings.
+
+        Reads the Pydantic ``QuerySettings.enable_query_expansion`` (tunable
+        through ``KNOWGRAPH_QUERY_ENABLE_QUERY_EXPANSION``) so the .env knob
+        actually takes effect, instead of the hardcoded legacy constant.
+        """
+        try:
+            return get_settings().query.enable_query_expansion
+        except Exception:
+            # Fall back to the historical default when settings are unavailable.
+            return True
 
     def retrieve(
         self: "QueryRetriever",
@@ -150,6 +175,18 @@ class QueryRetriever:
                             node = future.result()
                             if node:
                                 nodes.append(node)
+
+                    # Enrich results with related conversations so the retrieved
+                    # subgraph also surfaces conversations discussing these files.
+                    try:
+                        from knowgraph.application.querying.conversation_search import (
+                            enrich_with_conversations,
+                        )
+
+                        nodes, _ = enrich_with_conversations(nodes, self.graph_store_path)
+                    except Exception:
+                        # Enrichment is best-effort; never fail retrieval over it.
+                        pass
 
                     return nodes, seed_node_ids
 
@@ -277,6 +314,16 @@ class QueryRetriever:
 
                     # Step 3: Load nodes CONCURRENTLY
                     nodes = await self._load_nodes_async(expanded_node_ids)
+
+                    # Enrich results with related conversations (best-effort).
+                    try:
+                        from knowgraph.application.querying.conversation_search import (
+                            enrich_with_conversations,
+                        )
+
+                        nodes, _ = enrich_with_conversations(nodes, self.graph_store_path)
+                    except Exception:
+                        pass
 
                     return nodes, seed_node_ids
 

@@ -6,7 +6,7 @@ Supports both sync and async modes for backward compatibility.
 """
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from knowgraph.application.security.dataflow_result import DataFlowResult
@@ -26,6 +26,7 @@ from knowgraph.config import (
     DEFAULT_CENTRALITY_SCORE,
     MAX_CONCURRENT_QUERIES,
     MAX_QUERY_PREVIEW_LENGTH,
+    MAX_TOKENS,
     QUERY_TIMEOUT_SECONDS,
     TOP_K,
     get_settings,
@@ -137,16 +138,19 @@ class QueryEngine:
     def __init__(
         self: "QueryEngine",
         graph_store_path: Path,
+        provider: Any | None = None,
     ) -> None:
         """Initialize query engine.
 
         Args:
         ----
             graph_store_path: Root graph storage directory
+            provider: Optional LLM provider, forwarded to the retriever so
+                query expansion can use the real provider.
 
         """
         self.graph_store_path = graph_store_path
-        self.retriever = QueryRetriever(graph_store_path)
+        self.retriever = QueryRetriever(graph_store_path, intelligence_provider=provider)
 
         # Smart Routing Components
         self.classifier = QueryClassifier()
@@ -208,7 +212,7 @@ class QueryEngine:
         query_text: str,
         top_k: int = 20,
         max_hops: int = 4,
-        max_tokens: int = 3000,
+        max_tokens: int = MAX_TOKENS,
         with_explanation: bool = False,
         enable_hierarchical_lifting: bool = True,
         lift_levels: int = 2,
@@ -246,6 +250,49 @@ class QueryEngine:
             raise QueryError(f"max_tokens must be positive, got {max_tokens}")
         if lift_levels < 0:
             raise QueryError(f"lift_levels cannot be negative, got {lift_levels}")
+
+        # Smart routing for the sync path (CLI uses this). The async path already
+        # routes CODE/HYBRID/DATAFLOW through the code handler; without this, a
+        # CLI query like "find sql injection" would fall through to plain sparse
+        # retrieval. Delegate to the async code handler (which is the live
+        # implementation) and convert its result into a QueryResult.
+        query_type = self.classifier.classify(query_text)
+        if query_type in (QueryType.CODE, QueryType.HYBRID, QueryType.DATAFLOW):
+            import asyncio
+
+            try:
+                async def _run_code() -> "QueryResult":
+                    code_result = await self.code_handler.handle(query_text)
+                    if code_result["success"] and code_result["results"]:
+                        formatted_answer = self.code_handler.format_results(code_result)
+                        return QueryResult(
+                            query=query_text,
+                            answer=formatted_answer,
+                            context=formatted_answer,
+                            seed_nodes=[],
+                            active_subgraph_size=0,
+                            execution_time=0.0,
+                            sparse_search_time=0.0,
+                            graph_expansion_time=0.0,
+                            centrality_time=0.0,
+                            explanation=None,
+                        )
+                    # Fall through to generic retrieval if the code handler
+                    # produced nothing usable.
+                    return self._execute_query(
+                        query_text,
+                        top_k,
+                        max_hops,
+                        max_tokens,
+                        with_explanation,
+                        enable_hierarchical_lifting,
+                        lift_levels,
+                    )
+
+                return asyncio.run(_run_code())
+            except (RuntimeError, OSError):
+                # No event loop / Joern unavailable: fall back to generic search.
+                pass
 
         # Check cache first (for identical queries)
         cache_key = _get_query_cache_key(
@@ -553,7 +600,7 @@ class QueryEngine:
         query_text: str,
         top_k: int | None = None,
         max_hops: int | None = None,
-        max_tokens: int = 3000,
+        max_tokens: int = MAX_TOKENS,
         timeout: float | None = None,
         with_explanation: bool = False,
         enable_hierarchical_lifting: bool = True,
@@ -777,22 +824,18 @@ class QueryEngine:
                             )
 
                             # Format result as context
-                            df_context = "Dataflow Analysis Result:\\n"
-                            df_context += f"Source: {dataflow_result.source_pattern}\\n"
-                            df_context += f"Sink: {dataflow_result.sink_pattern}\\n"
-                            df_context += f"Paths Found: {dataflow_result.path_count}\\n\\n"
+                            df_context = "Dataflow Analysis Result:\n"
+                            df_context += f"Source: {dataflow_result.source_pattern}\n"
+                            df_context += f"Sink: {dataflow_result.sink_pattern}\n"
+                            df_context += f"Paths Found: {dataflow_result.path_count}\n\n"
 
                             if dataflow_result.path_count > 0:
-                                df_context += "Path Visualization (Mermaid):\\n"
-                                df_context += "```mermaid\\n"
-                                # Assuming to_mermaid() exists or simple representation
-                                # For now, just listing paths textually is safer without looking at DataFlowResult details
+                                df_context += "Path Visualization:\n"
                                 for i, path in enumerate(dataflow_result.paths[:3], 1):
                                     path_str = " -> ".join([str(node_id)[:8] for node_id in path])
-                                    df_context += f"Path {i}: {path_str}\\n"
-                                df_context += "```\\n"
+                                    df_context += f"Path {i}: {path_str}\n"
                             else:
-                                df_context += "No data flow paths found between these components.\\n"
+                                df_context += "No data flow paths found between these components.\n"
 
                             return QueryResult(
                                 query=query_text,
@@ -1014,7 +1057,7 @@ class QueryEngine:
         queries: list[str],
         top_k: int = 20,
         max_hops: int = 4,
-        max_tokens: int = 3000,
+        max_tokens: int = MAX_TOKENS,
         enable_hierarchical_lifting: bool = True,
         lift_levels: int = 2,
         batch_size: int = 5,

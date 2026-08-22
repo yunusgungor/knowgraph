@@ -85,9 +85,25 @@ async def handle_joern_query(arguments: dict[str, Any], PROJECT_ROOT: Path) -> l
 async def handle_security_scan(arguments: dict[str, Any], PROJECT_ROOT: Path) -> list[types.TextContent]:
     """Run security policy validation with CWE-mapped rules.
 
-    Scans code for 10 predefined security vulnerabilities.
+    Scans code for 10 predefined security vulnerabilities. When ``scan_type``
+    is provided, runs the flow-based taint analysis (TaintAnalyzer) instead of
+    the policy-engine scan.
     """
     try:
+        # Flow-based taint scan (optional). Requires graph_path to locate the CPG.
+        scan_type = arguments.get("scan_type")
+        if scan_type:
+            graph_path_arg = arguments.get("graph_path") or arguments.get("graph_store")
+            if not graph_path_arg:
+                return [types.TextContent(
+                    type="text",
+                    text="Error: 'graph_path' is required when 'scan_type' is set"
+                )]
+            from knowgraph.adapters.mcp.methods import security_scan_vulnerabilities
+
+            graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+            return security_scan_vulnerabilities(graph_path, scan_type=scan_type)
+
         from knowgraph.application.security.policy_engine import PolicyEngine, Severity
         from knowgraph.infrastructure.indexing.cpg_metadata import get_cpg_path
 
@@ -128,11 +144,23 @@ async def handle_security_scan(arguments: dict[str, Any], PROJECT_ROOT: Path) ->
         policies_to_check = None
 
         if policy_names:
-            policies_to_check = [p for p in engine.policies if p.name in policy_names]
+            # Match loosely: "sql_injection" should find "NoSQLInjection". Normalize
+            # both sides to lowercase with punctuation stripped and check containment.
+            def _norm(name: str) -> str:
+                return "".join(ch for ch in name.lower() if ch.isalnum())
+
+            wanted = [_norm(n) for n in policy_names]
+            policies_to_check = [
+                p for p in engine.policies
+                if any(w in _norm(p.name) or _norm(p.name) in w for w in wanted)
+            ]
             if not policies_to_check:
                 return [types.TextContent(
                     type="text",
-                    text=f"Error: None of the specified policies found: {policy_names}"
+                    text=(
+                        f"Error: None of the specified policies found: {policy_names}. "
+                        f"Available: {', '.join(p.name for p in engine.policies)}"
+                    )
                 )]
 
         # Run policy validation
@@ -165,8 +193,11 @@ async def handle_security_scan(arguments: dict[str, Any], PROJECT_ROOT: Path) ->
                     for v in by_severity[sev][:5]:  # Limit to 5 per severity
                         # Access dataclass attributes
                         policy_name = v.policy.name if v.policy else "Unknown"
-                        cwe = getattr(v.policy, "cwe", "N/A") if v.policy else "N/A"
-                        output += f"  - **{policy_name}** (CWE-{cwe})\n"
+                        # Policy stores the CWE id in cwe_id, not cwe. It already
+                        # includes the "CWE-" prefix, so only add it when absent.
+                        cwe_id = (v.policy.cwe_id if v.policy and v.policy.cwe_id else "")
+                        cwe_label = f"CWE-{cwe_id}" if cwe_id and not cwe_id.startswith("CWE") else cwe_id
+                        output += f"  - **{policy_name}** ({cwe_label or 'CWE-N/A'})\n"
                         output += f"    Location: {v.location}\n"
                         if v.policy and hasattr(v.policy, "recommendation"):
                             output += f"    💡 {v.policy.recommendation}\n"

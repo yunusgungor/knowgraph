@@ -56,6 +56,7 @@ async def run_update(
         verbose=verbose,
         provider=provider,
         exclude_patterns=exclude_patterns or [],
+        gc=gc,
     )
 
     if verbose:

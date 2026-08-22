@@ -638,7 +638,9 @@ def list_all_nodes(graph_store_path: Path) -> list[UUID]:
 
 
 def list_all_edges(graph_store_path: Path) -> list[UUID]:
-    """List all edge IDs (stub for compatibility)."""
-    # Edges are stored in JSONL, not as individual files
-    # This is a compatibility function
-    return []
+    """List all edge IDs.
+
+    Edges are stored in a single JSONL file (``edges/edges.jsonl``), so this
+    reads them back and returns their IDs.
+    """
+    return [edge.id for edge in read_all_edges(graph_store_path)]

@@ -11,6 +11,101 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def _write_code_edges(
+    graph_path: Path,
+    created_nodes: list[object],
+    call_edges: list[dict],
+    data_flows: list[dict],
+) -> int:
+    """Write call and data-flow edges whose endpoints resolve to real code nodes.
+
+    Builds a name -> node.id index from the freshly written code nodes and
+    writes an edge only when BOTH endpoint names resolve. Unresolvable or
+    dangling endpoints are skipped (never written), fixing the historical bug
+    that produced random-UUID edges pointing at nothing.
+
+    Args:
+        graph_path: Graph storage path
+        created_nodes: Code ``Node`` objects written by Step 8
+        call_edges: Raw call edge dicts from ``CallGraphExtractor``
+        data_flows: Raw data-flow dicts from ``DataFlowAnalyzer``
+
+    Returns:
+        Number of edges written
+    """
+    import time
+    from uuid import UUID
+
+    from knowgraph.domain.models.edge import Edge
+    from knowgraph.infrastructure.storage.filesystem import append_edge_jsonl
+
+    # Index written nodes by title/name so extractor names can resolve to a UUID.
+    name_to_id: dict[str, UUID] = {}
+    for node in created_nodes:
+        title = getattr(node, "title", None) or ""
+        if title:
+            name_to_id.setdefault(title, node.id)
+
+    written = 0
+
+    # Data-flow edges: source -> sink (both must resolve to a real node).
+    for flow in data_flows:
+        source_name = str(flow.get("source", "")).strip()
+        sink_name = str(flow.get("sink", "")).strip()
+        source_id = name_to_id.get(source_name)
+        sink_id = name_to_id.get(sink_name)
+        if not source_id or not sink_id or source_id == sink_id:
+            continue
+        try:
+            edge = Edge(
+                source=source_id,
+                target=sink_id,
+                type="data_flow",
+                score=0.8,
+                created_at=int(time.time()),
+                metadata={
+                    "variable": str(flow.get("variable", "unknown")),
+                    "source": "joern_data_flow",
+                },
+            )
+            append_edge_jsonl(edge, graph_path)
+            written += 1
+        except Exception as e:  # noqa: BLE001 - best-effort edge writing
+            logger.warning(f"Failed to write data flow edge: {e}")
+
+    # Call edges: only emitted when BOTH caller and callee resolve. The current
+    # CallGraphExtractor reports caller as "unknown", so these are skipped until
+    # caller extraction is implemented; never write an edge with an unresolved
+    # endpoint.
+    for call_edge in call_edges:
+        caller_name = str(call_edge.get("source", "")).strip()
+        callee_name = str(call_edge.get("target", "")).strip()
+        if caller_name in ("", "unknown") or callee_name in ("", "unknown"):
+            continue
+        caller_id = name_to_id.get(caller_name)
+        callee_id = name_to_id.get(callee_name)
+        if not caller_id or not callee_id or caller_id == callee_id:
+            continue
+        try:
+            edge = Edge(
+                source=caller_id,
+                target=callee_id,
+                type="call",
+                score=1.0,
+                created_at=int(time.time()),
+                metadata={
+                    "code": str(call_edge.get("metadata", {}).get("code", ""))[:100],
+                    "source": "joern_call_graph",
+                },
+            )
+            append_edge_jsonl(edge, graph_path)
+            written += 1
+        except Exception as e:  # noqa: BLE001 - best-effort edge writing
+            logger.warning(f"Failed to write call edge: {e}")
+
+    return written
+
+
 class CodeIndexIntegration:
     """Handles code analysis integration during indexing."""
 
@@ -243,75 +338,12 @@ class CodeIndexIntegration:
                     results["doc_links_found"] = 0
 
 
-                # Step 7.5: Write call graph and data flow edges to graphstore (CRITICAL)
-                # DISABLED: This code creates dangling edges because it uses random UUIDs
-                # instead of mapping caller/callee names to actual node UUIDs.
-                # TODO: Implement proper node ID mapping before enabling this feature.
-                try:
-                    logger.info("Skipping code edge generation (requires node ID mapping)")
-                    results["code_edges_written"] = 0
-
-                    # The following code is commented out until proper node ID mapping is implemented:
-                    #
-                    # import time
-                    # from uuid import uuid4
-                    # from knowgraph.domain.models.edge import Edge
-                    # from knowgraph.infrastructure.storage.filesystem import append_edge_jsonl
-                    #
-                    # logger.info("Writing code edges to graphstore...")
-                    # edges_written = 0
-                    #
-                    # # Write call graph edges
-                    # if call_edges:
-                    #     for call_edge in call_edges:
-                    #         try:
-                    #             # PROBLEM: uuid4() creates random UUIDs that don't correspond to any nodes!
-                    #             # We need to map caller/callee names to actual node UUIDs first.
-                    #             edge = Edge(
-                    #                 source=uuid4(),  # ❌ WRONG: Random UUID
-                    #                 target=uuid4(),  # ❌ WRONG: Random UUID
-                    #                 type="call",
-                    #                 score=1.0,
-                    #                 created_at=int(time.time()),
-                    #                 metadata={
-                    #                     "caller": call_edge.get("caller", "unknown"),
-                    #                     "callee": call_edge.get("callee", "unknown"),
-                    #                     "source": "joern_call_graph"
-                    #                 }
-                    #             )
-                    #             append_edge_jsonl(edge, graph_path)
-                    #             edges_written += 1
-                    #         except Exception as e:
-                    #             logger.warning(f"Failed to write call edge: {e}")
-                    #
-                    # # Write data flow edges
-                    # if data_flows:
-                    #     for flow in data_flows:
-                    #         try:
-                    #             edge = Edge(
-                    #                 source=uuid4(),  # ❌ WRONG: Random UUID
-                    #                 target=uuid4(),  # ❌ WRONG: Random UUID
-                    #                 type="data_flow",
-                    #                 score=0.8,
-                    #                 created_at=int(time.time()),
-                    #                 metadata={
-                    #                     "source_node": flow.get("source", "unknown"),
-                    #                     "sink_node": flow.get("sink", "unknown"),
-                    #                     "variable": flow.get("variable", "unknown"),
-                    #                     "source": "joern_data_flow"
-                    #                 }
-                    #             )
-                    #             append_edge_jsonl(edge, graph_path)
-                    #             edges_written += 1
-                    #         except Exception as e:
-                    #             logger.warning(f"Failed to write data flow edge: {e}")
-                    #
-                    # logger.info(f"✅ Written {edges_written} code edges to graphstore")
-                    # results["code_edges_written"] = edges_written
-
-                except Exception as e:
-                    logger.error(f"Failed to write code edges: {e}")
-                    results["code_edges_written"] = 0
+                # Step 7.5: Write call graph and data flow edges to graphstore.
+                # Edge endpoints are resolved against the written code nodes
+                # (created below in Step 8) rather than random UUIDs, so no
+                # dangling edges are produced. Only names that resolve to an
+                # actual node are emitted; unmatched ones are skipped.
+                results["code_edges_written"] = 0
 
                 # Step 8: Convert to graph nodes AND write to graphstore (CRITICAL FIX)
                 if entities:
@@ -395,6 +427,16 @@ class CodeIndexIntegration:
 
                         logger.info(f"✅ Written {written_count} code entities to graphstore")
                         results["entities_written_to_graph"] = written_count
+
+                        # Step 7.5 (post Step 8): Resolve and write call/data-flow
+                        # edges against the real code nodes created above.
+                        if created_nodes:
+                            code_edges_written = _write_code_edges(
+                                graph_path, created_nodes, call_edges, data_flows
+                            )
+                            results["code_edges_written"] = code_edges_written
+                            if code_edges_written > 0:
+                                logger.info(f"Written {code_edges_written} code edges to graphstore")
 
                         # Step 8.5: Generate embeddings and update sparse index (CRITICAL)
                         if created_nodes:

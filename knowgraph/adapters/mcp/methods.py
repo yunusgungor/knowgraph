@@ -110,7 +110,7 @@ async def index_graph(
                     file_hash = hash_content(normalized_content)
 
                     apply_incremental_update(
-                        delta, manifest, file_hash, str(input_path), graph_path, gc_orphans=True
+                        delta, manifest, file_hash, str(input_path), graph_path, gc_orphans=gc
                     )
 
                     return [
@@ -130,6 +130,8 @@ async def index_graph(
                 include_patterns=include_patterns,
                 exclude_patterns=exclude_patterns,
                 access_token=access_token,
+                gc=gc,
+                incremental=True,
             )
 
             # NEW: Code analysis integration

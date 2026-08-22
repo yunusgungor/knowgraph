@@ -71,6 +71,7 @@ async def run_index(
     access_token: str | None = None,
     link_conversations: bool = False,
     incremental: bool = False,
+    gc: bool = False,
     progress_callback: Callable[[str, int, int, str], Awaitable[None]] | None = None,
 ) -> None:
     """Execute indexing process (AI-Driven).
@@ -127,7 +128,7 @@ async def run_index(
         existing_manifest = load_existing_manifest(output_path, verbose)
 
         file_hashes, files_ready, cached_files, cache, file_hash_map = await prepare_files_and_hashes(
-            files_to_process, base_path, graph_store_path, verbose
+            files_to_process, base_path, graph_store_path, verbose, incremental=incremental
         )
 
         # Step 3: Check if indexing can be skipped
@@ -193,7 +194,17 @@ async def run_index(
             link_conversations, input_path, source_type, graph_store_path, verbose
         )
 
-        # Step 9: Log completion
+        # Step 9: Garbage-collect nodes whose source files were deleted
+        if gc and file_hash_map and base_path:
+            from knowgraph.adapters.cli.index_helpers import perform_gc
+
+            garbage_count = await perform_gc(
+                graph_store_path, base_path, file_hash_map, verbose
+            )
+            if garbage_count and verbose:
+                click.echo(f"✓ GC removed {garbage_count} orphan nodes")
+
+        # Log completion
         if progress_callback:
             await progress_callback("complete", 9, 9, "Indexing completed successfully!")
 

@@ -132,7 +132,7 @@ class JoernProvider:
         self,
         repo_path: Path,
         language: str | None = None,
-        timeout: int = 600,
+        timeout: int | None = None,
     ) -> Path:
         """Generate Code Property Graph using Joern.
 
@@ -140,7 +140,7 @@ class JoernProvider:
         ----
             repo_path: Path to source code repository
             language: Language hint (auto-detected if None)
-            timeout: Timeout in seconds (default: 600)
+            timeout: Timeout in seconds (defaults to config-derived budget)
 
         Returns:
         -------
@@ -154,6 +154,13 @@ class JoernProvider:
         """
         output_path = tempfile.mkdtemp(prefix="joern_cpg_")
         output_file = Path(output_path) / "cpg.bin"
+
+        # Default to a size-proportional budget if more generous than the
+        # configured per-query timeout (large repos need longer to parse).
+        if timeout is None:
+            from knowgraph.config import JOERN_MAX_CPG_SIZE_MB, JOERN_TIMEOUT
+
+            timeout = max(JOERN_TIMEOUT, JOERN_MAX_CPG_SIZE_MB // 4)
 
         # Build joern-parse command
         # joern_path is now the joern-cli directory
@@ -194,13 +201,13 @@ class JoernProvider:
             logger.error(f"CPG generation timed out after {timeout}s")
             raise
 
-    def export_graphml(self, cpg_path: Path, timeout: int = 300) -> Path:
+    def export_graphml(self, cpg_path: Path, timeout: int | None = None) -> Path:
         """Export CPG to GraphML format.
 
         Args:
         ----
             cpg_path: Path to cpg.bin file
-            timeout: Timeout in seconds (default: 300)
+            timeout: Timeout in seconds (defaults to ``JOERN_EXPORT_TIMEOUT``)
 
         Returns:
         -------
@@ -213,6 +220,11 @@ class JoernProvider:
             FileNotFoundError: If export succeeds but file not found
 
         """
+        if timeout is None:
+            from knowgraph.config import JOERN_EXPORT_TIMEOUT
+
+            timeout = JOERN_EXPORT_TIMEOUT
+
         output_dir = cpg_path.parent
         export_dir = output_dir / "graphml_export"  # Separate directory for export
 

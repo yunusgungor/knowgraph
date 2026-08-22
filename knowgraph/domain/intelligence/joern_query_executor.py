@@ -147,7 +147,7 @@ class JoernQueryExecutor:
         self,
         cpg_path: Path,
         query: str,
-        timeout: int = 60,
+        timeout: int | None = None,
     ) -> JoernQueryResult:
         """Execute a Joern query on a CPG.
 
@@ -155,7 +155,7 @@ class JoernQueryExecutor:
         ----
             cpg_path: Path to CPG binary (.bin file)
             query: Joern query string (e.g., "cpg.method.name.l")
-            timeout: Query timeout in seconds
+            timeout: Query timeout in seconds (defaults to ``JOERN_TIMEOUT``)
 
         Returns:
         -------
@@ -175,6 +175,12 @@ class JoernQueryExecutor:
 
         """
         start_time = time.time()
+
+        # Resolve the effective timeout from config when not explicitly given.
+        if timeout is None:
+            from knowgraph.config import JOERN_TIMEOUT
+
+            timeout = JOERN_TIMEOUT
 
         # Validate inputs
         if not cpg_path.exists():

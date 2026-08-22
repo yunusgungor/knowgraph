@@ -120,7 +120,7 @@ class JoernDaemon:
     # ------------------------------------------------------------------
     # Query execution
     # ------------------------------------------------------------------
-    def ensure_cpg_loaded(self, cpg_path: Path, timeout: int = 120) -> None:
+    def ensure_cpg_loaded(self, cpg_path: Path, timeout: int | None = None) -> None:
         """Send ``importCpg`` + ``run.ossdataflow`` once per distinct CPG.
 
         Args:
@@ -130,6 +130,11 @@ class JoernDaemon:
         Raises:
             RuntimeError: If the load sentinel is not seen in time.
         """
+        if timeout is None:
+            from knowgraph.config import JOERN_DAEMON_BOOT_TIMEOUT
+
+            timeout = JOERN_DAEMON_BOOT_TIMEOUT
+
         cpg_uri = str(cpg_path).replace("\\", "/")
         if cpg_uri in self._loaded_cpgs:
             return

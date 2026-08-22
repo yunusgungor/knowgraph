@@ -39,7 +39,7 @@ from knowgraph.adapters.mcp.version_handlers import (
     handle_rollback,
     handle_version_info,
 )
-from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+from knowgraph.config import DEFAULT_GRAPH_STORE_PATH, MAX_TOKENS
 from knowgraph.shared.versioning import (
     VersionStatus,
     get_current_version,
@@ -142,9 +142,17 @@ def _get_cached_project_root() -> Path | None:
 
 
 def _cache_project_root(root: Path) -> None:
-    """Cache the detected project root."""
+    """Cache the detected project root and refresh the module-level PROJECT_ROOT.
+
+    PROJECT_ROOT is captured once at import time, so a background LLM refinement
+    would otherwise never reach the tools. Refreshing it here makes the refined
+    root take effect on subsequent tool calls.
+    """
+    global PROJECT_ROOT
+
     _PROJECT_ROOT_CACHE["root"] = root
     _PROJECT_ROOT_CACHE["timestamp"] = time.time()
+    PROJECT_ROOT = root
     logger.debug(f"Cached project root: {root}")
 
 
@@ -266,7 +274,7 @@ async def knowgraph_query(
     top_k: Annotated[int, Field(description="Number of top results to return (default: 20).")] = 20,
     max_hops: Annotated[int, Field(description="Maximum number of hops for graph traversal (default: 4).")] = 4,
     expand_query: Annotated[bool, Field(description="Uses AI to expand query with synonyms and technical terms (default: false).")] = False,
-    max_tokens: Annotated[int, Field(description="Maximum token count for the context window (default: 3000).")] = 3000,
+    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = MAX_TOKENS,
     enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
     lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
     api_version: Annotated[str, Field(description="Requested API version to negotiate against the server registry (e.g., '1.0.1'). Omit to use the current version.")] = None,
@@ -394,7 +402,7 @@ async def knowgraph_batch_query(
     graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
     top_k: Annotated[int, Field(description="Number of top results to return per query (default: 20).")] = 20,
     max_hops: Annotated[int, Field(description="Maximum number of hops for graph traversal (default: 4).")] = 4,
-    max_tokens: Annotated[int, Field(description="Maximum token count for the context window (default: 3000).")] = 3000,
+    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = MAX_TOKENS,
     enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
     lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
 ) -> str:
@@ -509,7 +517,7 @@ async def knowgraph_diagnostic(
 async def knowgraph_joern_query(
     cpg_path: Annotated[str, Field(description="Path to CPG binary file (required).")],
     query: Annotated[str, Field(description="Native Joern DSL query string (e.g., 'cpg.method.name.l').")] = None,
-    query_name: Annotated[str, Field(description="Use predefined query template (e.g., 'find_sql_injections', 'find_buffer_overflows').")] = None,
+    query_name: Annotated[str, Field(description="Use predefined query template (e.g., 'sql_injection', 'buffer_overflow').")] = None,
     timeout: Annotated[int, Field(description="Query timeout in seconds (default: 60).")] = 60,
 ) -> str:
     arguments: dict[str, Any] = {
@@ -521,18 +529,20 @@ async def knowgraph_joern_query(
     return _join(await handle_joern_query(arguments, PROJECT_ROOT))
 
 
-@app.tool(description="Run security policy validation with 10 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc. Auto-detects CPG from graph_path if not explicitly provided.")
+@app.tool(description="Run security policy validation with 10 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc. Auto-detects CPG from graph_path if not explicitly provided. Set scan_type to run flow-based taint analysis instead.")
 async def knowgraph_security_scan(
     cpg_path: Annotated[str, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
     severity_filter: Annotated[Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"], Field(description="Minimum severity level for violations (default: MEDIUM).")] = "MEDIUM",
-    policy_names: Annotated[list[str], Field(description="Specific policies to run (e.g., ['buffer_overflow', 'sql_injection']). Omit to run all.")] = None,
+    policy_names: Annotated[list[str], Field(description="Specific policies to run (e.g., ['buffer_overflow', 'sql_injection', 'xss']). Omit to run all. Matches policy names loosely, so 'sql_injection' finds 'NoSQLInjection'.")] = None,
     graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional, defaults to ./graphstore).")] = None,
+    scan_type: Annotated[Literal["all", "sql_injection", "xss", "command_injection", "path_traversal", "xxe", "ssrf"], Field(description="When set, run flow-based taint analysis for this vulnerability type instead of the policy scan. Requires graph_path or cpg_path.")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "cpg_path": cpg_path,
         "severity_filter": severity_filter,
         "policy_names": policy_names,
         "graph_path": graph_path,
+        "scan_type": scan_type,
     }
     return _join(await handle_security_scan(arguments, PROJECT_ROOT))
 

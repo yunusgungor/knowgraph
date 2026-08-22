@@ -285,7 +285,7 @@ def cleanup_temp_files() -> None:
 # Hash Preparation & File Processing
 
 
-async def prepare_files_and_hashes(files, base_path, graph_store_path, verbose):
+async def prepare_files_and_hashes(files, base_path, graph_store_path, verbose, incremental=True):
     from knowgraph.adapters.cli.index_command import EXT_MAP
     from knowgraph.application.indexing.graph_builder import normalize_markdown_content
     from knowgraph.infrastructure.cache.indexing_cache import IndexingCache
@@ -336,8 +336,9 @@ async def prepare_files_and_hashes(files, base_path, graph_store_path, verbose):
             normalized = normalize_markdown_content(markdown_wrapper)
             file_hash = hash_content(normalized)
 
-            # Check cache
-            if cache.is_cached(file_path, file_hash):
+            # Check cache. Incremental mode reuses cached nodes for unchanged
+            # files; a full (non-incremental) reindex reprocesses every file.
+            if incremental and cache.is_cached(file_path, file_hash):
                 cached_count += 1
                 _log_verbose(verbose, f"  ✓ Using cache for {relative_path}")
                 # Still return the data for manifest tracking
@@ -628,15 +629,19 @@ async def create_and_save_manifest(nodes, edges, file_hashes, graph_store_path, 
 async def run_post_index_hooks(
     link_conversations, input_path, source_type, graph_store_path, verbose
 ):
-    """Run post-indexing hooks (conversation linking, stats)."""
-    if not (link_conversations or verbose):
-        return
+    """Run post-indexing hooks (conversation linking, stats).
 
+    Conversation linking runs whenever ``link_conversations`` is set OR the
+    indexed source is itself conversation history, so the MCP index and
+    ``update``/``discover-conversations`` paths link conversations too instead
+    of silently skipping them. Statistics are collected regardless of verbosity
+    and surfaced through the CLI completion log.
+    """
     _log_verbose(verbose, "\n" + "=" * 60)
     _log_verbose(verbose, "POST-INDEX PROCESSING")
     _log_verbose(verbose, "=" * 60)
 
-    if link_conversations:
+    if link_conversations or source_type == "conversation":
         _log_verbose(verbose, "\n🔗 Auto-linking conversations...")
         try:
             from knowgraph.application.indexing.post_index_hooks import auto_link_conversations
@@ -653,25 +658,39 @@ async def run_post_index_hooks(
         except Exception as e:
             _log_verbose(verbose, f"  ⚠️  Conversation linking failed: {e}")
 
-    if verbose:
-        _log_verbose(verbose, "\n" + "=" * 60)
-        _log_verbose(verbose, "INDEXING STATISTICS")
-        _log_verbose(verbose, "=" * 60)
-        try:
-            from knowgraph.application.indexing.post_index_hooks import collect_index_stats
+    _log_verbose(verbose, "\n" + "=" * 60)
+    _log_verbose(verbose, "BOOKMARK AUTO-TAGGING")
+    _log_verbose(verbose, "=" * 60)
+    try:
+        from knowgraph.application.indexing.post_index_hooks import auto_tag_bookmarks
 
-            stats = collect_index_stats(Path(graph_store_path))
-            click.echo("\n📊 Nodes by Type:")
-            click.echo(f"  Code nodes: {stats['code_nodes']}")
-            click.echo(f"  Markdown nodes: {stats['markdown_nodes']}")
-            if stats["conversation_nodes"] > 0:
-                click.echo(f"  Conversation nodes: {stats['conversation_nodes']}")
-            if stats["bookmark_nodes"] > 0:
-                click.echo(f"  Bookmarks: {stats['bookmark_nodes']}")
-            click.echo(f"  Total nodes: {stats['total_nodes']}")
-            click.echo(f"\n📈 Edges: {stats['total_edges']}")
-        except Exception:
-            pass
+        tag_stats = await auto_tag_bookmarks(Path(graph_store_path))
+        if tag_stats["bookmarks_found"] > 0:
+            click.echo(
+                f"  Bookmark auto-tagging: {tag_stats['bookmarks_enhanced']}/"
+                f"{tag_stats['bookmarks_found']} enhanced ({tag_stats['suggestions_added']} tags)"
+            )
+    except Exception:
+        pass
+
+    _log_verbose(verbose, "\n" + "=" * 60)
+    _log_verbose(verbose, "INDEXING STATISTICS")
+    _log_verbose(verbose, "=" * 60)
+    try:
+        from knowgraph.application.indexing.post_index_hooks import collect_index_stats
+
+        stats = collect_index_stats(Path(graph_store_path))
+        click.echo("\n📊 Nodes by Type:")
+        click.echo(f"  Code nodes: {stats['code_nodes']}")
+        click.echo(f"  Markdown nodes: {stats['markdown_nodes']}")
+        if stats["conversation_nodes"] > 0:
+            click.echo(f"  Conversation nodes: {stats['conversation_nodes']}")
+        if stats["bookmark_nodes"] > 0:
+            click.echo(f"  Bookmarks: {stats['bookmark_nodes']}")
+        click.echo(f"  Total nodes: {stats['total_nodes']}")
+        click.echo(f"\n📈 Edges: {stats['total_edges']}")
+    except Exception:
+        pass
 
 
 def log_completion(start_time, graph_store_path, verbose):
@@ -690,3 +709,63 @@ def log_completion(start_time, graph_store_path, verbose):
     click.echo(f"\n✅ Indexing completed in {elapsed:.1f}s")
     _log_verbose(verbose, f"\n✅ Indexing completed in {elapsed:.1f}s")
     _log_verbose(verbose, f"Graph stored in: {graph_store_path}")
+
+
+async def perform_gc(
+    graph_store_path,
+    base_path,
+    file_hash_map,
+    verbose=False,
+):
+    """Remove nodes whose source file no longer exists (garbage collection).
+
+    Scans the graph store for nodes carrying a source ``path`` that resolves
+    to a file which is absent from ``file_hash_map`` (the files just indexed).
+    Nodes that are not sourced from a file (bookmarks, tagged snippets) are
+    never touched.
+
+    Args:
+        graph_store_path: Graph storage directory
+        base_path: Source root directory used to resolve relative node paths
+        file_hash_map: Mapping of absolute file path -> hash for the current index
+        verbose: Enable verbose logging
+
+    Returns:
+        Number of nodes removed
+    """
+    from knowgraph.domain.models.node import Node
+    from knowgraph.infrastructure.storage.filesystem import (
+        delete_node_json,
+        list_all_nodes,
+        read_node_json,
+    )
+
+    active_abs = set(file_hash_map.keys())
+
+    removed = 0
+    for node_id in list_all_nodes(graph_store_path):
+        try:
+            node = read_node_json(node_id, graph_store_path)
+            if not node or not node.path:
+                continue
+
+            # Never garbage-collect user-created nodes that aren't file-backed.
+            if node.type in ("tagged_snippet", "bookmark"):
+                continue
+
+            # Resolve the node's source file to an absolute path and compare
+            # against the current index's file set.
+            abs_path = Path(base_path, node.path).resolve()
+            if str(abs_path) not in active_abs and not abs_path.exists():
+                if delete_node_json(node_id, graph_store_path):
+                    removed += 1
+                    _log_verbose(verbose, f"GC: removed orphan node {node.title} ({node.path})")
+        except Exception as e:  # noqa: BLE001 - best-effort GC
+            _log_verbose(verbose, f"GC: skipped node {node_id}: {e}")
+
+    if removed:
+        from knowgraph.shared.cache_versioning import invalidate_all_caches
+
+        invalidate_all_caches()
+
+    return removed

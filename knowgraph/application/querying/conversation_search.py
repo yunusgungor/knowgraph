@@ -146,26 +146,13 @@ def enrich_with_conversations(
         Tuple of (enriched nodes, metadata)
 
     """
-    from knowgraph.infrastructure.storage.filesystem import (
-        list_all_edges,
-        list_all_nodes,
-        read_edge_json,
-        read_node_json,
-    )
-
-    # Load all edges and nodes
-    edge_ids = list_all_edges(graph_store_path)
-    list_all_nodes(graph_store_path)
+    from knowgraph.infrastructure.storage.filesystem import read_all_edges, read_node_json
 
     # Find conversation nodes that reference our result nodes
     result_node_ids = {node.id for node in query_result_nodes}
     conversation_nodes = []
 
-    for edge_id in edge_ids:
-        edge = read_edge_json(edge_id, graph_store_path)
-        if not edge:
-            continue
-
+    for edge in read_all_edges(graph_store_path):
         # Look for conversation_references_code edges pointing to our results
         if edge.type == "conversation_references_code" and edge.target in result_node_ids:
             # Find the conversation node
