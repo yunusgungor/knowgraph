@@ -29,6 +29,28 @@ def test_query_cache_key_distinguishes_grounding():
     assert on != temporal
 
 
+def test_serialize_grounding_facts():
+    """Graph Engineering: enable_grounding serializes active-subgraph facts for
+    answer-level grounding (grounded_edges + entity_names)."""
+    from knowgraph.application.querying.query_engine import _serialize_grounding_facts
+    from knowgraph.domain.models.edge import Edge
+    from knowgraph.domain.models.node import Node
+    from uuid import uuid4
+
+    n1 = Node(id=uuid4(), hash="a" * 40, title="auth.py", content="x", path="auth.py",
+              type="code", token_count=5, created_at=1,
+              metadata={"entities": [{"name": "authenticate", "type": "definition"}]})
+    n2 = Node(id=uuid4(), hash="b" * 40, title="models.py", content="y", path="models.py",
+              type="code", token_count=5, created_at=1)
+    edge = Edge(source=n1.id, target=n2.id, type="reference", score=0.5, created_at=1, metadata={})
+
+    grounded_edges, entity_names = _serialize_grounding_facts([n1, n2], [edge])
+
+    assert ["auth.py", "reference", "models.py"] in grounded_edges
+    assert "authenticate" in entity_names
+    assert "auth.py" in entity_names
+
+
 def test_query_engine_run():
     store_path = Path("store")
 

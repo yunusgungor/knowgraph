@@ -9,6 +9,7 @@ from knowgraph.domain.claims.grounding_evaluator import (
     GroundingEvaluator,
     QueryPathEvaluator,
     RatchetLoop,
+    verify_entities_in_answer,
 )
 
 
@@ -111,3 +112,28 @@ class TestRatchetLoop:
         result = loop.run(draft, kg_triples, revision_mode=True)
         assert result["filtered_report"] == []
         assert result["log"]["total_stripped_unrevised"] == 1
+
+
+class TestVerifyEntitiesInAnswer:
+    def test_grounded_and_absent_classification(self):
+        answer = "Nova Dynamics produces Atlas. Zeppelin was mentioned."
+        entity_names = ["Nova Dynamics", "Atlas", "Zeppelin"]
+        grounded_edges = [["Nova Dynamics", "produces", "Atlas"]]
+        verdict = verify_entities_in_answer(answer, entity_names, grounded_edges)
+        assert set(verdict["grounded"]) == {"Nova Dynamics", "Atlas"}
+        assert set(verdict["absent"]) == {"Zeppelin"}
+        assert verdict["isolated"] == []
+
+    def test_entity_not_in_answer_ignored(self):
+        answer = "Only Atlas is mentioned."
+        entity_names = ["Nova Dynamics", "Atlas"]
+        grounded_edges = [["Nova Dynamics", "produces", "Atlas"]]
+        verdict = verify_entities_in_answer(answer, entity_names, grounded_edges)
+        # "Nova Dynamics" not in the answer -> not reported.
+        assert "Nova Dynamics" not in verdict["grounded"]
+        assert "Atlas" in verdict["grounded"]
+
+    def test_empty_inputs(self):
+        assert verify_entities_in_answer("", [], []) == {
+            "grounded": [], "isolated": [], "absent": []
+        }

@@ -195,3 +195,28 @@ def test_sc_relations_same_node_object_skipped():
     )
     edges = builder._sc_relations_to_edges([node])
     assert edges == []
+
+
+def test_sc_relations_match_entity_metadata_fast_path():
+    """Graph Engineering entity_resolver transfer: _match resolves an object via
+    build-time metadata['entities'] exact-name, even when the name is absent from
+    the node's title/content (no substring match)."""
+    builder = SmartGraphBuilder(provider=None)
+
+    subj = Node(
+        id=uuid4(), hash="a" * 40, title="Company", content="Nova Dynamics produces Atlas.",
+        path="company.md", type="readme", token_count=5, created_at=1,
+        metadata={"relations": [{"subject": "Nova Dynamics", "predicate": "produces",
+                                 "object": "Atlas", "source": "sc_p3"}]},
+    )
+    # Object node: "Atlas" is registered as an entity name in metadata but does
+    # NOT appear verbatim in title/path/content.
+    obj = Node(
+        id=uuid4(), hash="d" * 40, title="Product Doc", content="the flagship product page",
+        path="product.md", type="readme", token_count=5, created_at=1,
+        metadata={"entities": [{"name": "Atlas", "type": "org"}]},
+    )
+
+    edges = builder._sc_relations_to_edges([subj, obj])
+    assert len(edges) == 1
+    assert edges[0].target == obj.id
