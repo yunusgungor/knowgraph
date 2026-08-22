@@ -5,7 +5,7 @@ from typing import Any
 
 import mcp.types as types
 
-from knowgraph.adapters.mcp.utils import resolve_graph_path
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.shared.refactoring import build_error_response
 
 
@@ -101,7 +101,7 @@ async def handle_security_scan(arguments: dict[str, Any], PROJECT_ROOT: Path) ->
                 )]
             from knowgraph.adapters.mcp.methods import security_scan_vulnerabilities
 
-            graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=PROJECT_ROOT)
             return security_scan_vulnerabilities(graph_path, scan_type=scan_type)
 
         from knowgraph.application.security.policy_engine import PolicyEngine, Severity
@@ -113,7 +113,7 @@ async def handle_security_scan(arguments: dict[str, Any], PROJECT_ROOT: Path) ->
 
         if not cpg_path_str and graph_path_arg:
             # Try to auto-detect CPG from graph metadata
-            graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=PROJECT_ROOT)
             cpg_path = get_cpg_path(graph_path)
 
             if not cpg_path:
@@ -232,7 +232,7 @@ async def handle_find_dead_code(arguments: dict[str, Any], PROJECT_ROOT: Path) -
 
         if not cpg_path_str and graph_path_arg:
             # Try to auto-detect CPG from graph metadata
-            graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=PROJECT_ROOT)
             cpg_path = get_cpg_path(graph_path)
 
             if not cpg_path:
@@ -314,7 +314,7 @@ async def handle_analyze_call_graph(arguments: dict[str, Any], PROJECT_ROOT: Pat
         if not cpg_path_str and graph_path_arg:
             from knowgraph.infrastructure.indexing.cpg_metadata import get_cpg_path
             # Try to auto-detect CPG from graph metadata
-            graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=PROJECT_ROOT)
             cpg_path = get_cpg_path(graph_path)
 
             if not cpg_path:
@@ -444,7 +444,7 @@ async def handle_export_cpg(arguments: dict[str, Any], PROJECT_ROOT: Path) -> li
 
         if not cpg_path_str and graph_path_arg:
             # Try to auto-detect CPG from graph metadata
-            graph_path = resolve_graph_path(graph_path_arg, PROJECT_ROOT)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=PROJECT_ROOT)
             cpg_path = get_cpg_path(graph_path)
 
             if not cpg_path:

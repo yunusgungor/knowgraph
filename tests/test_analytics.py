@@ -312,7 +312,7 @@ class TestMCPHandlerIntegration:
     """Integration tests for MCP analyze_conversations handler."""
 
     @pytest.mark.asyncio
-    @patch("knowgraph.adapters.mcp.handlers.resolve_graph_path")
+    @patch("knowgraph.adapters.mcp.handlers.conversations.resolve_graph_store")
     @patch("knowgraph.application.analytics.topic_analyzer.list_all_nodes")
     @patch("knowgraph.application.analytics.topic_analyzer.read_node_json")
     @patch("knowgraph.application.analytics.topic_analyzer.extract_entities")
@@ -350,7 +350,7 @@ class TestMCPHandlerIntegration:
         assert "Trending Topics" in result[0].text
 
     @pytest.mark.asyncio
-    @patch("knowgraph.adapters.mcp.handlers.resolve_graph_path")
+    @patch("knowgraph.adapters.mcp.handlers.conversations.resolve_graph_store")
     @patch("knowgraph.application.analytics.knowledge_tracker.list_all_nodes")
     @patch("knowgraph.application.analytics.knowledge_tracker.read_node_json")
     async def test_handle_analyze_conversations_timeline(
@@ -382,7 +382,7 @@ class TestMCPHandlerIntegration:
         assert "Knowledge Timeline: FastAPI" in result[0].text
 
     @pytest.mark.asyncio
-    @patch("knowgraph.adapters.mcp.handlers.resolve_graph_path")
+    @patch("knowgraph.adapters.mcp.handlers.conversations.resolve_graph_store")
     @patch("knowgraph.application.analytics.topic_analyzer.list_all_nodes")
     async def test_handle_analyze_conversations_error_handling(
         self,

@@ -6,7 +6,6 @@ from collections.abc import Awaitable, Callable
 
 import click
 
-from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.domain.intelligence.provider import IntelligenceProvider
 from knowgraph.infrastructure.parsing.repo_ingestor import RepositoryIngestorError
 from knowgraph.shared.security import validate_path
@@ -233,8 +232,8 @@ async def run_index(
 @click.option(
     "--output",
     "-o",
-    default=str(DEFAULT_GRAPH_STORE_PATH),
-    help="Output path for the graph store",
+    default=None,
+    help="Output path for the graph store (defaults to ./graphstore in the workspace root)",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option(
@@ -249,7 +248,7 @@ async def run_index(
 )
 def index_command(
     input_path: str,
-    output: str,
+    output: str | None,
     verbose: bool,
     link_conversations: bool,
     incremental: bool,
@@ -262,11 +261,16 @@ def index_command(
     """
     import asyncio
 
+    from knowgraph.infrastructure.detection.graph_store_locator import (
+        resolve_graph_store,
+    )
+
     try:
+        graph_store = str(resolve_graph_store(output))
         asyncio.run(
             run_index(
                 input_path,
-                output,
+                graph_store,
                 verbose,
                 link_conversations=link_conversations,
                 incremental=incremental,

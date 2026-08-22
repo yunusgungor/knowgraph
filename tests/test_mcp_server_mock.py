@@ -21,9 +21,9 @@ async def test_mcp_validate():
     with patch("knowgraph.adapters.mcp.handlers.validate_graph_consistency") as mock_validate:
         mock_validate.return_value = MagicMock(valid=True, get_error_summary=lambda: "")
 
-        # Mock resolve_graph_path to just return the path string as Path
+        # Mock resolve_graph_store to just return the path string as Path
         with patch(
-            "knowgraph.adapters.mcp.handlers.resolve_graph_path", side_effect=lambda p, r: Path(p)
+            "knowgraph.adapters.mcp.handlers.misc.resolve_graph_store", side_effect=lambda p, **kw: Path(p)
         ):
             result = await knowgraph_validate(graph_path="/tmp/test_graph")
 
@@ -40,7 +40,7 @@ async def test_mcp_get_stats():
     with (
         patch("knowgraph.infrastructure.storage.manifest.read_manifest") as mock_read_manifest,
         patch("pathlib.Path.exists", return_value=True),
-        patch("knowgraph.adapters.mcp.server.resolve_graph_path", side_effect=lambda p, r: Path(p)),
+        patch("knowgraph.adapters.mcp.server.resolve_graph_store", side_effect=lambda p, **kw: Path(p)),
     ):
         # Mock manifest with expected values
         mock_manifest = Manifest(
@@ -68,7 +68,7 @@ async def test_mcp_query_advanced():
         patch("knowgraph.adapters.mcp.handlers.QueryEngine") as MockEngine,
         patch("knowgraph.adapters.mcp.handlers.QueryExpander") as MockExpander,
         patch(
-            "knowgraph.adapters.mcp.handlers.resolve_graph_path", side_effect=lambda p, r: Path(p)
+            "knowgraph.adapters.mcp.handlers.query.resolve_graph_store", side_effect=lambda p, **kw: Path(p)
         ),
         patch("knowgraph.adapters.mcp.server.get_llm_provider") as mock_provider_func,
     ):
@@ -105,7 +105,7 @@ async def test_mcp_analyze_impact_semantic():
     with (
         patch("knowgraph.adapters.mcp.handlers.QueryEngine") as MockEngine,
         patch(
-            "knowgraph.adapters.mcp.handlers.resolve_graph_path", side_effect=lambda p, r: Path(p)
+            "knowgraph.adapters.mcp.handlers.misc.resolve_graph_store", side_effect=lambda p, **kw: Path(p)
         ),
     ):
         mock_instance = MockEngine.return_value
@@ -126,7 +126,7 @@ async def test_mcp_analyze_impact_path():
     with (
         patch("knowgraph.adapters.mcp.handlers.analyze_path_impact_report") as mock_path_impact,
         patch(
-            "knowgraph.adapters.mcp.handlers.resolve_graph_path", side_effect=lambda p, r: Path(p)
+            "knowgraph.adapters.mcp.handlers.misc.resolve_graph_store", side_effect=lambda p, **kw: Path(p)
         ),
     ):
         mock_path_impact.return_value = [
@@ -147,7 +147,7 @@ async def test_mcp_index_resume_gc():
     with (
         patch("knowgraph.adapters.mcp.methods.run_index", new_callable=AsyncMock) as mock_run_index,
         patch(
-            "knowgraph.adapters.mcp.handlers.resolve_graph_path", side_effect=lambda p, r: Path(p)
+            "knowgraph.adapters.mcp.handlers.indexing.resolve_graph_store", side_effect=lambda p, **kw: Path(p)
         ),
         patch("knowgraph.adapters.mcp.server.get_llm_provider", return_value=MagicMock()),
         patch("knowgraph.adapters.mcp.methods.read_manifest", return_value=MagicMock()),

@@ -24,12 +24,14 @@ async def handle_diagnostic(
         Diagnostic report as text content
 
     """
-    from knowgraph.adapters.mcp.utils import resolve_graph_path
     from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+    from knowgraph.infrastructure.detection.graph_store_locator import (
+        resolve_graph_store,
+    )
     from knowgraph.infrastructure.storage.filesystem import list_all_nodes
 
     graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-    graph_path = resolve_graph_path(graph_path_arg, project_root)
+    graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
 
     report_lines = ["# 🔍 KnowGraph Diagnostic Report", ""]
 

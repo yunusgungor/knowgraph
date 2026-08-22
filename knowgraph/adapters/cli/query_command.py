@@ -7,7 +7,6 @@ import click
 from knowgraph.application.querying.impact_analyzer import analyze_impact_by_path
 from knowgraph.application.querying.query_engine import QueryEngine
 from knowgraph.config import (
-    DEFAULT_GRAPH_STORE_PATH,
     LLM_MAX_TOKENS,
     MAX_HOPS,
     MS_TO_SECONDS,
@@ -26,8 +25,8 @@ from knowgraph.infrastructure.storage.filesystem import (
 @click.option(
     "--graph-store",
     "-g",
-    default=DEFAULT_GRAPH_STORE_PATH,
-    help="Path to graph storage directory",
+    default=None,
+    help="Path to graph storage directory (defaults to ./graphstore in the workspace root)",
 )
 @click.option("--top-k", default=TOP_K, help="Number of seed nodes")
 @click.option("--max-hops", default=MAX_HOPS, help="Graph traversal depth")
@@ -43,7 +42,7 @@ from knowgraph.infrastructure.storage.filesystem import (
 )
 def query_command(
     query_text: str,
-    graph_store: str,
+    graph_store: str | None,
     top_k: int,
     max_hops: int,
     max_tokens: int,
@@ -56,6 +55,9 @@ def query_command(
 
     QUERY_TEXT: Natural language query string
     """
+    from knowgraph.infrastructure.detection.graph_store_locator import (
+        resolve_graph_store,
+    )
     from knowgraph.shared.security import (
         sanitize_query_input,
         validate_graph_store_path,
@@ -65,7 +67,9 @@ def query_command(
     try:
         # Validate and sanitize inputs
         query_text = sanitize_query_input(query_text, max_length=10000)
-        graph_store_path = validate_path(graph_store, must_exist=True, must_be_file=False)
+        graph_store_path = validate_path(
+            str(resolve_graph_store(graph_store)), must_exist=True, must_be_file=False
+        )
         validate_graph_store_path(graph_store_path)
 
         if verbose:

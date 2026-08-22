@@ -1,4 +1,4 @@
-"""Tests for KNOWGRAPH_PROJECT_ROOT environment variable functionality."""
+"""Tests for graph store path resolution in a workspace context."""
 
 import os
 from pathlib import Path
@@ -27,28 +27,32 @@ def test_project_root_auto_detection():
         assert isinstance(server_module.PROJECT_ROOT, Path)
 
 
-def test_resolve_graph_path_with_project_root(tmp_path):
-    """Test that resolve_graph_path uses PROJECT_ROOT correctly."""
-    from knowgraph.adapters.mcp.utils import resolve_graph_path
+def test_resolve_graph_store_with_project_root(tmp_path):
+    """Test that resolve_graph_store uses PROJECT_ROOT correctly."""
+    from knowgraph.infrastructure.detection.graph_store_locator import (
+        resolve_graph_store,
+    )
 
     project_root = tmp_path / "my-project"
     project_root.mkdir()
     relative_path = "./graphstore"
 
-    result = resolve_graph_path(relative_path, project_root)
+    result = resolve_graph_store(relative_path, root_dir=project_root)
 
-    assert result == project_root / "graphstore"
+    assert result == (project_root / "graphstore").resolve()
 
 
-def test_resolve_graph_path_with_absolute_path(tmp_path):
-    """Test that resolve_graph_path handles absolute paths correctly."""
-    from knowgraph.adapters.mcp.utils import resolve_graph_path
+def test_resolve_graph_store_with_absolute_path(tmp_path):
+    """Test that resolve_graph_store handles absolute paths correctly."""
+    from knowgraph.infrastructure.detection.graph_store_locator import (
+        resolve_graph_store,
+    )
 
     project_root = tmp_path / "my-project"
     project_root.mkdir()
     absolute_path = str(tmp_path / "custom" / "graphstore" / "location")
 
-    result = resolve_graph_path(absolute_path, project_root)
+    result = resolve_graph_store(absolute_path, root_dir=project_root)
 
     assert result == Path(absolute_path)
 
@@ -69,8 +73,8 @@ async def test_mcp_tools_use_auto_detected_root():
 
         importlib.reload(server_module)
 
-        # Mock the resolve_graph_path to verify it's called
-        with patch("knowgraph.adapters.mcp.server.resolve_graph_path") as mock_resolve:
+        # Mock the resolve_graph_store to verify it's called
+        with patch("knowgraph.adapters.mcp.server.resolve_graph_store") as mock_resolve:
             mock_resolve.return_value = Path("/test/graphstore")
 
             # Call a tool that uses graph_path
@@ -80,23 +84,25 @@ async def test_mcp_tools_use_auto_detected_root():
                 # We expect it to fail (no actual graphstore), but we can verify the call
                 pass
 
-            # Verify resolve_graph_path was called
+            # Verify resolve_graph_store was called
             assert mock_resolve.called
 
 
 def test_multiple_projects_isolation(tmp_path):
     """Test that different working directories result in different graphstore paths."""
-    from knowgraph.adapters.mcp.utils import resolve_graph_path
     from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+    from knowgraph.infrastructure.detection.graph_store_locator import (
+        resolve_graph_store,
+    )
 
     project_a = tmp_path / "project-a"
     project_a.mkdir()
     project_b = tmp_path / "project-b"
     project_b.mkdir()
 
-    graphstore_a = resolve_graph_path(DEFAULT_GRAPH_STORE_PATH, project_a)
-    graphstore_b = resolve_graph_path(DEFAULT_GRAPH_STORE_PATH, project_b)
+    graphstore_a = resolve_graph_store(DEFAULT_GRAPH_STORE_PATH, root_dir=project_a)
+    graphstore_b = resolve_graph_store(DEFAULT_GRAPH_STORE_PATH, root_dir=project_b)
 
-    assert graphstore_a == project_a / "graphstore"
-    assert graphstore_b == project_b / "graphstore"
+    assert graphstore_a == (project_a / "graphstore").resolve()
+    assert graphstore_b == (project_b / "graphstore").resolve()
     assert graphstore_a != graphstore_b

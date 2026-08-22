@@ -32,7 +32,8 @@ from knowgraph.adapters.mcp.handlers import (
     handle_tag_snippet,
     handle_validate,
 )
-from knowgraph.adapters.mcp.utils import get_llm_provider, resolve_graph_path
+from knowgraph.adapters.mcp.utils import get_llm_provider
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.adapters.mcp.version_handlers import (
     handle_diff_versions,
     handle_list_versions,
@@ -616,7 +617,7 @@ async def knowgraph_generate_cpg(
     mime_type="application/json",
 )
 async def _manifest() -> str:
-    graph_path = resolve_graph_path(DEFAULT_GRAPH_STORE_PATH, PROJECT_ROOT)
+    graph_path = resolve_graph_store(DEFAULT_GRAPH_STORE_PATH, root_dir=PROJECT_ROOT)
     manifest_path = graph_path / "metadata" / "manifest.json"
     if not manifest_path.exists():
         raise ValueError("Manifest not found")
@@ -630,7 +631,7 @@ async def _manifest() -> str:
     mime_type="application/json",
 )
 async def _graph_manifest(graph_path: str) -> str:
-    resolved = resolve_graph_path(graph_path, PROJECT_ROOT)
+    resolved = resolve_graph_store(graph_path, root_dir=PROJECT_ROOT)
     manifest_path = resolved / "metadata" / "manifest.json"
     if not manifest_path.exists():
         raise ValueError(f"Manifest not found at {resolved}")
@@ -646,7 +647,7 @@ async def _graph_manifest(graph_path: str) -> str:
 async def _graph_nodes(graph_path: str) -> str:
     from knowgraph.infrastructure.storage.filesystem import list_all_nodes
 
-    resolved = resolve_graph_path(graph_path, PROJECT_ROOT)
+    resolved = resolve_graph_store(graph_path, root_dir=PROJECT_ROOT)
     return json.dumps(list_all_nodes(resolved), ensure_ascii=False)
 
 
@@ -659,7 +660,7 @@ async def _graph_nodes(graph_path: str) -> str:
 async def _graph_stats(graph_path: str) -> str:
     import os
 
-    resolved = resolve_graph_path(graph_path, PROJECT_ROOT)
+    resolved = resolve_graph_store(graph_path, root_dir=PROJECT_ROOT)
     nodes_dir = resolved / "nodes"
     edges_file = resolved / "edges" / "edges.jsonl"
     stats = {

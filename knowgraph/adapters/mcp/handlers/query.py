@@ -13,7 +13,7 @@ from knowgraph.adapters.mcp.handlers._resilience import (
     _global_rate_limiter,
     logger,
 )
-from knowgraph.adapters.mcp.utils import resolve_graph_path
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.application.querying.query_engine import QueryEngine
 from knowgraph.application.querying.query_expansion import QueryExpander
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
@@ -119,7 +119,7 @@ async def handle_query(
                 return [types.TextContent(type="text", text=error)]
 
             graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-            graph_path = resolve_graph_path(graph_path_arg, project_root)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
 
             # Validate graph store exists and has nodes
             if not graph_path.exists():
@@ -348,7 +348,7 @@ async def handle_batch_query(
         return [types.TextContent(type="text", text="Error: queries must be a non-empty list.")]
 
     graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-    graph_path = resolve_graph_path(graph_path_arg, project_root)
+    graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
 
     try:
         # Shared parameters for all queries

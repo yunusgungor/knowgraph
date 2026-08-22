@@ -7,7 +7,7 @@ from typing import Any
 import mcp.types as types
 
 from knowgraph.adapters.mcp.handlers._resilience import _global_rate_limiter
-from knowgraph.adapters.mcp.utils import resolve_graph_path
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.shared.refactoring import (
     build_error_response,
@@ -50,7 +50,7 @@ async def handle_search_bookmarks(
             graph_path_arg = arguments.get("graph_path")
 
             # Resolve graph path
-            graph_path = resolve_graph_path(graph_path_arg, project_root)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
 
             # Search bookmarks using semantic search
             from knowgraph.application.querying.conversation_search import search_bookmarks
@@ -118,7 +118,7 @@ async def handle_analyze_conversations(
             graph_path_arg = arguments.get("graph_path")
 
             # Resolve graph path
-            graph_path = resolve_graph_path(graph_path_arg, project_root)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
 
             if topic:
                 # Get timeline for specific topic
@@ -228,7 +228,7 @@ async def handle_discover_conversations(
             return len(text) // 4
 
     graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-    graph_path = resolve_graph_path(graph_path_arg, project_root)
+    graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
     editor_filter = arguments.get("editor", "all")
 
     try:
@@ -420,7 +420,7 @@ async def handle_tag_snippet(
             auto_suggest = arguments.get("auto_suggest", True)
 
             # Resolve graph path
-            graph_path = resolve_graph_path(graph_path_arg, project_root)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
 
             # ENHANCEMENT: Auto-suggest tags if enabled
             suggested_tags = []

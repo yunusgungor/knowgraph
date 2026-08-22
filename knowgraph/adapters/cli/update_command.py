@@ -9,7 +9,6 @@ from pathlib import Path
 
 import click
 
-from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.domain.intelligence.provider import IntelligenceProvider
 from knowgraph.shared.security import validate_path
 
@@ -68,18 +67,25 @@ async def run_update(
 @click.option(
     "--graph-store",
     "-g",
-    default=DEFAULT_GRAPH_STORE_PATH,
-    help="Graph storage directory",
+    default=None,
+    help="Graph storage directory (defaults to ./graphstore in the workspace root)",
 )
 @click.option("--gc", is_flag=True, help="Garbage collect deleted nodes")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
-def update_command(input_path: str, graph_store: str, gc: bool, verbose: bool) -> None:
+def update_command(
+    input_path: str, graph_store: str | None, gc: bool, verbose: bool
+) -> None:
     """Incrementally update graph with changes.
 
     INPUT_PATH: Path to updated markdown file
     """
+    from knowgraph.infrastructure.detection.graph_store_locator import (
+        resolve_graph_store,
+    )
+
     try:
-        asyncio.run(run_update(input_path, graph_store, gc, verbose))
+        resolved = str(resolve_graph_store(graph_store))
+        asyncio.run(run_update(input_path, resolved, gc, verbose))
     except Exception as error:
         click.echo(f"Error: {error}", err=True)
         if verbose:

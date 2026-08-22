@@ -15,8 +15,8 @@ from knowgraph.infrastructure.detection.conversation_discovery import (
 @click.option(
     "--output",
     "-o",
-    default="./graphstore",
-    help="Output directory for graph storage",
+    default=None,
+    help="Output directory for graph storage (defaults to ./graphstore in the workspace root)",
 )
 @click.option(
     "--editor",
@@ -30,7 +30,7 @@ from knowgraph.infrastructure.detection.conversation_discovery import (
     "--dry-run", is_flag=True, help="Show what would be indexed without actually indexing"
 )
 def discover_and_index_conversations(
-    output: str, editor: str, verbose: bool, dry_run: bool
+    output: str | None, editor: str, verbose: bool, dry_run: bool
 ) -> None:
     """Auto-discover and index conversations from AI code editors.
 
@@ -41,6 +41,11 @@ def discover_and_index_conversations(
 
     No manual export required!
     """
+    from knowgraph.infrastructure.detection.graph_store_locator import (
+        resolve_graph_store,
+    )
+
+    output = str(resolve_graph_store(output))
     click.echo("🔍 Auto-discovering conversations from AI editors...\n")
 
     # Discover all conversations

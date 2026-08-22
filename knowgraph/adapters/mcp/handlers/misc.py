@@ -8,7 +8,7 @@ import mcp.types as types
 
 from knowgraph.adapters.mcp.handlers._resilience import _global_circuit_breaker
 from knowgraph.adapters.mcp.methods import analyze_path_impact_report
-from knowgraph.adapters.mcp.utils import resolve_graph_path
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.application.querying.query_engine import QueryEngine
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.domain.algorithms.graph_validator import validate_graph_consistency
@@ -54,7 +54,7 @@ async def handle_analyze_impact(
             mode = arguments.get("mode", "semantic")
 
             graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-            graph_path = resolve_graph_path(graph_path_arg, project_root)
+            graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
 
             trace.add_event("analysis_params", {"mode": mode, "max_hops": max_hops})
 
@@ -105,7 +105,7 @@ async def handle_validate(
         List of text content responses
     """
     graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-    graph_path = resolve_graph_path(graph_path_arg, project_root)
+    graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
 
     try:
         result = validate_graph_consistency(graph_path)
@@ -131,7 +131,7 @@ async def handle_get_stats(
         List of text content responses
     """
     graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-    graph_path = resolve_graph_path(graph_path_arg, project_root)
+    graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
 
     manifest_path = graph_path / "metadata" / "manifest.json"
 

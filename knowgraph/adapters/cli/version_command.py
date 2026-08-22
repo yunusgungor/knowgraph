@@ -4,9 +4,16 @@ from pathlib import Path
 
 import click
 
-from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.infrastructure.storage.version_diff import VersionDiffEngine
 from knowgraph.infrastructure.storage.version_history import VersionHistoryManager
+
+
+def _resolve_store(graph_store: str | None) -> Path:
+    """Resolve graph store with workspace awareness, requiring it to exist."""
+    from knowgraph.shared.security import validate_path
+
+    return validate_path(str(resolve_graph_store(graph_store)), must_exist=True, must_be_file=False)
 
 
 @click.group()
@@ -17,9 +24,9 @@ def version_commands():
 @click.command(name="versions")
 @click.option(
     "--graph-store",
-    type=click.Path(exists=True, path_type=Path),
-    default=DEFAULT_GRAPH_STORE_PATH,
-    help="Graph store directory path",
+    type=str,
+    default=None,
+    help="Graph store directory path (defaults to ./graphstore in the workspace root)",
 )
 @click.option(
     "--limit",
@@ -32,10 +39,10 @@ def version_commands():
     is_flag=True,
     help="Show detailed information",
 )
-def list_versions(graph_store: Path, limit: int, verbose: bool):
+def list_versions(graph_store: str | None, limit: int, verbose: bool):
     """List all versions in the knowledge graph."""
     try:
-        version_mgr = VersionHistoryManager(graph_store)
+        version_mgr = VersionHistoryManager(_resolve_store(graph_store))
         versions = version_mgr.list_versions(limit=limit)
 
         if not versions:
@@ -74,14 +81,14 @@ def list_versions(graph_store: Path, limit: int, verbose: bool):
 @click.argument("version_id")
 @click.option(
     "--graph-store",
-    type=click.Path(exists=True, path_type=Path),
-    default=DEFAULT_GRAPH_STORE_PATH,
-    help="Graph store directory path",
+    type=str,
+    default=None,
+    help="Graph store directory path (defaults to ./graphstore in the workspace root)",
 )
-def show_version(version_id: str, graph_store: Path):
+def show_version(version_id: str, graph_store: str | None):
     """Show detailed information about a specific version."""
     try:
-        version_mgr = VersionHistoryManager(graph_store)
+        version_mgr = VersionHistoryManager(_resolve_store(graph_store))
         version = version_mgr.get_version(version_id)
 
         if not version:
@@ -144,14 +151,14 @@ def show_version(version_id: str, graph_store: Path):
 @click.argument("version2")
 @click.option(
     "--graph-store",
-    type=click.Path(exists=True, path_type=Path),
-    default=DEFAULT_GRAPH_STORE_PATH,
-    help="Graph store directory path",
+    type=str,
+    default=None,
+    help="Graph store directory path (defaults to ./graphstore in the workspace root)",
 )
-def diff_versions(version1: str, version2: str, graph_store: Path):
+def diff_versions(version1: str, version2: str, graph_store: str | None):
     """Compare two versions and show differences."""
     try:
-        version_mgr = VersionHistoryManager(graph_store)
+        version_mgr = VersionHistoryManager(_resolve_store(graph_store))
 
         v1 = version_mgr.get_version(version1)
         if not v1:
@@ -179,9 +186,9 @@ def diff_versions(version1: str, version2: str, graph_store: Path):
 @click.argument("version_id")
 @click.option(
     "--graph-store",
-    type=click.Path(exists=True, path_type=Path),
-    default=DEFAULT_GRAPH_STORE_PATH,
-    help="Graph store directory path",
+    type=str,
+    default=None,
+    help="Graph store directory path (defaults to ./graphstore in the workspace root)",
 )
 @click.option(
     "--no-backup",
@@ -194,11 +201,12 @@ def diff_versions(version1: str, version2: str, graph_store: Path):
     help="Skip the interactive confirmation prompt and bypass validation checks "
     "(required in non-interactive/CI environments where no TTY is attached).",
 )
-def rollback_version(version_id: str, graph_store: Path, no_backup: bool, force: bool):
+def rollback_version(version_id: str, graph_store: str | None, no_backup: bool, force: bool):
     """Rollback to a previous version (manifest metadata only)."""
     from knowgraph.infrastructure.storage.version_rollback import RollbackManager
 
     try:
+        graph_store = _resolve_store(graph_store)
         # Confirmation prompt (only when a TTY is attached so CI/non-interactive
         # runs never block on stdin). Without --force in a non-interactive shell
         # we abort explicitly instead of hanging on a prompt nobody can answer.

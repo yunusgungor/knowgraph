@@ -34,7 +34,6 @@ from knowgraph.adapters.mcp.handlers.query import (
     handle_batch_query,
     handle_query,
 )
-from knowgraph.adapters.mcp.utils import resolve_graph_path
 
 __all__ = [
     "_expand_query_if_available",

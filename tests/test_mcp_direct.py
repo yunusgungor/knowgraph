@@ -9,13 +9,15 @@ from knowgraph.adapters.mcp.server import knowgraph_index, knowgraph_query
 @pytest.mark.asyncio
 @pytest.mark.skip(reason="Requires MCP request context - integration test")
 async def test_call_tool_query():
-    # Mock resolve_graph_path to ignore PROJECT_ROOT logic
+    # Mock resolve_graph_store to ignore PROJECT_ROOT logic
     with (
-        patch("knowgraph.adapters.mcp.handlers.resolve_graph_path") as mock_resolve,
-        patch("knowgraph.adapters.mcp.handlers.QueryEngine") as mock_engine_cls,
+        patch(
+            "knowgraph.adapters.mcp.handlers.query.resolve_graph_store"
+        ) as mock_resolve,
+        patch("knowgraph.adapters.mcp.handlers.query.QueryEngine") as mock_engine_cls,
         patch("knowgraph.adapters.mcp.server.get_llm_provider") as mock_provider_func,
         patch(
-            "knowgraph.adapters.mcp.handlers.QueryExpander"
+            "knowgraph.adapters.mcp.handlers.query.QueryExpander"
         ),  # Mock expander too to avoid side effects
     ):
 
@@ -43,7 +45,7 @@ async def test_call_tool_query():
 @pytest.mark.asyncio
 async def test_call_tool_index():
     with (
-        patch("knowgraph.adapters.mcp.server.resolve_graph_path"),
+        patch("knowgraph.adapters.mcp.handlers.indexing.resolve_graph_store"),
         patch("knowgraph.adapters.mcp.server.get_llm_provider") as mock_provider,
         # Mock the actual CLI functions that create OpenAIProvider
         patch("knowgraph.adapters.mcp.methods.run_index", new_callable=AsyncMock) as mock_run_index,

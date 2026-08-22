@@ -7,7 +7,7 @@ import mcp.types as types
 from mcp.server import Server
 
 from knowgraph.adapters.mcp.methods import index_graph
-from knowgraph.adapters.mcp.utils import resolve_graph_path
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.shared.progress import ProgressNotifier
 from knowgraph.shared.refactoring import (
@@ -56,7 +56,7 @@ async def handle_index(
             output_path = arguments.get("output_path", DEFAULT_GRAPH_STORE_PATH)
             gc = arguments.get("gc", False)
 
-            graph_path = resolve_graph_path(output_path, project_root)
+            graph_path = resolve_graph_store(output_path, root_dir=project_root)
             trace.add_event("paths_resolved", {"graph_path": str(graph_path)[:100]})
 
             # Extract additional parameters for repository/code directory indexing

@@ -3,8 +3,8 @@ from typing import Any
 
 import mcp.types as types
 
-from knowgraph.adapters.mcp.utils import resolve_graph_path
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.shared.refactoring import validate_required_argument
 
 
@@ -17,7 +17,7 @@ async def handle_list_versions(
     from knowgraph.adapters.mcp.version_methods import list_graph_versions
 
     graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-    graph_path = resolve_graph_path(graph_path_arg, project_root)
+    graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
     limit = arguments.get("limit", 50)
 
     return await list_graph_versions(str(graph_path), limit)
@@ -34,7 +34,7 @@ async def handle_version_info(
         return [types.TextContent(type="text", text=error)]
 
     graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-    graph_path = resolve_graph_path(graph_path_arg, project_root)
+    graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
     version_id = arguments["version_id"]
 
     return await get_version_info(str(graph_path), version_id)
@@ -53,7 +53,7 @@ async def handle_diff_versions(
         return [types.TextContent(type="text", text=error)]
 
     graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-    graph_path = resolve_graph_path(graph_path_arg, project_root)
+    graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
     version1 = arguments["version1"]
     version2 = arguments["version2"]
 
@@ -72,7 +72,7 @@ async def handle_rollback(
         return [types.TextContent(type="text", text=error)]
 
     graph_path_arg = arguments.get("graph_path", DEFAULT_GRAPH_STORE_PATH)
-    graph_path = resolve_graph_path(graph_path_arg, project_root)
+    graph_path = resolve_graph_store(graph_path_arg, root_dir=project_root)
     version_id = arguments["version_id"]
     create_backup = arguments.get("create_backup", True)
     force = arguments.get("force", False)
