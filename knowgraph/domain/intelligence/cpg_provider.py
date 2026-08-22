@@ -155,65 +155,43 @@ class CPGProvider:
         name = Path(rel_path).name
         entities: list[Entity] = []
 
-        # Methods (definitions) — skip <module>/<init>/<clinit>
+        # Single combined native query. JoernQueryExecutor starts a JVM per
+        # query, so merging method/call/identifier extraction into ONE query
+        # is ~3x cheaper than three separate queries. Results are prefixed:
+        # DEF| (method/definition), CALL| (call), REF| (identifier/reference).
+        query = (
+            f'cpg.method.where(_.filename("{name}")).map(m => "DEF|" + m.name).l ++ '
+            f'cpg.call.where(_.method.filename("{name}")).map(c => "CALL|" + c.name).l ++ '
+            f'cpg.identifier.where(_.method.filename("{name}")).name.dedup.map(n => "REF|" + n).l'
+        )
         try:
-            r = execr.execute_query(
-                cpg_path,
-                f'cpg.method.where(_.filename("{name}")).name.l',
-                timeout=60,
-            )
-            for item in r.results:
-                mname = item.get("raw", "").strip()
+            r = execr.execute_query(cpg_path, query, timeout=120)
+        except Exception as e:
+            logger.warning(f"Entity extraction failed for {rel_path}: {e}")
+            return entities
+
+        seen_calls: set[str] = set()
+        for item in r.results:
+            raw = item.get("raw", "").strip()
+            if raw.startswith("DEF|"):
+                mname = raw[4:].strip()
                 # Skip module/init wrappers and synthetic names (e.g. JS
                 # ":program", Scala "<init>", Python "<module>").
                 if mname and not mname.startswith("<") and not mname.startswith(":"):
                     entities.append(
-                        Entity(
-                            name=mname,
-                            type="definition",
-                            description=f"Method definition: {mname}",
-                        )
+                        Entity(name=mname, type="definition", description=f"Method definition: {mname}")
                     )
-        except Exception as e:
-            logger.warning(f"Method extraction failed for {rel_path}: {e}")
-
-        # Calls (reference) — includes operator calls; filter obvious operators
-        try:
-            r = execr.execute_query(
-                cpg_path,
-                f'cpg.call.where(_.method.filename("{name}")).name.l',
-                timeout=60,
-            )
-            seen = set()
-            for item in r.results:
-                cname = item.get("raw", "").strip()
-                if not cname or cname.startswith("<operator>") or cname in seen:
-                    continue
-                seen.add(cname)
-                entities.append(
-                    Entity(name=cname, type="call", description=f"Call: {cname}")
-                )
-        except Exception as e:
-            logger.warning(f"Call extraction failed for {rel_path}: {e}")
-
-        # Identifiers (references)
-        try:
-            r = execr.execute_query(
-                cpg_path,
-                f'cpg.identifier.where(_.method.filename("{name}")).name.dedup.l',
-                timeout=60,
-            )
-            seen = set()
-            for item in r.results:
-                iname = item.get("raw", "").strip()
-                if not iname or iname in seen:
-                    continue
-                seen.add(iname)
-                entities.append(
-                    Entity(name=iname, type="reference", description=f"Variable reference: {iname}")
-                )
-        except Exception as e:
-            logger.warning(f"Identifier extraction failed for {rel_path}: {e}")
+            elif raw.startswith("CALL|"):
+                cname = raw[5:].strip()
+                if cname and not cname.startswith("<operator>") and cname not in seen_calls:
+                    seen_calls.add(cname)
+                    entities.append(Entity(name=cname, type="call", description=f"Call: {cname}"))
+            elif raw.startswith("REF|"):
+                iname = raw[4:].strip()
+                if iname and not iname.startswith("<operator>"):
+                    entities.append(
+                        Entity(name=iname, type="reference", description=f"Variable reference: {iname}")
+                    )
 
         return entities
 
