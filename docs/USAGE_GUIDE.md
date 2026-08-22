@@ -147,7 +147,9 @@ KnowGraph v1.0.1, üretilen cevapları grafik kanıtına bağlayan bir **doğrul
     ```python
     # MCP
     knowgraph_query(query="Kim Nova Dynamics'in CEO'su?", enable_grounding=True)
+    ```
 
+    ```bash
     # CLI
     knowgraph query "Nova Dynamics CEO'su kim?" --enable-grounding
     ```
