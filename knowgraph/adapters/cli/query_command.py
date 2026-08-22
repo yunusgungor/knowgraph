@@ -33,6 +33,11 @@ from knowgraph.infrastructure.storage.filesystem import (
 @click.option("--max-tokens", default=LLM_MAX_TOKENS, help="Maximum context tokens")
 @click.option("--explain", "-e", is_flag=True, help="Show explainability report")
 @click.option("--expand-query", is_flag=True, help="Expand query with AI-generated synonyms")
+@click.option(
+    "--enable-grounding",
+    is_flag=True,
+    help="Prefer graph-evidence-backed nodes in context; demote graph-isolated content (Graph Engineering)",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 @click.option(
     "--mode",
@@ -48,6 +53,7 @@ def query_command(
     max_tokens: int,
     explain: bool,
     expand_query: bool,
+    enable_grounding: bool,
     verbose: bool,
     mode: str,
 ) -> None:
@@ -161,7 +167,8 @@ def query_command(
 
         # Execute query
         query_result = engine.query(
-            query_text, top_k, max_hops, max_tokens, with_explanation=explain
+            query_text, top_k, max_hops, max_tokens,
+            with_explanation=explain, enable_grounding=enable_grounding,
         )
 
         # Output result

@@ -444,7 +444,7 @@ async def chunk_files(files_ready, verbose):
 # ============================================================================
 
 
-async def build_knowledge_graph(chunks, input_path, graph_store_path, provider, verbose, base_path=None, file_hash_map=None):
+async def build_knowledge_graph(chunks, input_path, graph_store_path, provider, verbose, base_path=None, file_hash_map=None, enable_short_unit=False):
     """Build knowledge graph from chunks."""
     from knowgraph.application.indexing.graph_builder import SmartGraphBuilder
     from knowgraph.infrastructure.cache.indexing_cache import IndexingCache
@@ -464,7 +464,9 @@ async def build_knowledge_graph(chunks, input_path, graph_store_path, provider, 
 
     click.echo(f"Building knowledge graph from {len(chunks)} chunks...")
     builder = SmartGraphBuilder(provider)
-    nodes, edges = await builder.build(chunks, str(input_path), "", str(graph_store_path))
+    nodes, edges = await builder.build(
+        chunks, str(input_path), "", str(graph_store_path), enable_short_unit=enable_short_unit
+    )
 
     # Initialize cache and save results
     cache = None

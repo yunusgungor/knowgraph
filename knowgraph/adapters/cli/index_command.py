@@ -71,6 +71,7 @@ async def run_index(
     link_conversations: bool = False,
     incremental: bool = False,
     gc: bool = False,
+    enable_short_unit: bool = False,
     progress_callback: Callable[[str, int, int, str], Awaitable[None]] | None = None,
 ) -> None:
     """Execute indexing process (AI-Driven).
@@ -89,6 +90,7 @@ async def run_index(
         access_token: GitHub token for private repos
         link_conversations: Auto-discover and link conversations
         incremental: Only index new/modified files
+        enable_short_unit: Run SC-quote + P3 entailment on non-code chunks
         progress_callback: Optional callback for progress updates (stage, current, total, message)
     """
     from knowgraph.adapters.cli.index_helpers import (
@@ -167,7 +169,8 @@ async def run_index(
             await progress_callback("graph_building", 5, 9, f"Building graph from {len(all_chunks)} chunks...")
 
         nodes, edges, _ = await build_knowledge_graph(
-            all_chunks, input_path, graph_store_path, provider, verbose, base_path, file_hash_map
+            all_chunks, input_path, graph_store_path, provider, verbose, base_path, file_hash_map,
+            enable_short_unit=enable_short_unit,
         )
 
         # Merge cached nodes with newly created nodes
@@ -242,6 +245,11 @@ async def run_index(
     help="Auto-discover and link conversations to code after indexing",
 )
 @click.option(
+    "--enable-short-unit",
+    is_flag=True,
+    help="Run the SC-quote + P3 entailment chain on non-code chunks (Graph Engineering anti-hallucination)",
+)
+@click.option(
     "--incremental",
     is_flag=True,
     help="Only index new/modified files (uses checkpoint for faster re-indexing)",
@@ -252,12 +260,14 @@ def index_command(
     verbose: bool,
     link_conversations: bool,
     incremental: bool,
+    enable_short_unit: bool,
 ) -> None:
     """Index markdown files, code, or repositories into a knowledge graph.
 
     Enhanced with:
     - Auto conversation discovery and linking (--link-conversations)
     - Incremental indexing for faster updates (--incremental)
+    - SC-quote + P3 entailment on non-code chunks (--enable-short-unit)
     """
     import asyncio
 
@@ -274,6 +284,7 @@ def index_command(
                 verbose,
                 link_conversations=link_conversations,
                 incremental=incremental,
+                enable_short_unit=enable_short_unit,
             )
         )
     except Exception as error:

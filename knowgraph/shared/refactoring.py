@@ -139,6 +139,7 @@ def extract_query_parameters(arguments: dict[str, Any]) -> dict[str, Any]:
         "max_tokens": arguments.get("max_tokens", 3000),
         "enable_hierarchical_lifting": arguments.get("enable_hierarchical_lifting", True),
         "lift_levels": arguments.get("lift_levels", 2),
+        "enable_grounding": arguments.get("enable_grounding", False),
         "system_prompt": arguments.get("system_prompt"),
     }
 

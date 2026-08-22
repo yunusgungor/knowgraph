@@ -217,6 +217,7 @@ async def handle_query(
                     with_explanation=params["with_explanation"],
                     enable_hierarchical_lifting=params["enable_hierarchical_lifting"],
                     lift_levels=params["lift_levels"],
+                    enable_grounding=params["enable_grounding"],
                 )
 
                 if progress:

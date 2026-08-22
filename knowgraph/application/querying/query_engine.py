@@ -217,6 +217,7 @@ class QueryEngine:
         enable_hierarchical_lifting: bool = True,
         lift_levels: int = 2,
         enable_grounding: bool = False,
+        enable_temporal_filter: bool = False,
     ) -> QueryResult:
         """Execute full query pipeline with retry logic.
 
@@ -233,6 +234,8 @@ class QueryEngine:
                 graph evidence (connected by an edge) are preferred in context and
                 isolated nodes are demoted — evidence-backed content wins the
                 context budget.
+            enable_temporal_filter: When True (Graph Engineering transfer), drop
+                edges sourced from superseded conversations before traversal.
 
         Returns:
         -------
@@ -331,6 +334,11 @@ class QueryEngine:
         # This sync version calls implementation directly
         start_time = time.time()
         try:
+            # Graph Engineering: grounding and temporal filtering are both
+            # evidence-awareness levers. When grounding is on, temporal filtering
+            # (drop superseded-conversation edges) is implied too.
+            effective_temporal = enable_temporal_filter or enable_grounding
+
             result = self._execute_query(
                 query_text,
                 top_k,
@@ -340,6 +348,7 @@ class QueryEngine:
                 enable_hierarchical_lifting,
                 lift_levels,
                 enable_grounding,
+                effective_temporal,
             )
 
             # Store in cache
@@ -371,6 +380,7 @@ class QueryEngine:
         enable_hierarchical_lifting: bool,
         lift_levels: int,
         enable_grounding: bool = False,
+        enable_temporal_filter: bool = False,
     ) -> QueryResult:
         """Internal query execution."""
         with memory_guard(
@@ -391,7 +401,8 @@ class QueryEngine:
                     # Step 1: Sparse search + graph expansion
                     retrieval_start = time.time()
                     nodes, seed_node_ids = self.retriever.retrieve(
-                        query_text, self._get_edges(), top_k, max_hops
+                        query_text, self._get_edges(), top_k, max_hops,
+                        enable_temporal_filter=enable_temporal_filter,
                     )
                     timings["sparse_search"] = time.time() - retrieval_start
                     timings["graph_expansion"] = 0.0  # Included in retrieval
@@ -631,6 +642,7 @@ class QueryEngine:
         enable_hierarchical_lifting: bool = True,
         lift_levels: int = 2,
         enable_grounding: bool = False,
+        enable_temporal_filter: bool = False,
     ) -> QueryResult:
         """Execute full query pipeline (async version with timeout and concurrency control).
 
@@ -726,6 +738,8 @@ class QueryEngine:
                     start_time_inner = time.time()
 
                     async def _execute():
+                        # Graph Engineering: grounding implies temporal filtering.
+                        effective_temporal = enable_temporal_filter or enable_grounding
                         return await self._query_async_impl(
                             query_text=query_text,
                             top_k=top_k,
@@ -735,6 +749,7 @@ class QueryEngine:
                             lift_levels=lift_levels,
                             with_explanation=with_explanation,
                             enable_grounding=enable_grounding,
+                            enable_temporal_filter=effective_temporal,
                         )
 
                     result = await asyncio.wait_for(
@@ -783,6 +798,7 @@ class QueryEngine:
         lift_levels: int,
         with_explanation: bool,
         enable_grounding: bool = False,
+        enable_temporal_filter: bool = False,
     ) -> QueryResult:
         """Internal async implementation without timeout wrapper."""
         with memory_guard(
@@ -883,7 +899,8 @@ class QueryEngine:
                     # Step 1: Sparse search + graph expansion (async)
                     retrieval_start = time.time()
                     nodes, seed_node_ids = await self.retriever.retrieve_async(
-                        query_text, self._get_edges(), top_k, max_hops
+                        query_text, self._get_edges(), top_k, max_hops,
+                        enable_temporal_filter=enable_temporal_filter,
                     )
                     timings["sparse_search"] = time.time() - retrieval_start
                     timings["graph_expansion"] = 0.0  # Included in retrieval
