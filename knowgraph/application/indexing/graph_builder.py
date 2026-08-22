@@ -863,9 +863,26 @@ class SmartGraphBuilder:
         def _match(name: str, exclude: UUID | None = None) -> UUID | None:
             if not name:
                 return None
-            needle = name.strip().lower()
+            needle = name.strip()
             if not needle:
                 return None
+            # Graph Engineering entity_resolver transfer: exact-name fast-path via
+            # the build-time entity metadata BEFORE substring fallback. This is
+            # stricter (avoids content false-positives) and resolves names that
+            # may not literally appear in title/content (e.g. a canonical symbol
+            # registered under metadata["entities"]).
+            for candidate in nodes:
+                if candidate.type == "conversation":
+                    continue
+                if exclude is not None and candidate.id == exclude:
+                    continue
+                ents = (candidate.metadata or {}).get("entities", []) or []
+                if any(
+                    isinstance(e, dict) and str(e.get("name", "")).strip() == needle
+                    for e in ents
+                ):
+                    return candidate.id
+            needle = needle.lower()
             best: UUID | None = None
             best_rank = -1
             for candidate in nodes:

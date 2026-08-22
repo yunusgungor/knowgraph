@@ -242,7 +242,8 @@ async def handle_query(
                 if progress:
                     await progress.update(4, "🤖 Generating AI answer from context...")
                 answer = await _generate_llm_answer(
-                    query, result, params["system_prompt"], params["with_explanation"], provider
+                    query, result, params["system_prompt"], params["with_explanation"], provider,
+                    enable_grounding=params.get("enable_grounding", False),
                 )
                 trace.add_event("llm_answer_generated", {"length": len(answer)})
 
@@ -293,8 +294,15 @@ async def _generate_llm_answer(
     system_prompt: str | None,
     with_explanation: bool,
     provider: Any,
+    enable_grounding: bool = False,
 ) -> str:
-    """Generate answer using LLM provider."""
+    """Generate answer using LLM provider.
+
+    When ``enable_grounding`` (Graph Engineering transfer), the raw LLM answer
+    is annotated with entities that appear in the answer but are not backed by
+    the retrieved subgraph (zero extra LLM calls). Annotation is applied AFTER
+    the cache read so the raw prompt response stays cacheable.
+    """
     explanation_data = None
     if with_explanation and result.explanation:
         explanation_data = json.dumps(result.explanation.to_dict(), indent=2, default=str)
@@ -304,20 +312,51 @@ async def _generate_llm_answer(
     # Skip re-billing when the exact prompt was answered before.
     cache_key = _llm_answer_key(prompt)
     cached = _llm_answer_cache.get(cache_key)
-    if cached is not None:
-        return cached
+    raw_answer: str | None = cached
+    if cached is None:
+        try:
+            generated_answer = await provider.generate_text(prompt)
+            if generated_answer:
+                raw_answer = generated_answer
+                if len(_llm_answer_cache) >= _LLM_ANSWER_CACHE_MAX:
+                    _llm_answer_cache.clear()  # simple bounded reset
+                _llm_answer_cache[cache_key] = generated_answer
+        except Exception as e:
+            return f"{result.context}\n\n[Generation Error: {e!s}]"
 
-    try:
-        generated_answer = await provider.generate_text(prompt)
-        if generated_answer:
-            if len(_llm_answer_cache) >= _LLM_ANSWER_CACHE_MAX:
-                _llm_answer_cache.clear()  # simple bounded reset
-            _llm_answer_cache[cache_key] = generated_answer
-            return generated_answer
-    except Exception as e:
-        return f"{result.context}\n\n[Generation Error: {e!s}]"
+    if raw_answer is None:
+        return result.context
 
-    return result.context
+    if enable_grounding:
+        raw_answer = _annotate_grounding(raw_answer, result)
+
+    return raw_answer
+
+
+def _annotate_grounding(answer: str, result: Any) -> str:
+    """Annotate a generated answer with unbacked entities (zero LLM).
+
+    Reuses ``grounding_evaluator.verify_entities_in_answer`` on the grounding
+    facts that ``query_engine`` serialized onto the QueryResult. Entities found
+    in the answer but not in the retrieved graph get a trailing note. We never
+    strip content — this is an honest "double-check these" annotation.
+    """
+    from knowgraph.domain.claims.grounding_evaluator import verify_entities_in_answer
+
+    entity_names = getattr(result, "entity_names", []) or []
+    grounded_edges = getattr(result, "grounded_edges", []) or []
+    if not entity_names:
+        return answer
+
+    verdict = verify_entities_in_answer(answer, entity_names, grounded_edges)
+    miss = verdict["absent"] + verdict["isolated"]
+    if miss:
+        answer = (
+            f"{answer}\n\n"
+            f"[grounding] these entities in the answer were not found in the "
+            f"retrieved graph; verify: {', '.join(miss)}"
+        )
+    return answer
 
 
 async def handle_batch_query(
@@ -375,6 +414,7 @@ async def handle_batch_query(
         async def generate_answer_for_result(query: str, result: Any) -> dict:
             """Generate LLM answer for a single query result."""
             answer = result.context
+            enable_grounding = arguments.get("enable_grounding", False)
             if provider and result.answer:  # Only if we have context
                 try:
                     prompt = build_llm_prompt(query, result.context)
@@ -391,6 +431,9 @@ async def handle_batch_query(
                             answer = generated_answer
                 except Exception:
                     pass  # Use context as fallback
+
+            if enable_grounding:
+                answer = _annotate_grounding(answer, result)
 
             return {
                 "query": query,

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 import asyncio
 import time
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -36,6 +36,7 @@ from knowgraph.domain.algorithms.centrality import (
     compute_centrality_metrics_async,
 )
 from knowgraph.domain.models.edge import Edge
+from knowgraph.domain.models.node import Node
 from knowgraph.infrastructure.storage.filesystem import (
     read_all_edges,
 )
@@ -103,6 +104,43 @@ def _get_query_cache_key(
     return hashlib.md5(key_parts.encode()).hexdigest()  # noqa: S324
 
 
+def _serialize_grounding_facts(
+    nodes: list[Node], active_edges: list[Edge]
+) -> tuple[list[list[str]], list[str]]:
+    """Serialize active-subgraph facts for answer-level grounding.
+
+    Returns (grounded_edges, entity_names):
+      grounded_edges: ``[subject_name, edge_type, object_name]`` triples built
+          from ``active_edges`` (list-of-lists for JSON-safe to_dict/cache).
+      entity_names: de-duplicated entity surface forms from node titles/paths
+          plus each node's ``metadata["entities"]`` names.
+
+    Both are consumed by ``grounding_evaluator.verify_entities_in_answer`` in
+    the MCP handler — zero extra LLM calls.
+    """
+    by_id = {n.id: n for n in nodes}
+
+    def _name(nid: UUID) -> str:
+        n = by_id.get(nid)
+        return (n.title or n.path or "") if n else ""
+
+    edges: list[list[str]] = []
+    for e in active_edges:
+        s, t = _name(e.source), _name(e.target)
+        if s and t:
+            edges.append([s, str(e.type), t])
+
+    names: list[str] = []
+    for n in nodes:
+        names.append(n.title or n.path)
+        for ent in (n.metadata or {}).get("entities", []) or []:
+            if isinstance(ent, dict):
+                nm = ent.get("name")
+                if nm:
+                    names.append(str(nm))
+    return edges, list(dict.fromkeys(names))
+
+
 @dataclass
 class QueryResult:
     """Result from query execution.
@@ -132,6 +170,10 @@ class QueryResult:
     graph_expansion_time: float
     centrality_time: float
     explanation: ExplanationObject | None = None
+    # Graph Engineering: active-subgraph facts serialized for answer-level
+    # grounding (list-of-lists for JSON-safe to_dict/cache paths).
+    grounded_edges: list[list[str]] = field(default_factory=list)
+    entity_names: list[str] = field(default_factory=list)
 
 
 class QueryEngine:
@@ -452,11 +494,16 @@ class QueryEngine:
                     # Graph Engineering transfer (opt-in): nodes with graph evidence
                     # (appear in an edge) are grounded; isolated nodes are ungrounded.
                     grounded_verdicts: dict[UUID, bool] | None = None
+                    grounded_edges: list[list[str]] = []
+                    entity_names: list[str] = []
                     if enable_grounding:
                         grounded_ids = {
                             edge.source for edge in active_edges
                         } | {edge.target for edge in active_edges}
                         grounded_verdicts = {node.id: node.id in grounded_ids for node in nodes}
+                        # Graph Engineering: serialize graph facts for answer-level
+                        # grounding in the MCP handler (zero LLM calls).
+                        grounded_edges, entity_names = _serialize_grounding_facts(nodes, active_edges)
 
                     context, _context_blocks = assemble_context(
                         nodes,
@@ -501,6 +548,8 @@ class QueryEngine:
                         graph_expansion_time=timings["graph_expansion"],
                         centrality_time=timings["centrality"],
                         explanation=explanation,
+                        grounded_edges=grounded_edges,
+                        entity_names=entity_names,
                     )
 
                 except QueryError:
@@ -943,11 +992,16 @@ class QueryEngine:
                     # Graph Engineering transfer (opt-in): nodes with graph evidence
                     # (appear in an edge) are grounded; isolated nodes are ungrounded.
                     grounded_verdicts: dict[UUID, bool] | None = None
+                    grounded_edges: list[list[str]] = []
+                    entity_names: list[str] = []
                     if enable_grounding:
                         grounded_ids = {
                             edge.source for edge in active_edges
                         } | {edge.target for edge in active_edges}
                         grounded_verdicts = {node.id: node.id in grounded_ids for node in nodes}
+                        # Graph Engineering: serialize graph facts for answer-level
+                        # grounding in the MCP handler (zero LLM calls).
+                        grounded_edges, entity_names = _serialize_grounding_facts(nodes, active_edges)
 
                     context, _context_blocks = assemble_context(
                         nodes,
@@ -993,6 +1047,8 @@ class QueryEngine:
                         graph_expansion_time=timings["graph_expansion"],
                         centrality_time=timings["centrality"],
                         explanation=explanation,
+                        grounded_edges=grounded_edges,
+                        entity_names=entity_names,
                     )
 
                 except QueryError:

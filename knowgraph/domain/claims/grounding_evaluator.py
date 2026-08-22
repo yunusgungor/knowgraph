@@ -123,6 +123,49 @@ def build_supported_set(kg_triples) -> Set[Tuple[str, str, str]]:
     return supported_set
 
 
+def verify_entities_in_answer(
+    answer: str,
+    entity_names: list[str],
+    grounded_edges: list[tuple[str, str, str]] | list[list[str]],
+) -> Dict[str, list[str]]:
+    """Classify which answer entities are grounded vs isolated vs absent.
+
+    Zero-LLM entity-in-graph verification (Graph Engineering transfer, E-132
+    grounding): entity surface forms (from node titles/paths/metadata) are
+    substring-matched against the generated answer, and each matched entity is
+    checked against the active-subgraph ``grounded_edges``.
+
+    This is an ANNOTATION, not a filter: we never silently strip a claim. We
+    surface which entities the retrieved graph does not back, so the caller
+    (or the user) can double-check. Grounding is not truth (E-082): a grounded
+    entity can still be the subject of a fabricated claim.
+
+    Returns ``{"grounded": [...], "isolated": [...], "absent": [...]}``:
+      grounded - entity appears in the answer and is an endpoint of a grounded edge
+      isolated - entity appears in the answer, known to the KG name set, but has
+                 no edge in the active subgraph
+      absent   - entity appears in the answer but is not in the KG name set
+    """
+    supported = build_supported_set(tuple(t) for t in grounded_edges)
+    # build_supported_set normalizes to lowercase; keep a lowercased known set.
+    known: Set[str] = set()
+    for s, _p, o in supported:
+        known.add(s)
+        known.add(o)
+
+    lower = answer.lower()
+    hits: Dict[str, list[str]] = {"grounded": [], "isolated": [], "absent": []}
+    for name in entity_names:
+        nm = str(name).strip()
+        if not nm or nm.lower() not in lower:
+            continue
+        if nm.lower() in known:
+            hits["grounded"].append(nm)
+        else:
+            hits["absent"].append(nm)
+    return hits
+
+
 class GroundingEvaluator:
     """Evaluates and filters report claims against Knowledge Graph evidence."""
 
