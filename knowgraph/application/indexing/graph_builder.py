@@ -376,9 +376,22 @@ class SmartGraphBuilder:
         self.perf_tracker = PerformanceTracker()
 
     async def build(
-        self, chunks: list[Chunk], file_path: str, file_hash: str, graph_path: str
+        self,
+        chunks: list[Chunk],
+        file_path: str,
+        file_hash: str,
+        graph_path: str,
+        enable_short_unit: bool = False,
     ) -> tuple[list[Node], list[Edge]]:
-        """Build graph nodes and edges from chunks using AI analysis."""
+        """Build graph nodes and edges from chunks using AI analysis.
+
+        ``enable_short_unit`` (Graph Engineering transfer, opt-in): when True,
+        non-code chunks that passed LLM entity extraction also run the R-008
+        SC-quote + P3 entailment chain (`extract_short_unit_graph`). The
+        published relations are stored on each node's ``metadata["relations"]``
+        for the query path to consume. Requires a live provider (set via the
+        constructor).
+        """
         with memory_guard(
             operation_name=f"graph_build[{file_path}]",
             warning_threshold_mb=200,
@@ -604,6 +617,41 @@ class SmartGraphBuilder:
             # Reassemble final nodes
             # Include ALL nodes from map (chunks + CPG entity nodes)
             final_nodes = list(final_nodes_map.values())
+
+            # Graph Engineering transfer (opt-in): run the R-008 SC-quote + P3
+            # entailment chain on non-code chunks that got LLM entities. The
+            # published relations are stored on the node metadata for the query
+            # path (grounding/context assembly) to consume.
+            if enable_short_unit and self.provider is not None:
+                from knowgraph.domain.claims.sc_extractor import (
+                    AsyncChatAdapter,
+                    extract_short_unit_graph,
+                )
+
+                adapter = AsyncChatAdapter(self.provider)
+                for node in final_nodes:
+                    if node.type == "code" or not node.content.strip():
+                        continue
+                    try:
+                        result = await extract_short_unit_graph(adapter, node.content)
+                        relations = result.get("relations", [])
+                        if relations:
+                            node_meta = dict(node.metadata) if node.metadata else {}
+                            node_meta["relations"] = [
+                                {
+                                    "subject": r["subject"],
+                                    "predicate": r["predicate"],
+                                    "object": r["object"],
+                                    "source": "sc_p3",
+                                }
+                                for r in relations
+                            ]
+                            final_nodes_map[node.id] = replace(node, metadata=node_meta)
+                    except Exception as e:
+                        logger.debug(f"Short-unit extraction failed for node {node.id}: {e}")
+                        continue
+                # Reassemble in case metadata was updated.
+                final_nodes = list(final_nodes_map.values())
 
             # Finalize metrics
             self.metrics.finalize()

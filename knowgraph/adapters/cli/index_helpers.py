@@ -658,6 +658,19 @@ async def run_post_index_hooks(
         except Exception as e:
             _log_verbose(verbose, f"  ⚠️  Conversation linking failed: {e}")
 
+    # Temporal edge building runs after conversation linking so the reference
+    # edges it reads are fresh. Best-effort: never fails the index.
+    try:
+        from knowgraph.application.indexing.post_index_hooks import build_temporal_edges
+
+        temporal_stats = await build_temporal_edges(Path(graph_store_path))
+        if temporal_stats["supersedes_edges"] or temporal_stats["contradicts_edges"]:
+            _log_verbose(verbose, "\n🕐 Building temporal edges (SUPERSEDES/CONTRADICTS)...")
+            _log_verbose(verbose, f"  Supersedes: {temporal_stats['supersedes_edges']}")
+            _log_verbose(verbose, f"  Contradicts: {temporal_stats['contradicts_edges']}")
+    except Exception as e:
+        _log_verbose(verbose, f"  ⚠️  Temporal edge building failed: {e}")
+
     if verbose:
         _log_verbose(verbose, "\n" + "=" * 60)
         _log_verbose(verbose, "BOOKMARK AUTO-TAGGING")

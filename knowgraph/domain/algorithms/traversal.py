@@ -202,6 +202,11 @@ def traverse_graph_reference_aware(
     semantic_adj: dict[UUID, list[UUID]] = {}
 
     for edge in edges:
+        # Temporal/metadata edges (Graph Engineering transfer) are NOT content
+        # links — they carry claim chronology, not code dependencies. Exclude
+        # them from traversal entirely (E-119: temporal paths only via active edges).
+        if edge.type in ("supersedes", "contradicts"):
+            continue
         if edge.type in ["reference", "call", "data_flow", "hierarchy", "control_flow"]:
             # Reference edges are DIRECTED (follow code dependencies precisely)
             if edge.source not in reference_adj:

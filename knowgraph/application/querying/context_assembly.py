@@ -51,6 +51,7 @@ def score_node_importance(
     similarity_score: float,
     centrality_score: float,
     reference_path_quality: float = 0.0,
+    grounded: bool | None = None,
 ) -> float:
     """Calculate node importance for context inclusion (REFERENCE-AWARE).
 
@@ -64,6 +65,10 @@ def score_node_importance(
         centrality_score: Composite centrality [0, 1]
         reference_path_quality: Quality of reference path to this node [0, 1]
                                 (Higher if reached via reference edges vs semantic)
+        grounded: When not None, the claim's grounding verdict (Graph Engineering
+            transfer, E-132). Grounded nodes get a +20% importance bonus;
+            ungrounded nodes a -20% penalty — evidence-backed content wins the
+            context budget, unbacked content is demoted.
 
     Returns:
     -------
@@ -92,6 +97,12 @@ def score_node_importance(
     penalty_ratio = min(node.token_count, MAX_TOKEN_COUNT_FOR_PENALTY) / MAX_TOKEN_COUNT_FOR_PENALTY
     token_penalty = 1.0 - penalty_ratio * TOKEN_PENALTY_FACTOR
     importance *= token_penalty
+
+    # Grounding verdict (opt-in): grounded evidence is preferred, unbacked demoted.
+    if grounded is True:
+        importance *= 1.2
+    elif grounded is False:
+        importance *= 0.8
 
     return min(importance, 1.0)
 
@@ -156,8 +167,11 @@ def compute_reference_path_quality(
 
         visited.add(current)
 
-        # Expand to neighbors
+        # Expand to neighbors. Temporal/metadata edges (Graph Engineering transfer)
+        # are not content links — exclude them from path quality.
         for edge in edges:
+            if edge.type in ("supersedes", "contradicts"):
+                continue
             if edge.source == current and edge.target not in visited:
                 queue.append((edge.target, [*path_edges, edge], depth + 1))
             elif edge.target == current and edge.source not in visited:
@@ -177,6 +191,7 @@ def assemble_context(
     edges: list | None = None,  # NEW: Optional edges for path quality
     enable_hierarchical_lifting: bool = True,  # NEW: Enable hierarchical context lifting
     lift_levels: int = 2,  # NEW: Number of directory levels to lift from
+    grounded_verdicts: dict[UUID, bool] | None = None,  # Graph Engineering: grounding verdict per node id
 ) -> tuple[str, list[ContextBlock]]:
     """Assemble context from nodes with greedy token-aware packing (REFERENCE-AWARE).
 
@@ -211,7 +226,12 @@ def assemble_context(
         if edges:
             ref_path_quality = compute_reference_path_quality(node.id, seed_node_ids, edges)
 
-        importance = score_node_importance(node, is_seed, similarity, centrality, ref_path_quality)
+        # Graph Engineering: pass the node's grounding verdict if provided.
+        grounded = grounded_verdicts.get(node.id) if grounded_verdicts is not None else None
+
+        importance = score_node_importance(
+            node, is_seed, similarity, centrality, ref_path_quality, grounded=grounded
+        )
 
         # Format content
         formatted = _format_node_content(node)

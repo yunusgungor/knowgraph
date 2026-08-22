@@ -138,11 +138,148 @@ async def _resolve_conversation_node(
         hash=content_hash,
         title=conv_file.stem,
         content=content[:100_000],
-        path=str(conv_file),
+        path=conv_file.name,  # relative — Node requires no leading slash
         type="conversation",
         token_count=len(content.split()),
         created_at=int(time.time()),
     )
+
+
+async def build_temporal_edges(
+    graphstore_path: Path,
+) -> dict:
+    """Build temporal SUPERSEDES/CONTRADICTS edges from conversation history.
+
+    Uses the Graph Engineering TemporalResolver (transferred from the research
+    project, E-117..E-124 measured): conversations carry a real created-at
+    timestamp (`metadata["timestamp"]`, set by the conversations MCP handler).
+    Each conversation -> code reference edge is treated as a temporal claim
+    (entity = target code node, value = source conversation id, dated by the
+    conversation's created-at). For the same target node, a NEWER conversation
+    SUPERSEDES an older one; when the referencing conversations differ (different
+    source), a CONTRADICTS edge is added too — "stale fact never current".
+
+    Follows the `auto_link_conversations` pattern: reads existing edges, writes
+    new ones via append_edge_jsonl. Best-effort — failures increment errors and
+    never fail the caller.
+
+    Args:
+    ----
+        graphstore_path: Path to graph storage
+
+    Returns:
+    -------
+        Statistics about temporal edges built
+
+    """
+    from knowgraph.domain.claims.temporal_resolver import TemporalResolver
+    from knowgraph.domain.models.edge import Edge
+    from knowgraph.infrastructure.storage.filesystem import (
+        append_edge_jsonl,
+        list_all_nodes,
+        read_all_edges,
+        read_node_json_async,
+    )
+
+    stats = {
+        "conversation_nodes": 0,
+        "claims_evaluated": 0,
+        "supersedes_edges": 0,
+        "contradicts_edges": 0,
+        "errors": 0,
+    }
+
+    try:
+        # Collect conversation node timestamps (entity id -> ISO date).
+        node_ts: dict[str, str] = {}
+        for node_id in list_all_nodes(graphstore_path):
+            node = await read_node_json_async(node_id, graphstore_path)
+            if not node:
+                continue
+            meta_ts = (node.metadata or {}).get("timestamp")
+            if node.type == "conversation" and meta_ts:
+                node_ts[str(node.id)] = str(meta_ts)
+        stats["conversation_nodes"] = len(node_ts)
+
+        # Group conversation_references_code edges by their target code node.
+        # Each edge is a temporal claim: entity=target, value=source conversation.
+        claims_by_target: dict[str, list[dict]] = {}
+        for edge in read_all_edges(graphstore_path):
+            if edge.type != "conversation_references_code":
+                continue
+            src = str(edge.source)
+            if src not in node_ts:
+                continue  # no real timestamp -> no temporal basis
+            claims_by_target.setdefault(str(edge.target), []).append(
+                {
+                    "id": src,
+                    "entity": str(edge.target),
+                    "attribute": "conversation_references_code",
+                    "value": src,
+                    "valid_at_timestamp": node_ts[src],
+                    "source": "conversation",
+                }
+            )
+
+        # Feed every (entity, attribute) group to the resolver; write the
+        # resulting SUPERSEDES/CONTRADICTS edges back to the store.
+        import time
+
+        resolver = TemporalResolver()
+        for target, claims in claims_by_target.items():
+            result = resolver.resolve_claims(claims)
+            stats["claims_evaluated"] += len(claims)
+            for sup in result["supersedes_edges"]:
+                edge = Edge(
+                    source=_uuid_or_none(sup["source"]),
+                    target=_uuid_or_none(sup["target"]),
+                    type="supersedes",
+                    score=1.0,
+                    created_at=int(time.time()),
+                    metadata={
+                        "reason": sup.get("reason", ""),
+                        "claim_subject": target,
+                        "source": "temporal_hook",
+                    },
+                )
+                if edge.source and edge.target:
+                    append_edge_jsonl(edge, graphstore_path)
+                    stats["supersedes_edges"] += 1
+            for con in result["contradicts_edges"]:
+                edge = Edge(
+                    source=_uuid_or_none(con["source"]),
+                    target=_uuid_or_none(con["target"]),
+                    type="contradicts",
+                    score=1.0,
+                    created_at=int(time.time()),
+                    metadata={
+                        "reason": con.get("reason", ""),
+                        "claim_subject": target,
+                        "source": "temporal_hook",
+                    },
+                )
+                if edge.source and edge.target:
+                    append_edge_jsonl(edge, graphstore_path)
+                    stats["contradicts_edges"] += 1
+
+    except Exception:
+        stats["errors"] += 1
+
+    return stats
+
+
+def _uuid_or_none(value: str) -> "object | None":
+    """Parse a UUID string to a UUID object, or None when malformed.
+
+    TemporalResolver edge ids are the raw claim ids we seeded (conversation node
+    UUID strings), so this is a defensive guard for unexpected values.
+    """
+    from uuid import UUID
+
+    try:
+        return UUID(str(value))
+    except (ValueError, AttributeError):
+        return None
 
 
 async def auto_tag_bookmarks(
@@ -301,6 +438,10 @@ if __name__ == "__main__":
         # Auto-tag bookmarks
         tag_stats = await auto_tag_bookmarks(graphstore)
         print(f"Auto-tagging: {tag_stats}")
+
+        # Build temporal edges
+        temporal_stats = await build_temporal_edges(graphstore)
+        print(f"Temporal edges: {temporal_stats}")
 
         # Collect stats
         stats = collect_index_stats(graphstore)

@@ -216,6 +216,7 @@ class QueryEngine:
         with_explanation: bool = False,
         enable_hierarchical_lifting: bool = True,
         lift_levels: int = 2,
+        enable_grounding: bool = False,
     ) -> QueryResult:
         """Execute full query pipeline with retry logic.
 
@@ -228,6 +229,10 @@ class QueryEngine:
             with_explanation: Generate explanation object
             enable_hierarchical_lifting: Apply hierarchical context lifting (FR-029)
             lift_levels: Directory levels to traverse upward (default: 2)
+            enable_grounding: When True (Graph Engineering transfer), nodes with
+                graph evidence (connected by an edge) are preferred in context and
+                isolated nodes are demoted — evidence-backed content wins the
+                context budget.
 
         Returns:
         -------
@@ -334,6 +339,7 @@ class QueryEngine:
                 with_explanation,
                 enable_hierarchical_lifting,
                 lift_levels,
+                enable_grounding,
             )
 
             # Store in cache
@@ -364,6 +370,7 @@ class QueryEngine:
         with_explanation: bool,
         enable_hierarchical_lifting: bool,
         lift_levels: int,
+        enable_grounding: bool = False,
     ) -> QueryResult:
         """Internal query execution."""
         with memory_guard(
@@ -419,6 +426,15 @@ class QueryEngine:
                     similarity_scores = {node.id: score for node, score in retrieval_results}
 
                     # Step 4: Assemble context (REFERENCE-AWARE IMPORTANCE!)
+                    # Graph Engineering transfer (opt-in): nodes with graph evidence
+                    # (appear in an edge) are grounded; isolated nodes are ungrounded.
+                    grounded_verdicts: dict[UUID, bool] | None = None
+                    if enable_grounding:
+                        grounded_ids = {
+                            edge.source for edge in active_edges
+                        } | {edge.target for edge in active_edges}
+                        grounded_verdicts = {node.id: node.id in grounded_ids for node in nodes}
+
                     context, _context_blocks = assemble_context(
                         nodes,
                         seed_node_ids,
@@ -426,6 +442,7 @@ class QueryEngine:
                         centrality_scores,
                         max_tokens,
                         edges=active_edges,
+                        grounded_verdicts=grounded_verdicts,
                     )
 
                     # Step 5: Return context
@@ -613,6 +630,7 @@ class QueryEngine:
         with_explanation: bool = False,
         enable_hierarchical_lifting: bool = True,
         lift_levels: int = 2,
+        enable_grounding: bool = False,
     ) -> QueryResult:
         """Execute full query pipeline (async version with timeout and concurrency control).
 
@@ -633,6 +651,8 @@ class QueryEngine:
             with_explanation: Generate explanation object
             enable_hierarchical_lifting: Apply hierarchical context lifting
             lift_levels: Directory levels to traverse upward
+            enable_grounding: When True (Graph Engineering transfer), nodes with
+                graph evidence are preferred in context and isolated nodes demoted.
 
         Returns:
         -------
@@ -714,6 +734,7 @@ class QueryEngine:
                             enable_hierarchical_lifting=enable_hierarchical_lifting,
                             lift_levels=lift_levels,
                             with_explanation=with_explanation,
+                            enable_grounding=enable_grounding,
                         )
 
                     result = await asyncio.wait_for(
@@ -761,6 +782,7 @@ class QueryEngine:
         enable_hierarchical_lifting: bool,
         lift_levels: int,
         with_explanation: bool,
+        enable_grounding: bool = False,
     ) -> QueryResult:
         """Internal async implementation without timeout wrapper."""
         with memory_guard(
@@ -887,6 +909,15 @@ class QueryEngine:
                     similarity_scores = {node.id: score for node, score in retrieval_results}
 
                     # Step 4: Assemble context with hierarchical lifting
+                    # Graph Engineering transfer (opt-in): nodes with graph evidence
+                    # (appear in an edge) are grounded; isolated nodes are ungrounded.
+                    grounded_verdicts: dict[UUID, bool] | None = None
+                    if enable_grounding:
+                        grounded_ids = {
+                            edge.source for edge in active_edges
+                        } | {edge.target for edge in active_edges}
+                        grounded_verdicts = {node.id: node.id in grounded_ids for node in nodes}
+
                     context, _context_blocks = assemble_context(
                         nodes,
                         seed_node_ids,
@@ -895,6 +926,7 @@ class QueryEngine:
                         max_tokens,
                         enable_hierarchical_lifting=enable_hierarchical_lifting,
                         lift_levels=lift_levels,
+                        grounded_verdicts=grounded_verdicts,
                     )
 
                     # Step 5: Return context

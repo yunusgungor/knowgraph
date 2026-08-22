@@ -105,6 +105,7 @@ class QueryRetriever:
         top_k: int = TOP_K,
         max_hops: int = MAX_HOPS,
         use_code_search: bool = False,
+        enable_temporal_filter: bool = False,
     ) -> tuple[list[Node], list[UUID]]:
         """Retrieve relevant nodes for query (REFERENCE-AWARE!).
 
@@ -115,6 +116,9 @@ class QueryRetriever:
             top_k: Number of seed nodes
             max_hops: Graph traversal depth
             use_code_search: Use code embeddings instead of text
+            enable_temporal_filter: When True (Graph Engineering transfer,
+                opt-in), drop edges sourced from superseded conversations before
+                traversal — "stale fact never current".
 
         Returns:
         -------
@@ -157,7 +161,15 @@ class QueryRetriever:
                     seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
                     # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
-                    expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, edges, max_hops)
+                    # Graph Engineering transfer (opt-in): drop edges sourced from
+                    # superseded conversations so stale facts never expand the subgraph.
+                    traversal_edges: list[Edge] = edges
+                    if enable_temporal_filter:
+                        from knowgraph.domain.claims.temporal_filter import filter_edges_by_temporal
+
+                        traversal_edges = filter_edges_by_temporal(edges, "")
+
+                    expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, traversal_edges, max_hops)
 
                     # Step 3: Load nodes CONCURRENTLY (using thread pool for I/O)
                     from concurrent.futures import ThreadPoolExecutor, as_completed

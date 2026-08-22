@@ -26,6 +26,22 @@ def test_score_node_importance():
     assert 0.0 <= score <= 1.0
 
 
+def test_score_node_importance_grounded_bonus():
+    """Graph Engineering: a grounded node (graph evidence) scores higher than baseline."""
+    n = create_mock_node(uuid4())
+    baseline = score_node_importance(n, True, 0.8, 0.7, grounded=None)
+    grounded = score_node_importance(n, True, 0.8, 0.7, grounded=True)
+    assert grounded > baseline
+
+
+def test_score_node_importance_ungrounded_penalty():
+    """Graph Engineering: an ungrounded (isolated) node scores lower than baseline."""
+    n = create_mock_node(uuid4())
+    baseline = score_node_importance(n, True, 0.8, 0.7, grounded=None)
+    ungrounded = score_node_importance(n, True, 0.8, 0.7, grounded=False)
+    assert ungrounded < baseline
+
+
 def test_assemble_context():
     n1 = create_mock_node(uuid4(), content="Short", token_count=5)
     n2 = create_mock_node(uuid4(), content="Longer content", token_count=15)

@@ -25,7 +25,12 @@ SHA1_PATTERN = re.compile(r"^[a-f0-9]{40}$")
 
 # Valid edge types from FR-058 (Updated to include Reference Edges and CPG types)
 # Matches EdgeType definition in shared/types.py
-VALID_EDGE_TYPES = {"semantic", "reference", "control_flow", "data_flow", "hierarchy", "call", "ast"}
+VALID_EDGE_TYPES = {
+    "semantic", "reference", "control_flow", "data_flow", "hierarchy", "call", "ast",
+    "conversation_references_code",  # conversation_linker (previously produced without a literal match)
+    "supersedes",                    # Graph Engineering temporal transfer
+    "contradicts",                   # Graph Engineering temporal transfer
+}
 
 
 @dataclass
