@@ -35,7 +35,7 @@ KnowGraph is an **MCP (Model Context Protocol) server** that enhances AI coding 
 - **💬 Conversational Memory**: Index and search your AI chat history
 - **⚡ High Performance**: 30s indexing, <1s re-indexing with smart caching
 
-**Supported Languages:** Python, JavaScript/TypeScript, Java, C/C++, Go, Rust, C#, Scala, PHP, Ruby, Kotlin, Swift, and more (15+ languages)
+**Supported Languages:** Python, JavaScript/TypeScript, Java, C/C++, Go, Rust, C#, Scala, PHP, Ruby, Kotlin, Swift, and more (14+ languages)
 
 ---
 

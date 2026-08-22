@@ -82,10 +82,10 @@ Do not guess parameters. Use these pre-calculated settings for optimal Performan
 *   **`expand_query`**:
     *   **True**: For natural language questions ("Why is login failing?").
     *   **False**: For exact symbol lookups ("QueryEngine definition").
-*   **`edge_type_weights`** (Advanced Dictionary):
-    *   *Usage*: Pass as JSON object in `edge_type_weights` argument.
-    *   **Structure Focus**: `{"inherit": 2.5, "call": 1.5, "import": 1.0, "semantic": 0.5}` (Prioritizes strict code relationships).
-    *   **Concept Focus**: `{"semantic": 2.5, "mention": 2.0, "call": 0.5}` (Prioritizes loose topic relationships).
+*   **No `edge_type_weights` / `prioritize_reference_edges`**: these parameters do
+    not exist in the query engine or MCP tools. Traversal is fixed: `reference`,
+    `call`, `data_flow`, `hierarchy`, and `control_flow` edges are followed as
+    directed adjacency; all other types (semantic, grounded, …) as undirected.
 
 ---
 

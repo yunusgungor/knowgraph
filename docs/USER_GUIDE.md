@@ -482,34 +482,55 @@ For more query examples, see the [Example Usage Guide](USAGE_GUIDE.md).
 
 ### 7.1 Basic Query
 ```python
-from knowgraph.application.querying.engine import QueryEngine
-engine = QueryEngine()
+from knowgraph.application.querying.query_engine import QueryEngine
+engine = QueryEngine("./graphstore")
 result = engine.query("How does auth work?")
 print(result.answer)
 ```
 
-### 7.2 Advanced Parameters
+### 7.2 Data-Flow Query
 
-Fine-tune your query logic with weighting parameters:
+The engine's async `query_dataflow` finds taint paths from a source to a sink:
+
+```python
+result = await engine.query_dataflow(
+    source_pattern="user input from HTTP request",
+    sink_pattern="SQL query execution",
+    max_path_length=10,
+    edge_types=["data_flow"],   # default: data_flow
+)
+print(result.to_mermaid())
+```
+
+This traverses `data_flow` edges. Those edges are produced by the
+code-analysis indexing stage (see [§6.2](#62-what-gets-analyzed)); if your
+graph was indexed via the CLI path (which builds `SmartGraphBuilder` only),
+there may be no `data_flow` edges to trace.
+
+### 7.3 Advanced Parameters
+
+Fine-tune your query logic with the query parameters:
 
 ```json
 {
   "query": "Find inheritance structure of BaseClass",
   "top_k": 20,
   "max_hops": 4,
-  "edge_type_weights": {
-    "inherit": 1.5,
-    "import": 0.8,
-    "call": 1.0
-  },
-  "prioritize_reference_edges": true,
+  "max_tokens": 4096,
+  "expand_query": false,
   "enable_hierarchical_lifting": true,
-  "lift_levels": 3
+  "lift_levels": 2,
+  "enable_grounding": false
 }
 ```
 
-- **`edge_type_weights`**: Customize how strong different relationships are. Giving "inherit" a higher weight (1.5) makes the search follow class hierarchies more aggressively.
-- **`prioritize_reference_edges`**: If true, the traversal prefers nodes that are explicitly referenced in the source code (e.g., via `see` tags or Docstrings).
+- **`enable_hierarchical_lifting` / `lift_levels`**: include parent-directory context (READMEs, package docs) for nodes deep in a directory tree.
+- **`enable_grounding`**: prefer graph-evidence-backed nodes and annotate unbacked answer entities (see [§10](#10-graph-engineering-grounding--anti-hallucination)).
+- **`expand_query`**: AI synonym/term expansion.
+- `max_tokens` is the LLM **output** cap (`LLM_MAX_TOKENS`, default 4096).
+
+> There is no `edge_type_weights` / `prioritize_reference_edges` parameter in
+> the query engine or MCP tools — see [§9.2](#92-edge-types-in-the-graph).
 
 ---
 
@@ -534,7 +555,7 @@ KnowGraph exposes a comprehensive suite of tools to your AI assistant. Here is t
 | `knowgraph_diff_versions` | Compare nodes/edges between two commits. |
 | `knowgraph_rollback` | Revert graph state to a previous snapshot. |
 | `knowgraph_diagnostic` | Run system health checks (Graph Store, LLM, Config). |
-| `knowgraph_joern_query` | Execute native Joern DSL queries. |
+| `knowgraph_joern_query` | Execute native Joern DSL queries, or a **predefined template** via `query_name`. |
 | `knowgraph_security_scan` | Scan for vulnerabilities using Joern policies (or flow-based taint analysis via `scan_type`). |
 | `knowgraph_find_dead_code` | Detect unreachable methods using dominance analysis. |
 | `knowgraph_analyze_call_graph` | Analyze call paths and recursion. |
@@ -561,6 +582,28 @@ pass `scan_type` to run Joern taint-analysis for a specific vulnerability type �
 `all`, `sql_injection`, `xss`, `command_injection`, `path_traversal`, `xxe`,
 `ssrf` (the `xss`/`xxe`/`ssrf` types come from the `vulnerability_patterns`
 taint register, not the policy engine):
+
+#### `knowgraph_joern_query` — named templates
+
+Besides raw DSL, `knowgraph_joern_query` accepts a `query_name` that resolves to
+a predefined template. The exact template name and the vulnerability aliases
+`sql_injection`, `buffer_overflow`, `command_injection`, `dangerous_functions`
+are valid. Parameters: `cpg_path` (required), `query` **or** `query_name`,
+`timeout` (default 60s).
+
+#### Other tool parameters worth knowing
+
+- `knowgraph_tag_snippet` also accepts `conversation_id` (optional, contextualizes
+  the snippet) alongside `tag`, `snippet`, `user_question`, `graph_path`.
+- `knowgraph_index` accepts `access_token` (GitHub PAT) for private repositories,
+  and also exposes `include_patterns`, `exclude_patterns`, `resume`, `gc`.
+
+#### Graph resources
+
+The MCP server exposes resources under `knowgraph://…`:
+`knowgraph://default/manifest` (default graph), `knowgraph://graph/{graph_path}/manifest`,
+`/nodes`, and `/stats` — plus reusable prompt templates (`graph_summary`,
+`security_scan`, `impact_analysis`).
 
 ### 8.1 Configuring AI Clients
 
@@ -643,9 +686,9 @@ Query expansion uses AI to automatically enrich your queries with synonyms and t
 
 **Example:**
 ```python
-from knowgraph.application.querying.engine import QueryEngine
+from knowgraph.application.querying.query_engine import QueryEngine
 
-engine = QueryEngine()
+engine = QueryEngine("./graphstore")
 result = engine.query(
     "authentication mechanism",
     expand_query=True  # Expands to: "auth, login, JWT, OAuth, session, token..."
@@ -660,55 +703,31 @@ result = engine.query(
 
 **Performance Impact:** +1-2s query time, but significantly better recall.
 
-### 9.2 Edge Type Weights
+### 9.2 Edge Types in the Graph
 
-Customize how the graph traversal prioritizes different relationship types.
+KnowGraph stores edges of the following types (`knowgraph/shared/types.py`):
 
-**Default Weights:**
-```python
-{
-    "import": 1.0,      # Standard import relationships
-    "call": 1.0,        # Function calls
-    "inherit": 1.0,     # Class inheritance
-    "data_flow": 1.0,   # Data dependencies
-    "reference": 1.0    # Documentation references
-}
-```
+| Edge type | Meaning |
+|-----------|---------|
+| `semantic` | Shared-entity overlap between chunks (AI entity extraction, Jaccard > 0.2) |
+| `reference` | Definition/reference symbol edges (`relation: "dependency"`) |
+| `hierarchy` | CPG entity node → its source chunk (`child_of_chunk`) |
+| `call` | Function call edges (produced by the code-analysis stage, MCP index on local dirs) |
+| `data_flow` | Tainted data-flow edges, source → sink (same code-analysis stage) |
+| `conversation_references_code` | Auto-linked conversation → code node edges |
+| `supersedes` / `contradicts` | Temporal claim edges built by the post-index hook |
+| `grounded` | SC-quote + P3 verified relations (`--enable-short-unit`) |
+| `control_flow`, `ast` | Declared in the literal; not emitted during indexing (available via native Joern queries) |
 
-**Custom Weighting Example:**
-```json
-{
-  "query": "Find inheritance structure of BaseClass",
-  "edge_type_weights": {
-    "inherit": 2.0,     # Prioritize inheritance (2x weight)
-    "import": 0.5,      # De-prioritize imports
-    "call": 1.0         # Normal weight for calls
-  }
-}
-```
+**Node types** (`knowgraph/shared/types.py`): `code`, `text`, `config`,
+`documentation`, `conversation`, `tagged_snippet`, `readme`, `entity_node`.
 
-**Use Cases:**
-- **Architecture Analysis**: Boost `inherit` and `import` weights
-- **Data Flow Tracing**: Boost `data_flow` and `call` weights
-- **Documentation Search**: Boost `reference` weights
+> **Note**: there is currently **no `edge_type_weights` / `prioritize_reference_edges`
+> parameter** in the query engine or MCP tools. Traversal follows
+> `reference`/`call`/`data_flow`/`hierarchy`/`control_flow` edges as directed
+> adjacency, and other types as undirected.
 
-### 9.3 Prioritize Reference Edges
-
-When enabled, the traversal prefers nodes that are explicitly referenced in documentation.
-
-```python
-result = engine.query(
-    "How does caching work?",
-    prioritize_reference_edges=True  # Prefer documented code
-)
-```
-
-**Benefits:**
-- Returns well-documented code first
-- Useful for onboarding and learning
-- Filters out internal implementation details
-
-### 9.4 Batch Queries
+### 9.3 Batch Queries
 
 Execute multiple queries efficiently with shared context loading.
 
@@ -718,9 +737,9 @@ Execute multiple queries efficiently with shared context loading.
 
 **Example:**
 ```python
-from knowgraph.application.querying.engine import QueryEngine
+from knowgraph.application.querying.query_engine import QueryEngine
 
-engine = QueryEngine()
+engine = QueryEngine("./graphstore")
 results = engine.batch_query([
     "How does authentication work?",
     "What are the security policies?",
@@ -750,7 +769,7 @@ for query, result in zip(queries, results):
 }
 ```
 
-### 9.5 Hierarchical Context Lifting
+### 9.4 Hierarchical Context Lifting
 
 Automatically includes context from parent directories (README files, package docs).
 Applies to the sync CLI path (`knowgraph query`) **and** async/MCP queries
@@ -784,7 +803,7 @@ result = engine.query(
 )
 ```
 
-### 9.6 Advanced Query Parameters Reference
+### 9.5 Advanced Query Parameters Reference
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -797,9 +816,7 @@ result = engine.query(
 | `lift_levels` | int | 2 | Parent directory levels |
 | `with_explanation` | bool | false | Include reasoning path |
 | `enable_grounding` | bool | false | Prefer graph-evidence-backed nodes (see [§10](#10-graph-engineering-grounding--anti-hallucination)) |
-| `enable_temporal_filter` | bool | false | Drop superseded-conversation edges before traversal |
-| `edge_type_weights` | dict | `{}` | Custom edge priorities |
-| `prioritize_reference_edges` | bool | false | Prefer documented code |
+| `enable_temporal_filter` | bool | false | Drop superseded-conversation edges before traversal. **Note**: exposed on the Python API and `knowgraph_batch_query`, but **not** on the `knowgraph_query` MCP tool (opening `enable_grounding` there still implies temporal filtering). |
 
 ---
 
@@ -1121,7 +1138,7 @@ Control parallelism for indexing and querying.
 
 **Environment Variable:**
 ```bash
-# Auto-detect (default, max 30)
+# Auto-detect (default, capped at 5 to avoid LLM rate limits)
 export KNOWGRAPH_WORKERS=auto
 
 # Manual override
@@ -1132,19 +1149,22 @@ export KNOWGRAPH_WORKERS=1
 ```
 
 **Recommendations:**
-- **Small projects (<100 files):** 5-10 workers
-- **Medium projects (100-1000 files):** 15-20 workers
-- **Large projects (>1000 files):** 25-30 workers
-- **Low memory systems:** 5 workers max
+- **Small projects (<100 files):** 5 workers
+- **Medium projects (100-1000 files):** 5-10 workers
+- **Large projects (>1000 files):** 10-20 workers (mind LLM rate limits)
+- **Low memory systems:** 1-5 workers max
 
-**Performance Impact:**
+> The auto-detected value is capped at **5** (`get_optimal_workers()` →
+> `recommend_workers(max_workers=5)`) specifically to avoid hitting LLM rate
+> limits. Set `KNOWGRAPH_WORKERS` explicitly to override.
+
+**Performance Impact** (illustrative, small project):
 ```
 Workers | Indexing Time | Memory Usage
 --------|---------------|-------------
-1       | 120s          | 500MB
-10      | 30s           | 1.5GB
-20      | 18s           | 2.5GB
-30      | 15s           | 3.5GB
+1       | ~120s         | ~500MB
+5       | ~35s          | ~1.5GB
+10      | ~25s          | ~2GB
 ```
 
 ### 14.3 Memory Management
@@ -1169,7 +1189,7 @@ Recommended limits for optimal performance:
 **For Very Large Graphs:**
 - Reduce `max_hops` (default: 4 → 2)
 - Reduce `top_k` (default: 20 → 10)
-- Enable `prioritize_reference_edges` to filter results
+- Enable `enable_grounding` to favor evidence-backed nodes, or split the project into smaller graphs
 
 ### 14.4 Async Best Practices
 
@@ -1178,10 +1198,10 @@ KnowGraph is 100% async for non-blocking I/O.
 **Batch Queries (Recommended):**
 ```python
 import asyncio
-from knowgraph.application.querying.engine import QueryEngine
+from knowgraph.application.querying.query_engine import QueryEngine
 
 async def main():
-    engine = QueryEngine()
+    engine = QueryEngine("./graphstore")
     
     # Parallel execution (4x faster)
     results = await engine.batch_query_async([
@@ -1257,9 +1277,9 @@ Track system performance with built-in metrics.
 
 **Query Performance:**
 ```python
-from knowgraph.application.querying.engine import QueryEngine
+from knowgraph.application.querying.query_engine import QueryEngine
 
-engine = QueryEngine()
+engine = QueryEngine("./graphstore")
 result = engine.query("How does caching work?")
 
 print(f"Query time: {result.metadata['query_time_ms']}ms")
@@ -1410,24 +1430,41 @@ If an external dependency (like OpenAI API) fails repeatedly, KnowGraph opens th
 - **Action**: Check your API status. The system will auto-retry after a timeout.
 
 ### 16.2 Monitoring Metrics
-The server exposes Prometheus-compatible metrics (namespace `knowgraph`). Key gauges/counters:
-- **Indexing Speed**: `knowgraph_indexing_duration_seconds` (histogram)
-- **Query Latency**: `knowgraph_query_duration_seconds` (histogram)
-- **Request Duration**: `knowgraph_request_duration_seconds`
-- **Error Rates**: `knowgraph_errors_total`
-- **Cache**: `knowgraph_cache_hits_total`, `knowgraph_cache_misses_total`
-- **Graph**: `knowgraph_nodes_total`, `knowgraph_edges_total`
+
+KnowGraph records Prometheus-compatible metrics (namespace prefix `knowgraph`)
+into the default `prometheus_client` registry. **KnowGraph does not serve an
+HTTP `/metrics` endpoint** itself — scrape it by wiring your own
+`prometheus_client` handler (e.g. `start_http_server`) or read the registry.
+
+| Metric | Type |
+|--------|------|
+| `knowgraph_requests_total` | Counter |
+| `knowgraph_request_duration_seconds` | Histogram |
+| `knowgraph_queries_total` | Counter |
+| `knowgraph_query_duration_seconds` | Histogram |
+| `knowgraph_query_results` | Summary |
+| `knowgraph_cache_hits_total` | Counter |
+| `knowgraph_cache_misses_total` | Counter |
+| `knowgraph_cache_size` | Gauge |
+| `knowgraph_nodes_total` | Gauge |
+| `knowgraph_edges_total` | Gauge |
+| `knowgraph_graph_operations_total` | Counter |
+| `knowgraph_errors_total` | Counter |
+| `knowgraph_indexed_documents_total` | Counter |
+| `knowgraph_indexing_duration_seconds` | Histogram |
 
 ### 16.3 System Health (Diagnostics)
-You can run a comprehensive health check of the KnowGraph system using the `knowgraph_diagnostic` MCP tool.
+Run a comprehensive health check of the KnowGraph system with the
+`knowgraph_diagnostic` MCP tool. It reports five sections:
 
-This checks:
-- **Graph Store**: Integrity and accessibility of the database.
-- **LLM Provider**: Connection status and API key validity (OpenAI/Anthropic).
-- **Configuration**: Validity of the current environment setup.
+1. **📦 Graph Store** — total nodes, tagged-snippet count, node-type distribution.
+2. **🤖 LLM Provider** — presence of `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
+3. **🛠️ MCP Tools** — the tool surface available to clients.
+4. **💻 System** — project root, Python version, virtual environment.
+5. **💡 Recommendations** — actionable suggestions based on the above.
 
 ```bash
-# Run via MCP
+# Run via MCP (in your AI editor, ask: "run the knowgraph diagnostic")
 knowgraph_diagnostic()
 ```
 
@@ -1437,8 +1474,8 @@ knowgraph_diagnostic()
 
 ### Core Commands
 - `knowgraph index <path>`: Build the graph. Flags: `--incremental`, `--link-conversations`, `--enable-short-unit`, `--verbose`, `-o/--output`. (File filters `include_patterns`/`exclude_patterns` and `gc` are MCP-tool options.)
-- `knowgraph query "question"`: Ask a question. Flags: `--enable-grounding`, `--expand-query`, `--explain`, `--top-k`, `--max-hops`, `--mode query|impact`.
-- `knowgraph update <path>`: Incrementally update an existing graph. Flags: `--gc`, `--verbose`.
+- `knowgraph query "question"`: Ask a question. Flags: `--enable-grounding`, `--expand-query`, `--explain`, `--top-k`, `--max-hops`, `--max-tokens`, `-g/--graph-store`, `-v/--verbose`, `--mode query|impact`.
+- `knowgraph update <path>`: Incrementally update an existing graph. Flags: `--gc`, `-g/--graph-store`, `-v/--verbose`.
 - `knowgraph serve`: Start MCP server (transport: `KNOWGRAPH_MCP_TRANSPORT`).
 
 ### Versioning Commands
@@ -1514,7 +1551,7 @@ knowgraph_diagnostic()
 
 | Issue | Solution |
 |-------|----------|
-| **Slow Indexing (>5min)** | Increase workers: `KNOWGRAPH_WORKERS=20`. Enable parallel CPG generation. |
+| **Slow Indexing (>5min)** | Increase workers via `KNOWGRAPH_WORKERS` (e.g. 5–10; auto-detect is capped at 5). |
 | **High RAM Usage (>4GB)** | Reduce workers, enable lazy edge loading, or split project into smaller graphs. |
 | **Cache Not Working** | Check cache directory exists: `ls ~/.knowgraph/cpg_cache/`. Verify TTL not expired. |
 | **LLM Rate Limits** | Increase retry delay: `KNOWGRAPH_LLM_RETRY_DELAY=2.0` |
