@@ -8,6 +8,7 @@ Tests the automatic processing that runs after code indexing:
 
 from datetime import datetime, timezone
 from unittest.mock import patch
+from uuid import UUID
 
 import pytest
 
@@ -16,6 +17,7 @@ from knowgraph.application.indexing.post_index_hooks import (
     auto_tag_bookmarks,
     collect_index_stats,
 )
+from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
 
 
@@ -67,9 +69,12 @@ async def test_auto_link_conversations_success(mock_graphstore, mock_workspace):
         ]
         mock_discover.return_value = conv_files
 
-        # Mock link function to return edges created
-        async def mock_link_func(conv_file, graphstore):
-            return 3  # 3 edges created per conversation
+        # Mock link function to return (edges, metadata) per the real signature.
+        def mock_link_func(conv_node, code_nodes):
+            return (
+                [Edge(source=conv_node.id, target=UUID("0" * 32), type="conversation_references_code", score=0.9, created_at=0, metadata={})] * 3,
+                {"edges_created": 3},
+            )
 
         mock_link.side_effect = mock_link_func
 
@@ -128,18 +133,24 @@ async def test_auto_link_conversations_with_errors(mock_graphstore, mock_workspa
     ) as mock_discover, patch(
         "knowgraph.application.linking.conversation_linker.link_conversation_to_code"
     ) as mock_link:
+        # conv3.md isn't part of the fixture; create it so all three files resolve.
+        conv3 = mock_workspace / "conversations" / "conv3.md"
+        conv3.write_text("# Conversation 3\nUser: Security?\nAssistant: Sanitize inputs")
         conv_files = [
             mock_workspace / "conversations" / "conv1.md",
             mock_workspace / "conversations" / "conv2.md",
-            mock_workspace / "conversations" / "conv3.md",
+            conv3,
         ]
         mock_discover.return_value = conv_files
 
         # First succeeds, second fails, third succeeds
-        async def mock_link_func(conv_file, graphstore):
-            if "conv2" in str(conv_file):
+        def mock_link_func(conv_node, code_nodes):
+            if "conv2" in str(getattr(conv_node, "title", "")):
                 raise Exception("Linking failed")
-            return 2
+            return (
+                [Edge(source=conv_node.id, target=UUID("0" * 32), type="conversation_references_code", score=0.9, created_at=0, metadata={})] * 2,
+                {"edges_created": 2},
+            )
 
         mock_link.side_effect = mock_link_func
 
@@ -163,8 +174,8 @@ async def test_auto_link_conversations_no_edges_created(mock_graphstore, mock_wo
         mock_discover.return_value = conv_files
 
         # Return 0 edges created
-        async def mock_link_func(conv_file, graphstore):
-            return 0
+        def mock_link_func(conv_node, code_nodes):
+            return [], {"edges_created": 0}
 
         mock_link.side_effect = mock_link_func
 

@@ -94,6 +94,7 @@ def discover_and_index_conversations(
                         input_path=str(file_path),
                         output_path=output,
                         verbose=False,  # Suppress individual file verbosity
+                        incremental=True,  # Only (re)index changed conversation files
                     )
                 )
                 indexed_count += 1

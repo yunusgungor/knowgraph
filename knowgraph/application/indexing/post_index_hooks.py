@@ -31,6 +31,11 @@ async def auto_link_conversations(
     """
     from knowgraph.application.linking.conversation_linker import link_conversation_to_code
     from knowgraph.infrastructure.detection.conversation_discovery import discover_conversations
+    from knowgraph.infrastructure.storage.filesystem import (
+        append_edge_jsonl,
+        list_all_nodes,
+        read_node_json_async,
+    )
 
     stats = {
         "conversations_found": 0,
@@ -40,18 +45,33 @@ async def auto_link_conversations(
     }
 
     try:
-        # Discover conversations
+        # Load the graph's code nodes once for matching references.
+        code_nodes = []
+        for node_id in list_all_nodes(graphstore_path):
+            node = await read_node_json_async(node_id, graphstore_path)
+            if node and node.type == "code":
+                code_nodes.append(node)
+
+        # Discover conversation source files.
         workspace = workspace_path or graphstore_path.parent
         conversations = discover_conversations(workspace)
         stats["conversations_found"] = len(conversations)
 
-        # Link each conversation to code
+        # Link each conversation file to the code it references. link_conversation_to_code
+        # expects Node objects, so resolve each file to the matching graph node (by path
+        # or content) before calling it; write only the new edges it produces.
         for conv_file in conversations:
             try:
-                edges_created = await link_conversation_to_code(conv_file, graphstore_path)
-                if edges_created > 0:
+                conv_node = await _resolve_conversation_node(conv_file, graphstore_path)
+                if conv_node is None:
+                    continue
+
+                edges, _metadata = link_conversation_to_code(conv_node, code_nodes)
+                for edge in edges:
+                    append_edge_jsonl(edge, graphstore_path)
+                if edges:
                     stats["conversations_linked"] += 1
-                    stats["edges_created"] += edges_created
+                    stats["edges_created"] += len(edges)
             except Exception:
                 stats["errors"] += 1
                 continue
@@ -60,6 +80,69 @@ async def auto_link_conversations(
         stats["errors"] += 1
 
     return stats
+
+
+async def _resolve_conversation_node(
+    conv_file: Path, graphstore_path: Path
+) -> "Node | None":
+    """Return the graph node for a discovered conversation file.
+
+    Prefers the already-indexed conversation node (matched by source path);
+    falls back to a lightweight Node built from the file content so linking
+    still works even when the file was not indexed yet.
+
+    Args:
+    ----
+        conv_file: Conversation source file path
+        graphstore_path: Path to graph storage
+
+    Returns:
+    -------
+        Conversation Node, or None if it cannot be resolved.
+
+    """
+    from knowgraph.domain.models.node import Node
+    from knowgraph.infrastructure.storage.filesystem import (
+        list_all_nodes,
+        read_node_json_async,
+    )
+
+    # Normalize path for matching.
+    conv_key = str(conv_file).replace("\\", "/")
+
+    for node_id in list_all_nodes(graphstore_path):
+        node = await read_node_json_async(node_id, graphstore_path)
+        if not node:
+            continue
+        node_path = (node.path or "").replace("\\", "/")
+        if node.type in ("conversation", "bookmark") and (
+            conv_key.endswith(node_path) or node_path.endswith(conv_key)
+        ):
+            return node
+
+    # Fall back to a synthetic node so a not-yet-indexed conversation can still
+    # produce reference edges.
+    import hashlib
+    import time
+    from uuid import uuid4
+
+    try:
+        content = conv_file.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+
+    content_hash = hashlib.sha1(f"{conv_file}:{content[:512]}".encode()).hexdigest()
+
+    return Node(
+        id=uuid4(),
+        hash=content_hash,
+        title=conv_file.stem,
+        content=content[:100_000],
+        path=str(conv_file),
+        type="conversation",
+        token_count=len(content.split()),
+        created_at=int(time.time()),
+    )
 
 
 async def auto_tag_bookmarks(

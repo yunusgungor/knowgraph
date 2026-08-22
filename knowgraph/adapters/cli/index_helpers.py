@@ -658,39 +658,42 @@ async def run_post_index_hooks(
         except Exception as e:
             _log_verbose(verbose, f"  ⚠️  Conversation linking failed: {e}")
 
-    _log_verbose(verbose, "\n" + "=" * 60)
-    _log_verbose(verbose, "BOOKMARK AUTO-TAGGING")
-    _log_verbose(verbose, "=" * 60)
-    try:
-        from knowgraph.application.indexing.post_index_hooks import auto_tag_bookmarks
+    if verbose:
+        _log_verbose(verbose, "\n" + "=" * 60)
+        _log_verbose(verbose, "BOOKMARK AUTO-TAGGING")
 
-        tag_stats = await auto_tag_bookmarks(Path(graph_store_path))
-        if tag_stats["bookmarks_found"] > 0:
-            click.echo(
-                f"  Bookmark auto-tagging: {tag_stats['bookmarks_enhanced']}/"
-                f"{tag_stats['bookmarks_found']} enhanced ({tag_stats['suggestions_added']} tags)"
-            )
-    except Exception:
-        pass
+        # Auto-tagging is gated on verbosity: its full-graph scan is expensive,
+        # so it must be explicitly requested (--verbose) rather than run on every
+        # index (which would slow down repeated runs and MCP indexing).
+        try:
+            from knowgraph.application.indexing.post_index_hooks import auto_tag_bookmarks
 
-    _log_verbose(verbose, "\n" + "=" * 60)
-    _log_verbose(verbose, "INDEXING STATISTICS")
-    _log_verbose(verbose, "=" * 60)
-    try:
-        from knowgraph.application.indexing.post_index_hooks import collect_index_stats
+            tag_stats = await auto_tag_bookmarks(Path(graph_store_path))
+            if tag_stats["bookmarks_found"] > 0:
+                click.echo(
+                    f"  Bookmark auto-tagging: {tag_stats['bookmarks_enhanced']}/"
+                    f"{tag_stats['bookmarks_found']} enhanced ({tag_stats['suggestions_added']} tags)"
+                )
+        except Exception:
+            pass
 
-        stats = collect_index_stats(Path(graph_store_path))
-        click.echo("\n📊 Nodes by Type:")
-        click.echo(f"  Code nodes: {stats['code_nodes']}")
-        click.echo(f"  Markdown nodes: {stats['markdown_nodes']}")
-        if stats["conversation_nodes"] > 0:
-            click.echo(f"  Conversation nodes: {stats['conversation_nodes']}")
-        if stats["bookmark_nodes"] > 0:
-            click.echo(f"  Bookmarks: {stats['bookmark_nodes']}")
-        click.echo(f"  Total nodes: {stats['total_nodes']}")
-        click.echo(f"\n📈 Edges: {stats['total_edges']}")
-    except Exception:
-        pass
+        _log_verbose(verbose, "=" * 60)
+        _log_verbose(verbose, "INDEXING STATISTICS")
+        try:
+            from knowgraph.application.indexing.post_index_hooks import collect_index_stats
+
+            stats = collect_index_stats(Path(graph_store_path))
+            click.echo("\n📊 Nodes by Type:")
+            click.echo(f"  Code nodes: {stats['code_nodes']}")
+            click.echo(f"  Markdown nodes: {stats['markdown_nodes']}")
+            if stats["conversation_nodes"] > 0:
+                click.echo(f"  Conversation nodes: {stats['conversation_nodes']}")
+            if stats["bookmark_nodes"] > 0:
+                click.echo(f"  Bookmarks: {stats['bookmark_nodes']}")
+            click.echo(f"  Total nodes: {stats['total_nodes']}")
+            click.echo(f"\n📈 Edges: {stats['total_edges']}")
+        except Exception:
+            pass
 
 
 def log_completion(start_time, graph_store_path, verbose):
