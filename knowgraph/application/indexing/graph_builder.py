@@ -508,11 +508,16 @@ class SmartGraphBuilder:
                         self.metrics.record_ast_failure(str(e), f"node_{node.id}")
                         logger.debug(f"Code analysis failed for node {node.id}: {e}")
 
-                    # If Cache Miss & AST Miss -> Check heuristics before Queueing for LLM
-                    # Optimization: If file is small (< 2000 tokens) and AST found nothing,
-                    # it likely has no significant entities. Skip expensive LLM call.
-                    if node.token_count < 2000:
-                        logger.debug(f"Skipping LLM for small file {node.path} ({node.token_count} tokens)")
+                    # If Cache Miss & Joern/AST Miss -> Check heuristics before
+                    # Queueing for LLM. Code chunks never go to the LLM: Joern
+                    # is the code extractor, and LLM entity extraction on code
+                    # is slow and low-value. LLM is reserved for non-code
+                    # content (docs, README, prose) above the small-file skip.
+                    if node.token_count < 2000 or node.type == "code":
+                        logger.debug(
+                            f"Skipping LLM for {'code' if node.type == 'code' else 'small'} file "
+                            f"{node.path} ({node.token_count} tokens)"
+                        )
                         # Add node without entities
                         final_nodes_map[node.id] = node
                     else:

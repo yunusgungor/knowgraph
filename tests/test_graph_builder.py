@@ -77,6 +77,63 @@ def test_validate_edges():
     assert len(warnings) == 2
 
 
+def test_code_chunks_skip_llm():
+    """Code chunks never reach the LLM; non-code large chunks do.
+
+    Joern is the code extractor, so code chunks that miss the cache/AST are
+    added without entities instead of being queued to the (slow, paid) LLM.
+    """
+    import asyncio
+    import tempfile
+    from pathlib import Path
+
+    from knowgraph.application.indexing.graph_builder import SmartGraphBuilder
+
+    # Fake provider that records whether extract_entities_batch is called.
+    calls = []
+
+    class FakeProvider:
+        async def extract_entities_batch(self, texts):
+            calls.extend(texts)
+            return [[] for _ in texts]
+
+    builder = SmartGraphBuilder(FakeProvider())
+    # Force AST-only (no Joern) so this unit test doesn't need Joern/daemon.
+    builder.code_analyzer.use_joern = False
+    builder.code_analyzer.joern_provider = None
+
+    def big_chunk(content, header, has_code):
+        return Chunk(
+            content=content,
+            header=header,
+            chunk_id=header,
+            line_start=1,
+            line_end=20,
+            token_count=2500,  # > 2000, would queue to LLM for non-code
+            header_depth=1,
+            header_path=header,
+            has_code=has_code,
+        )
+
+    code_chunk = big_chunk("def foo(x):\n    return x + 1\n", "code.py", has_code=True)
+    md_chunk = big_chunk("A long markdown section about architecture. " * 50, "docs.md", has_code=False)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_path = Path(tmpdir) / "graph"
+
+        async def run():
+            return await builder.build([code_chunk, md_chunk], str(Path(tmpdir) / "src"), "", str(graph_path))
+
+        asyncio.run(run())
+        if builder.cache_manager:
+            builder.cache_manager.close()
+
+    # The code chunk must not be sent to the LLM.
+    assert not any("def foo" in t for t in calls), f"code chunk leaked to LLM: {calls}"
+    # The markdown chunk should be (it's non-code and above the small-file skip).
+    assert len(calls) == 1, f"expected 1 LLM batch call for markdown, got {len(calls)}"
+
+
 def test_create_semantic_edges():
     n1 = MagicMock(spec=Node)
     n1.id = uuid4()
