@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from knowgraph.application.indexing.graph_builder import (
+    SmartGraphBuilder,
     create_node_from_chunk,
     create_semantic_edges,
     validate_edges,
@@ -156,3 +157,41 @@ def test_create_semantic_edges():
     assert edges[0].source == n1.id
     assert edges[0].target == n2.id
     assert edges[0].type == "semantic"
+
+
+def test_sc_relations_to_edges_creates_grounded_edge():
+    """Graph Engineering: SC-extractor relations resolve to grounded edges between
+    distinct nodes (subject node -> object node). A relation whose object only
+    exists inside the subject's own node is NOT turned into an edge."""
+    builder = SmartGraphBuilder(provider=None)
+
+    subj = Node(
+        id=uuid4(), hash="a" * 40, title="Company", content="Nova Dynamics produces Atlas.",
+        path="company.md", type="readme", token_count=5, created_at=1,
+        metadata={"relations": [{"subject": "Nova Dynamics", "predicate": "produces",
+                                 "object": "Atlas", "source": "sc_p3"}]},
+    )
+    obj = Node(
+        id=uuid4(), hash="b" * 40, title="Product", content="Atlas robotic arm is the product.",
+        path="product.md", type="readme", token_count=5, created_at=1,
+    )
+
+    edges = builder._sc_relations_to_edges([subj, obj])
+    assert len(edges) == 1
+    assert edges[0].type == "grounded"
+    assert edges[0].source == subj.id
+    assert edges[0].target == obj.id
+    assert edges[0].metadata.get("predicate") == "produces"
+
+
+def test_sc_relations_same_node_object_skipped():
+    """A relation whose object is only in the subject node is not an edge."""
+    builder = SmartGraphBuilder(provider=None)
+    node = Node(
+        id=uuid4(), hash="c" * 40, title="Company", content="Nova Dynamics produces Atlas.",
+        path="company.md", type="readme", token_count=5, created_at=1,
+        metadata={"relations": [{"subject": "Nova Dynamics", "predicate": "produces",
+                                 "object": "Atlas", "source": "sc_p3"}]},
+    )
+    edges = builder._sc_relations_to_edges([node])
+    assert edges == []

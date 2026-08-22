@@ -652,6 +652,11 @@ class SmartGraphBuilder:
                         continue
                 # Reassemble in case metadata was updated.
                 final_nodes = list(final_nodes_map.values())
+                # Graph Engineering: turn SC-quote + P3 verified relations into
+                # grounded edges so they become part of the queryable graph.
+                sc_edges = self._sc_relations_to_edges(final_nodes)
+            else:
+                sc_edges = []
 
             # Finalize metrics
             self.metrics.finalize()
@@ -814,10 +819,10 @@ class SmartGraphBuilder:
                     )
 
                 # Include CPG edges if any were collected
-                all_edges = semantic_edges + relevant_reference_edges + valid_cpg_edges
+                all_edges = semantic_edges + relevant_reference_edges + valid_cpg_edges + sc_edges
                 logger.info(
                     f"Total edges: {len(all_edges)} "
-                    f"(semantic: {len(semantic_edges)}, reference: {len(relevant_reference_edges)}, cpg: {len(valid_cpg_edges)})"
+                    f"(semantic: {len(semantic_edges)}, reference: {len(relevant_reference_edges)}, cpg: {len(valid_cpg_edges)}, sc: {len(sc_edges)})"
                 )
 
 
@@ -837,6 +842,76 @@ class SmartGraphBuilder:
                     logger.info(f"\nBuild Performance Summary: {perf_summary}")
 
                 return final_nodes, all_edges
+
+    def _sc_relations_to_edges(self, nodes: list[Node]) -> list[Edge]:
+        """Convert SC-extractor relations (stored on node metadata) into graph edges.
+
+        Each relation is a (subject, predicate, object) triple produced by the
+        R-008 SC-quote + P3 entailment chain (Graph Engineering transfer). The
+        subject/object are surface-form entity names; resolve the subject to its
+        best matching node (defaults to the node that produced the relation) and
+        the object to its best matching node EXCLUDING the subject node. A
+        ``grounded`` edge is added between distinct endpoints. Relations whose
+        object cannot be resolved to a node other than the subject's are skipped
+        (anti-fabrication: a relation inside one document is not a cross-document
+        edge).
+        """
+        import time as _time
+
+        edges: list[Edge] = []
+
+        def _match(name: str, exclude: UUID | None = None) -> UUID | None:
+            if not name:
+                return None
+            needle = name.strip().lower()
+            if not needle:
+                return None
+            best: UUID | None = None
+            best_rank = -1
+            for candidate in nodes:
+                if candidate.type == "conversation":
+                    continue  # skip conversation nodes as entity endpoints
+                if exclude is not None and candidate.id == exclude:
+                    continue
+                rank = 0
+                if candidate.path and needle in candidate.path.lower():
+                    rank = 3
+                elif candidate.title and needle in candidate.title.lower():
+                    rank = 2
+                elif candidate.content and needle in candidate.content.lower():
+                    rank = 1
+                if rank > best_rank:
+                    best_rank = rank
+                    best = candidate.id
+            return best if best_rank > 0 else None
+
+        for node in nodes:
+            if not node.metadata:
+                continue
+            # The node that produced the relation is the subject's home node.
+            subj_id: UUID | None = node.id
+            for rel in node.metadata.get("relations", []):
+                # Prefer an explicit subject node match, else fall back to the
+                # producing node itself.
+                subj_id = _match(rel.get("subject", "")) or node.id
+                # Object must resolve to a node OTHER than the subject's.
+                obj_id = _match(rel.get("object", ""), exclude=subj_id)
+                if subj_id is None or obj_id is None or subj_id == obj_id:
+                    continue
+                edges.append(
+                    Edge(
+                        source=subj_id,
+                        target=obj_id,
+                        type="grounded",
+                        score=0.9,  # SC-quote + P3 verified
+                        created_at=int(_time.time()),
+                        metadata={
+                            "predicate": str(rel.get("predicate", "")),
+                            "source": "sc_p3",
+                        },
+                    )
+                )
+        return edges
 
     def _validate_build_results(self, nodes: list[Node], edges: list[Edge]) -> list[str]:
         """Validate build results for common issues.
