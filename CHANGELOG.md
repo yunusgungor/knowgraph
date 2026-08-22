@@ -5,11 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.1] - 2026-08-22
+## [1.0.1] - 2026-08-23
 
 ### ⚓ Graph Engineering: Grounding & Anti-Hallucination
 - **Answer Grounding**: `enable_grounding` query flag prefers graph-evidence-backed nodes in context; generated answers are annotated with entities not found in the retrieved graph — zero extra LLM calls (`grounding_evaluator.verify_entities_in_answer`).
-- **Entity Resolution**: Cloned `entity_resolver` exact-name fast-path for resolving SC-extractor relation objects at build time.
+- **Entity Resolution**: Exact-name entity matching fast-path (from the `entity_resolver` technique) embedded in `graph_builder._sc_relations_to_edges` for resolving SC-extractor relation objects at build time.
 - **Temporal Filtering**: `enable_temporal_filter` drops superseded-conversation edges before traversal; grounding implies temporal filtering.
 - **SC-Quoted Extraction** (`index --enable-short-unit`): R-008 SC-quote + P3 entailment chain publiches verified relations as `grounded` graph edges (`score=0.9`, `source="sc_p3"`).
 - **Version Negotiation**: MCP queries accept `api_version` / `min_api_version`; negotiation against the server registry, unsupported versions rejected up front.
@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MAX_TOKENS` (context cap) decoupled from `LLM_MAX_TOKENS` (output cap).
 
 ### 🔧 Fixes
+- Hierarchical context lifting now applies to **async/MCP/batch queries**, not just the sync CLI path (`lift_hierarchical_context` in `_query_async_impl`).
+- `batch_query_async` accepts `enable_grounding` / `enable_temporal_filter`; MCP `knowgraph_batch_query` exposes both.
 - Conversation auto-linking wired (was raising `TypeError`); conversation enrichment reuses cached edges.
 - Query sync path routes CODE/HYBRID/DATAFLOW through the code handler; Joern CLI-unavailable degrades safely.
 - GC disabled for repository/conversation sources; version chain preserved on stats update; suffix-safe version parser.
