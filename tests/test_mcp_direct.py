@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from knowgraph.adapters.mcp.server import call_tool
+from knowgraph.adapters.mcp.server import knowgraph_index, knowgraph_query
 
 
 @pytest.mark.asyncio
@@ -34,10 +34,10 @@ async def test_call_tool_query():
         mock_provider_instance.generate_text = AsyncMock(return_value="Generated Answer")
         mock_provider_func.return_value = mock_provider_instance
 
-        result = await call_tool("knowgraph_query", {"query": "test"})
+        result = await knowgraph_query(query="test")
         # The tool uses provider to generate answer from context.
         # If provider exists, it replaces answer with generated text.
-        assert result[0].text == "Generated Answer"
+        assert result == "Generated Answer"
 
 
 @pytest.mark.asyncio
@@ -52,13 +52,17 @@ async def test_call_tool_index():
         mock_provider.return_value = MagicMock()
         mock_run_index.return_value = None
 
-        result = await call_tool("knowgraph_index", {"input_path": "docs"})
+        result = await knowgraph_index(input_path="docs")
         # Check that we got a success message (not an error)
-        assert "error" not in result[0].text.lower() or "successfully" in result[0].text.lower()
+        assert "error" not in result.lower() or "successfully" in result.lower()
 
 
 @pytest.mark.asyncio
 @pytest.mark.skip(reason="Requires MCP request context - integration test")
 async def test_call_tool_unknown():
-    result = await call_tool("unknown", {})
-    assert "Unknown tool" in result[0].text
+    # FastMCP rejects unknown tools; verify our 21 tools are registered instead.
+    from knowgraph.adapters.mcp.server import app
+
+    names = list(app._tool_manager._tools.keys())
+    assert "knowgraph_query" in names
+    assert len(names) == 21

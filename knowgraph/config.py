@@ -290,8 +290,11 @@ JOERN_PATH = os.getenv("KNOWGRAPH_JOERN_PATH")  # None = auto-detect
 JOERN_TIMEOUT = int(os.getenv("KNOWGRAPH_JOERN_TIMEOUT", "120"))  # Reduced to 2 minutes
 
 # CPG Integration Settings (v0.8.0+)
-# Enable creation of separate nodes from CPG entities (default: disabled for backward compatibility)
-CPG_NODES_ENABLED = os.getenv("KNOWGRAPH_CPG_NODES_ENABLED", "false").lower() == "true"
+# Enable creation of separate nodes from CPG entities. Joern runs on every
+# code file, so its CPG nodes are folded into the graph by default to
+# maximize indexing/extraction quality. Set KNOWGRAPH_CPG_NODES_ENABLED=false
+# to keep the graph smaller (metadata-only extraction).
+CPG_NODES_ENABLED = os.getenv("KNOWGRAPH_CPG_NODES_ENABLED", "true").lower() == "true"
 
 # CPG node types to create KnowGraph nodes for
 CPG_NODE_TYPES = os.getenv(
@@ -302,51 +305,7 @@ CPG_NODE_TYPES = os.getenv(
 # Intelligence Provider Settings
 JOERN_EXPORT_TIMEOUT = int(os.getenv("KNOWGRAPH_JOERN_EXPORT_TIMEOUT", "300"))  # 5 minutes
 
-# Joern Cache Directory
-JOERN_CACHE_DIR = os.getenv("KNOWGRAPH_JOERN_CACHE", str(Path.home() / ".knowgraph" / "joern_cache"))
-
-# Comprehensive Language Support Mapping
-# Maps file extensions/language names to Joern frontend commands
-JOERN_LANGUAGE_MAP = {
-    # Primary languages (full CPG support)
-    "python": "pysrc2cpg",
-    "py": "pysrc2cpg",
-    "javascript": "jssrc2cpg",
-    "js": "jssrc2cpg",
-    "typescript": "jssrc2cpg",  # Same frontend as JS
-    "ts": "jssrc2cpg",
-    "java": "javasrc2cpg",
-    "go": "go2cpg",
-    "c": "c2cpg",
-    "cpp": "c2cpg",
-    "c++": "c2cpg",
-    "cc": "c2cpg",
-    "cxx": "c2cpg",
-    "h": "c2cpg",
-    "hpp": "c2cpg",
-    "csharp": "csharpsrc2cpg",
-    "c#": "csharpsrc2cpg",
-    "cs": "csharpsrc2cpg",
-    "scala": "scala2cpg",
-    "php": "php2cpg",
-    "ruby": "rubysrc2cpg",
-    "rb": "rubysrc2cpg",
-    "kotlin": "kotlin2cpg",
-    "kt": "kotlin2cpg",
-    "swift": "swiftsrc2cpg",
-    # Secondary (partial support)
-    "llvm": "llvm2cpg",
-    "ll": "llvm2cpg",
-    "ghidra": "ghidra2cpg",  # Binary analysis
-}
-
-# Hybrid Strategy Configuration
-# Files below this threshold use AST (fast), above use Joern (deep)
-JOERN_MIN_FILE_SIZE = int(os.getenv("KNOWGRAPH_JOERN_MIN_SIZE", "1000"))  # LOC
-
-# Languages that always use AST (performance optimization)
-JOERN_FAST_LANGUAGES = ["python", "py"]  # Python AST is very fast
-
-# Maximum CPG file size before warning (MB)
+# Joern is used for every code file (no size/language thresholds):
+# Joern is the primary extractor across the whole pipeline.
 JOERN_MAX_CPG_SIZE_MB = 500
 

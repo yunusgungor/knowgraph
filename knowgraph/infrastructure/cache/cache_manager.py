@@ -25,16 +25,33 @@ class CacheManager:
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
-        """Get thread-local database connection."""
-        if not hasattr(self._local, "conn"):
-            self._local.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            # Enable WAL mode for better concurrency
-            self._local.conn.execute("PRAGMA journal_mode=WAL")
-        return self._local.conn  # type: ignore[no-any-return]
+        """Get a usable thread-local database connection.
+
+        Reopens if the cached connection was closed externally (e.g. a caller
+        that did ``cache._get_conn().close()``).
+        """
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            try:
+                conn.execute("SELECT 1")
+                return conn
+            except sqlite3.Error:
+                conn = None
+        if conn is None:
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            # Default rollback journal (no -wal/-shm sidecar files) keeps the
+            # cache a single file that Windows can unlink while a connection
+            # is open, and simplifies cleanup.
+            self._local.conn = conn
+        return conn  # type: ignore[no-any-return]
 
     def _init_db(self) -> None:
         """Initialize database schema."""
-        with sqlite3.connect(self.db_path) as conn:
+        # NOTE: `with sqlite3.connect(...) as conn` commits/rolls back but does
+        # NOT close the connection — the leaked handle blocks shutil.rmtree /
+        # os.replace on Windows. Close it explicitly.
+        conn = sqlite3.connect(self.db_path)
+        try:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS entities (
@@ -45,6 +62,27 @@ class CacheManager:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_hash ON entities(chunk_hash)")
+            conn.commit()
+        finally:
+            conn.close()
+
+    def close(self) -> None:
+        """Close any open thread-local database connection."""
+        if hasattr(self._local, "conn"):
+            try:
+                self._local.conn.close()
+            except Exception:
+                pass
+            delattr(self._local, "conn")
+
+    def __del__(self) -> None:
+        """Close open connections on garbage collection.
+
+        Without this, an open thread-local SQLite handle keeps the DB file
+        locked on Windows (blocks rmtree / os.replace) when callers drop the
+        CacheManager without closing it.
+        """
+        self.close()
 
     def get_entities(self, chunk_hash: str) -> list[Entity] | None:
         """Retrieve entities for a chunk hash if they exist."""
@@ -98,9 +136,7 @@ class CacheManager:
             logger.warning("Cache corrupted, rebuilding...")
             try:
                 # Close all connections
-                if hasattr(self._local, "conn"):
-                    self._local.conn.close()
-                    delattr(self._local, "conn")
+                self.close()
 
                 # Backup corrupted DB (for debugging)
                 if self.db_path.exists():

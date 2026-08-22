@@ -46,7 +46,6 @@ from knowgraph.shared.refactoring import (
     filter_active_edges,
     flatten_centrality_scores,
 )
-from knowgraph.shared.retry import BackoffStrategy, RetryConfig, RetryContext
 from knowgraph.shared.throttle import RequestThrottle
 from knowgraph.shared.tracing import trace_operation
 
@@ -161,13 +160,6 @@ class QueryEngine:
                 success_threshold=3,  # Use 'success_threshold' not 'half_open_max_calls'
             ),
         )
-        self._retry_config = RetryConfig(
-            max_attempts=3,
-            backoff_strategy=BackoffStrategy.EXPONENTIAL,  # Correct parameter name
-            initial_delay=1.0,  # Use 'initial_delay' not 'base_delay'
-            max_delay=10.0,
-            timeout=30.0,
-        )
         self._throttle = RequestThrottle(
             max_concurrent=MAX_CONCURRENT_QUERIES,
             queue_size=100,
@@ -270,8 +262,7 @@ class QueryEngine:
         # This sync version calls implementation directly
         start_time = time.time()
         try:
-            result = self._execute_query_with_retry(
-                None,  # No retry context for sync version
+            result = self._execute_query(
                 query_text,
                 top_k,
                 max_hops,
@@ -300,9 +291,8 @@ class QueryEngine:
             self.metrics.record_error(type(error).__name__, "query")
             raise
 
-    def _execute_query_with_retry(
+    def _execute_query(
         self: "QueryEngine",
-        retry_ctx: "RetryContext",
         query_text: str,
         top_k: int,
         max_hops: int,
@@ -311,7 +301,7 @@ class QueryEngine:
         enable_hierarchical_lifting: bool,
         lift_levels: int,
     ) -> QueryResult:
-        """Internal query execution with retry support."""
+        """Internal query execution."""
         with memory_guard(
             operation_name=f"query_sync[{query_text[:30]}]",
             warning_threshold_mb=100,

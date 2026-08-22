@@ -288,6 +288,7 @@ KnowGraph uses environment variables for configuration. **Bold keys** are common
 | `KNOWGRAPH_LLM_RETRY_COUNT` | No | Max LLM retries | `5` |
 | `KNOWGRAPH_LLM_RETRY_DELAY` | No | Base delay for backoff (sec) | `1.0` |
 | `KNOWGRAPH_JOERN_ENABLED` | No | Enable/disable Joern analysis | `true` |
+| `KNOWGRAPH_CPG_NODES_ENABLED` | No | Fold Joern CPG nodes (method/call/…) into the graph | `true` |
 | `KNOWGRAPH_CPG_TIMEOUT` | No | CPG generation timeout (sec) | `600` |
 | `KNOWGRAPH_LOG_LEVEL` | No | Logging level (DEBUG/INFO/WARNING) | `INFO` |
 | `GITHUB_TOKEN` | No | GitHub PAT for private repos | - |

@@ -5,6 +5,7 @@ leveraging Joern's full query language power.
 """
 
 import logging
+import platform
 import subprocess
 import tempfile
 import time
@@ -153,12 +154,23 @@ class JoernQueryExecutor:
             if not self.joern_path:
                  raise RuntimeError("Joern path not configured")
 
+            # Cross-platform: on Windows the frontend is a .bat file that must
+            # run through cmd.exe /c (CreateProcess can't launch .bat directly).
             joern_bin = self.joern_path / "joern"
+            if platform.system() == "Windows":
+                bat = joern_bin.with_suffix(".bat")
+                if bat.exists():
+                    cmd = ["cmd.exe", "/c", str(bat), "--script", str(script_path)]
+                else:
+                    cmd = [str(joern_bin), "--script", str(script_path)]
+            else:
+                cmd = [str(joern_bin), "--script", str(script_path)]
 
             logger.debug(f"Executing Joern query: {query[:100]}...")
 
             result = subprocess.run(
-                [str(joern_bin), "--script", str(script_path)],
+                cmd,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -256,9 +268,13 @@ flows.l
             Script content as string
 
         """
+        # Normalize backslashes to forward slashes: Scala string literals treat
+        # "\U" etc. in Windows paths (C:\\Users\\...) as invalid escape sequences,
+        # which breaks importCpg and yields "No projects loaded".
+        cpg_uri = str(cpg_path).replace("\\", "/")
         return f"""
 // Load CPG
-importCpg("{cpg_path}")
+importCpg("{cpg_uri}")
 
 // Ensure dataflow overlays are present for complete analysis
 try {{

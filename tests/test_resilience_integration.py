@@ -57,10 +57,6 @@ class TestQueryEngineResilience:
         assert hasattr(engine, "_circuit_breaker")
         assert engine._circuit_breaker is not None
 
-        # Check retry config is initialized
-        assert hasattr(engine, "_retry_config")
-        assert engine._retry_config is not None
-
         # Check throttle is initialized
         assert hasattr(engine, "_throttle")
         assert engine._throttle is not None
@@ -107,15 +103,6 @@ class TestQueryEngineResilience:
             assert (
                 max_concurrent <= expected_max + 5
             ), f"Expected max ~{expected_max} concurrent, got {max_concurrent}"
-
-    def test_sync_query_uses_retry(self, mock_graph_store):
-        """Test that sync queries use retry logic."""
-        engine = QueryEngine(mock_graph_store)
-
-        # Verify retry context is available
-        assert engine._retry_config is not None
-        assert engine._retry_config.max_attempts == 3
-
 
 class TestMCPHandlersResilience:
     """Test resilience patterns in MCP handlers."""
@@ -215,7 +202,6 @@ class TestEndToEndResilience:
 
         # Verify all resilience components are present
         assert engine._circuit_breaker is not None
-        assert engine._retry_config is not None
         assert engine._throttle is not None
 
         # Mock successful query
@@ -263,14 +249,6 @@ class TestResilienceConfiguration:
 
         assert cb.config.failure_threshold == 5
         assert cb.config.timeout == 30.0
-
-    def test_retry_configuration(self, mock_graph_store):
-        """Verify retry logic is configured correctly."""
-        engine = QueryEngine(mock_graph_store)
-        retry = engine._retry_config
-
-        assert retry.max_attempts == 3
-        assert retry.backoff_strategy.value == "exponential"
 
     def test_throttle_configuration(self, mock_graph_store):
         """Verify throttle is configured correctly."""

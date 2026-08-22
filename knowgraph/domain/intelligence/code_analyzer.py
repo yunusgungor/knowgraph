@@ -6,12 +6,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from knowgraph.config import (
-    JOERN_ENABLED,
-    JOERN_FAST_LANGUAGES,
-    JOERN_LANGUAGE_MAP,
-    JOERN_MIN_FILE_SIZE,
-)
+from knowgraph.config import JOERN_ENABLED
 from knowgraph.domain.intelligence.provider import Entity
 
 logger = logging.getLogger(__name__)
@@ -109,23 +104,12 @@ class CodeAnalyzer:
                 logger.warning(f"Joern unavailable: {e}")
                 self.use_joern = False
 
-    def _detect_language(self, file_path: str) -> str | None:
-        path = Path(file_path)
-        extension = path.suffix.lstrip(".")
-        return extension if extension in JOERN_LANGUAGE_MAP else None
-
-    def _count_lines(self, content: str) -> int:
-        lines = content.split("\n")
-        return len([line for line in lines if line.strip() and not line.strip().startswith("#")])
-
     def _should_use_joern(self, content: str, file_path: str) -> bool:
-        if not self.use_joern or not self.joern_provider:
-            return False
-        language = self._detect_language(file_path)
-        if not language or language in JOERN_FAST_LANGUAGES:
-            return False
-        loc = self._count_lines(content)
-        return loc >= JOERN_MIN_FILE_SIZE
+        # Joern is the primary extractor: use it for EVERY code file, regardless
+        # of size or language. AST remains only as a fallback (when Joern is
+        # disabled/not installed or throws during generation). Quality of
+        # indexing/extraction matters more than per-file speed.
+        return bool(self.use_joern and self.joern_provider)
 
     def extract_entities(self, content: str, file_path: str = "") -> list[Entity]:
         """Extract entities from code (backward compatible).

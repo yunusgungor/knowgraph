@@ -5,7 +5,13 @@ import pytest
 
 # Standard import without sys.path hack
 from knowgraph.adapters.mcp import server
-from knowgraph.adapters.mcp.server import call_tool
+from knowgraph.adapters.mcp.server import (
+    knowgraph_analyze_impact,
+    knowgraph_get_stats,
+    knowgraph_index,
+    knowgraph_query,
+    knowgraph_validate,
+)
 
 
 @pytest.mark.asyncio
@@ -19,9 +25,9 @@ async def test_mcp_validate():
         with patch(
             "knowgraph.adapters.mcp.handlers.resolve_graph_path", side_effect=lambda p, r: Path(p)
         ):
-            result = await call_tool("knowgraph_validate", {"graph_path": "/tmp/test_graph"})
+            result = await knowgraph_validate(graph_path="/tmp/test_graph")
 
-        assert "VALID" in result[0].text
+        assert "VALID" in result
         mock_validate.assert_called_once()
 
 
@@ -50,8 +56,8 @@ async def test_mcp_get_stats():
         )
         mock_read_manifest.return_value = mock_manifest
 
-        result = await call_tool("knowgraph_get_stats", {"graph_path": "/tmp/test_graph"})
-        assert "Nodes: 100" in result[0].text
+        result = await knowgraph_get_stats(graph_path="/tmp/test_graph")
+        assert "Nodes: 100" in result
 
 
 @pytest.mark.asyncio
@@ -78,21 +84,17 @@ async def test_mcp_query_advanced():
         # Mock async expansion
         MockExpander.return_value.expand_query_async = AsyncMock(return_value=["expanded_term"])
 
-        result = await call_tool(
-            "knowgraph_query",
-            {
-                "query": "test query",
-                "top_k": 20,
-                "max_hops": 4,
-                "max_tokens": 5000,
-                "with_explanation": True,
-                "enable_hierarchical_lifting": False,
-                "lift_levels": 3,
-            },
+        result = await knowgraph_query(
+            query="test query",
+            top_k=20,
+            max_hops=4,
+            max_tokens=5000,
+            with_explanation=True,
+            enable_hierarchical_lifting=False,
+            lift_levels=3,
         )
 
-        assert len(result) == 1
-        assert result[0].text == "Generated Answer"
+        assert result == "Generated Answer"
         mock_instance.query_async.assert_called_once()
 
 
@@ -110,13 +112,11 @@ async def test_mcp_analyze_impact_semantic():
         mock_result = MagicMock(active_subgraph_size=10, context="Semantic Impact Report")
         mock_instance.analyze_impact_async = AsyncMock(return_value=mock_result)
 
-        result = await call_tool(
-            "knowgraph_analyze_impact", {"element": "func_x", "mode": "semantic"}
-        )
+        result = await knowgraph_analyze_impact(element="func_x", mode="semantic")
         # Check that analyze_impact_async was called (mock worked)
         mock_instance.analyze_impact_async.assert_called_once()
         # Result should not be an error
-        assert "failed" not in result[0].text.lower() or "Semantic Impact Report" in result[0].text
+        assert "failed" not in result.lower() or "Semantic Impact Report" in result
 
 
 @pytest.mark.asyncio
@@ -133,7 +133,7 @@ async def test_mcp_analyze_impact_path():
             server.types.TextContent(type="text", text="Path Impact Report")
         ]
 
-        result = await call_tool("knowgraph_analyze_impact", {"element": "auth.py", "mode": "path"})
+        result = await knowgraph_analyze_impact(element="auth.py", mode="path")
 
         mock_path_impact.assert_called_once()
         # Check result is not empty and mock was called
@@ -154,9 +154,7 @@ async def test_mcp_index_resume_gc():
     ):
         mock_run_index.return_value = None
 
-        result = await call_tool(
-            "knowgraph_index", {"input_path": "docs", "gc": True, "resume": True}
-        )
+        result = await knowgraph_index(input_path="docs", gc=True, resume=True)
 
         # Check that result indicates success
-        assert "success" in result[0].text.lower() or "indexed" in result[0].text.lower()
+        assert "success" in result.lower() or "indexed" in result.lower()

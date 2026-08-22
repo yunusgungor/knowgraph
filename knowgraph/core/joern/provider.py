@@ -25,6 +25,36 @@ class JoernProvider:
     and entity extraction for KnowGraph integration.
     """
 
+    def _joern_cmd(self, name: str) -> str:
+        """Return the platform-correct Joern executable path.
+
+        On Windows the Joern frontend scripts are ``.bat`` files (e.g.
+        ``joern-parse.bat``); invoking the bare name fails with WinError 193
+        (not a valid Win32 application). Linux/macOS use the bare script.
+        """
+        exe = Path(self.joern_path) / name
+        if platform.system() == "Windows":
+            bat = exe.with_suffix(".bat")
+            if bat.exists():
+                return str(bat)
+        return str(exe)
+
+    def _joern_subprocess(self, cmd: list[str], **kwargs):
+        """Run a Joern command cross-platform.
+
+        On Windows, ``.bat`` frontend scripts cannot be launched directly by
+        CreateProcess (they are not PE images); they must go through
+        ``cmd.exe /c``. ``subprocess.run([...bat...])`` would raise WinError 193,
+        so wrap the command list accordingly.
+        """
+        if platform.system() == "Windows":
+            cmd = ["cmd.exe", "/c"] + cmd
+            # Avoid spawning a console window and reduce inherited handles —
+            # this prevents _winapi.DuplicateHandle OSErrors when many Joern
+            # subprocesses run in quick succession (e.g. under pytest capture).
+            kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return subprocess.run(cmd, **kwargs)
+
     def __init__(self, joern_path: str | None = None):
         """Initialize Joern provider.
 
@@ -42,7 +72,16 @@ class JoernProvider:
             raise JoernNotFoundError(
                 "Joern CLI not found. Run: knowgraph-setup-joern"
             )
+        self._executor_cache: "JoernQueryExecutor | None" = None
         logger.info(f"Joern found at: {self.joern_path}")
+
+    def _executor(self) -> "JoernQueryExecutor":
+        """Return a memoized JoernQueryExecutor for this provider."""
+        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
+
+        if self._executor_cache is None:
+            self._executor_cache = JoernQueryExecutor(Path(self.joern_path))
+        return self._executor_cache
 
     def _find_joern(self) -> str | None:
         """Auto-detect Joern installation.
@@ -118,20 +157,24 @@ class JoernProvider:
 
         # Build joern-parse command
         # joern_path is now the joern-cli directory
-        joern_parse = str(Path(self.joern_path) / "joern-parse")
+        joern_parse = self._joern_cmd("joern-parse")
         cmd = [joern_parse, str(repo_path), "--output", str(output_file)]
 
         if language:
             cmd.extend(["--language", language])
 
         logger.info(f"Generating CPG: {' '.join(cmd)}")
-        print("🔧 Generating Code Property Graph...")
 
         try:
-            result = subprocess.run(
+            # stdout -> DEVNULL, stderr -> PIPE: capturing stdout is unnecessary
+            # (joern-parse prints nothing useful) and the extra pipe handles make
+            # Windows _winapi.DuplicateHandle fail under pytest's capture.
+            result = self._joern_subprocess(
                 cmd,
                 timeout=timeout,
-                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 text=True,
             )
 
@@ -140,7 +183,7 @@ class JoernProvider:
                 raise subprocess.CalledProcessError(
                     result.returncode,
                     cmd,
-                    result.stdout,
+                    result.stdout or "",
                     result.stderr,
                 )
 
@@ -175,7 +218,7 @@ class JoernProvider:
 
         # Build joern-export command
         # Note: -o expects a DIRECTORY that DOESN'T EXIST YET in Joern v4.x
-        joern_export = str(Path(self.joern_path) / "joern-export")
+        joern_export = self._joern_cmd("joern-export")
         cmd = [
             joern_export,
             "--repr", "all",  # "all" works with GraphML (cpg14 doesn't!)
@@ -185,12 +228,12 @@ class JoernProvider:
         ]
 
         logger.info(f"Exporting GraphML: {' '.join(cmd)}")
-        print("📤 Exporting to GraphML...")
 
         try:
-            result = subprocess.run(
+            result = self._joern_subprocess(
                 cmd,
                 timeout=timeout,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
             )
@@ -343,7 +386,7 @@ class JoernProvider:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Build joern-export command
-        joern_export = str(Path(self.joern_path) / "joern-export")
+        joern_export = self._joern_cmd("joern-export")
 
         cmd = [
             joern_export,
@@ -360,12 +403,13 @@ class JoernProvider:
         logger.info(f"Exporting CPG to {format.value}: {' '.join(cmd)}")
 
         try:
-            result = subprocess.run(
+            result = self._joern_subprocess(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
                 cwd=str(self.joern_path),
+                stdin=subprocess.DEVNULL,
             )
 
             if result.returncode != 0:
@@ -533,9 +577,6 @@ class JoernProvider:
 
     def analyze_complexity(self, cpg_path: Path, method_pattern: str) -> dict:
         """Calculate cyclomatic complexity for methods."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
-
         # Calculate complexity: control structures + 1
         query = f"""
         cpg.method.name("{method_pattern}").map{{ m =>
@@ -543,7 +584,7 @@ class JoernProvider:
            s"${{m.name}}:$complexity"
         }}.l
         """
-        result = executor.execute_query(cpg_path, query)
+        result = self._executor().execute_query(cpg_path, query)
 
         complexity_data = []
         for item in result.results:
@@ -556,13 +597,10 @@ class JoernProvider:
 
     def get_ast(self, cpg_path: Path, method_pattern: str) -> str:
         """Get Abstract Syntax Tree (DOT format) for a method."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
-
         query = f"""
         cpg.method.name("{method_pattern}").dotAst.headOption.getOrElse("AST not found")
         """
-        result = executor.execute_query(cpg_path, query)
+        result = self._executor().execute_query(cpg_path, query)
 
         # Extract the DOT string
         if result.results:
@@ -571,27 +609,6 @@ class JoernProvider:
 
     def get_type_hierarchy(self, cpg_path: Path, type_pattern: str) -> dict:
         """Get base types and derived types for a class/structure."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
-
-        query = f"""
-        val target = cpg.typeDecl.name("{type_pattern}").headOption
-
-        target match {{
-          case Some(t) =>
-            val baseTypes = t.inheritsFromTypeFullName.l
-            val derivedTypes = cpg.typeDecl.where(_.inheritsFromTypeFullName(t.fullName)).name.l
-            Map("base" -> baseTypes, "derived" -> derivedTypes)
-          case None =>
-            Map("error" -> "Type not found")
-        }}
-        """
-        result = executor.execute_query(cpg_path, query)
-
-        # Parse map result - Joern output parsing might need adjustment based on how Map prints
-        # For simplicity, we'll rely on the executor's parser or raw output if simple
-        # Since Map output can be complex, we might want a simpler string output query
-
         # Revised simpler query for robust parsing
         simple_query = f"""
         val target = cpg.typeDecl.name("{type_pattern}").headOption
@@ -603,7 +620,7 @@ class JoernProvider:
             case None => "NOT_FOUND"
         }}
         """
-        result = executor.execute_query(cpg_path, simple_query)
+        result = self._executor().execute_query(cpg_path, simple_query)
         raw = result.results[0].get("raw", "") if result.results else ""
 
         if raw == "NOT_FOUND":
@@ -622,8 +639,7 @@ class JoernProvider:
 
     def get_cfg(self, cpg_path: Path, method_pattern: str) -> str:
         """Get Control Flow Graph (DOT format) for a method."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = f"""
         cpg.method.name("{method_pattern}").dotCfg.headOption.getOrElse("CFG not found")
@@ -636,8 +652,7 @@ class JoernProvider:
 
     def get_pdg(self, cpg_path: Path, method_pattern: str) -> str:
         """Get Program Dependence Graph (DOT format) for a method."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = f"""
         cpg.method.name("{method_pattern}").dotPdg.headOption.getOrElse("PDG not found")
@@ -650,8 +665,7 @@ class JoernProvider:
 
     def get_cdg(self, cpg_path: Path, method_pattern: str) -> str:
         """Get Control Dependence Graph (DOT format) for a method."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = f"""
         cpg.method.name("{method_pattern}").dotCdg.headOption.getOrElse("CDG not found")
@@ -664,15 +678,14 @@ class JoernProvider:
 
     def find_variable_usages(self, cpg_path: Path, var_pattern: str) -> dict:
         """Find where a variable/identifier is used, including filename."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = f"""
         cpg.identifier.name("{var_pattern}").map{{ i =>
             val method = i.method.name
             val line = i.lineNumber.getOrElse(-1)
             val file = i.method.filename
-            s"$method__KG_SEP__$line__KG_SEP__$file"
+            s"${{method}}__KG_SEP__${{line}}__KG_SEP__$file"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -696,8 +709,7 @@ class JoernProvider:
 
     def perform_slicing(self, cpg_path: Path, var_pattern: str) -> dict:
         """Perform backwards slicing with filename info."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         # Slicing logic using REACHABLE BY
         query = f"""
@@ -709,7 +721,7 @@ class JoernProvider:
             val line = c.lineNumber.getOrElse(-1)
             val file = c.method.filename
             val code = c.code.replace("\\"", "'") // Escape quotes
-            s"$method__KG_SEP__$line__KG_SEP__$file__KG_SEP__$code"
+            s"${{method}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$code"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -737,8 +749,7 @@ class JoernProvider:
 
     def find_literals(self, cpg_path: Path, literal_pattern: str) -> dict:
         """Find hardcoded literals/strings matching a pattern."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         # Case-insensitive wildcard search
         query = f"""
@@ -747,7 +758,7 @@ class JoernProvider:
              val method = l.method.name.headOption.getOrElse("<unknown>")
              val line = l.lineNumber.getOrElse(-1)
              val file = l.file.name.headOption.getOrElse("<unknown>")
-             s"$method__KG_SEP__$line__KG_SEP__$file__KG_SEP__$code"
+             s"${{method}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$code"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -775,8 +786,7 @@ class JoernProvider:
 
     def find_methods(self, cpg_path: Path, pattern: str) -> dict:
         """Find methods matching a pattern with detailed info."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         # Safe string for scala
         safe_pattern = pattern.replace('"', "").replace("'", "")
@@ -788,7 +798,7 @@ class JoernProvider:
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
             val sig = m.signature
-            s"$name__KG_SEP__$line__KG_SEP__$file__KG_SEP__$sig"
+            s"${{name}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$sig"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -811,8 +821,7 @@ class JoernProvider:
 
     def analyze_taint_flow(self, cpg_path: Path, source_pattern: str, sink_pattern: str) -> dict:
         """Trace data flow (taint) from source to sink."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         # Robust query using reachableBy
         # Robust query using reachableBy
@@ -821,8 +830,12 @@ class JoernProvider:
         # FIX: Track flow to BOTH the call arguments AND the call node itself (for builtins/identifiers)
 
         # Clean pattern for string literal
-        src_clean = source_pattern.replace('"', '\\"')
-        sink_clean = sink_pattern.replace('"', '\\"')
+        # Clean patterns for a Scala string literal: patterns are regex text that
+        # may contain backslashes (e.g. re.escape("read(") -> "read\\(") and quotes.
+        # Both must be escaped so the embedded Scala string stays valid (an
+        # unescaped "\(" raises "invalid escape character" in Scala).
+        src_clean = source_pattern.replace("\\", "\\\\").replace('"', '\\"')
+        sink_clean = sink_pattern.replace("\\", "\\\\").replace('"', '\\"')
 
         query = f"""
         def src = cpg.call.filter(c => c.name.contains("{src_clean}") || c.methodFullName.contains("{src_clean}") || c.code.contains("{src_clean}")) ++ cpg.identifier.filter(_.name.contains("{src_clean}"))
@@ -830,11 +843,21 @@ class JoernProvider:
 
         dst.reachableByFlows(src).map{{ path =>
             val flow = path.elements.map{{ e =>
-                val method = e.method.name
+                // AstNode has no .method member in Joern 4; it exists only on the
+                // concrete node subtypes (Method, Call, Identifier, ...). Resolve
+                // the enclosing method via a pattern match so the script compiles.
+                // AstNode has no .method member in Joern 4; it exists only on
+                // concrete node subtypes (Method, Call, Identifier, ...).
+                // Resolve the enclosing method + filename via a pattern match.
+                val (method, file) = e match {{
+                    case m: Method => (m.name, m.filename)
+                    case c: Call => (c.method.name, c.method.filename)
+                    case i: Identifier => (i.method.name, i.method.filename)
+                    case _ => ("", "")
+                }}
                 val line = e.lineNumber.getOrElse(-1)
                 val code = e.code.replace("\\"", "'")
-                val file = e.method.filename
-                s"$method__KG_SEP__$line__KG_SEP__$file__KG_SEP__$code"
+                s"${{method}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$code"
             }}.mkString("__KS_FLOW__")
             flow
         }}.dedup.l
@@ -864,15 +887,14 @@ class JoernProvider:
 
     def get_method_params(self, cpg_path: Path, method_pattern: str) -> dict:
         """Get parameters of a method."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = f"""
         cpg.method.name("{method_pattern}").parameter.map{{ p =>
             val name = p.name
             val type = p.typeFullName
             val index = p.index
-            s"$name__KG_SEP__$type__KG_SEP__$index"
+            s"${{name}}__KG_SEP__${{type}}__KG_SEP__$index"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -896,14 +918,13 @@ class JoernProvider:
 
     def get_method_locals(self, cpg_path: Path, method_pattern: str) -> dict:
         """Get local variables defined in a method."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = f"""
         cpg.method.name("{method_pattern}").local.map{{ l =>
             val name = l.name
             val type = l.typeFullName
-            s"$name__KG_SEP__$type"
+            s"${{name}}__KG_SEP__$type"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -925,8 +946,7 @@ class JoernProvider:
 
     def get_ddg(self, cpg_path: Path, method_pattern: str) -> str:
         """Get Data Dependence Graph (DOT format)."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = f"""
         cpg.method.name("{method_pattern}").dotDdg.headOption.getOrElse("DDG not found")
@@ -939,8 +959,7 @@ class JoernProvider:
 
     def find_comments(self, cpg_path: Path, pattern: str) -> dict:
         """Find comments or TODOs matchin pattern."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         # Note: 'comment' node type might vary by language/CPG version, but widely supported
         # If unavailable, returns empty
@@ -949,7 +968,7 @@ class JoernProvider:
             val file = c.file.name.headOption.getOrElse("<unknown>")
             val line = c.lineNumber.getOrElse(-1)
             val content = c.code.replace("\\"", "'")
-            s"$file__KG_SEP__$line__KG_SEP__$content"
+            s"${{file}}__KG_SEP__${{line}}__KG_SEP__$content"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -972,8 +991,7 @@ class JoernProvider:
 
     def list_tags(self, cpg_path: Path) -> dict:
         """List all tags in the CPG."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = "cpg.tag.name.dedup.l"
         result = executor.execute_query(cpg_path, query)
@@ -988,8 +1006,7 @@ class JoernProvider:
 
     def find_annotations(self, cpg_path: Path, annotation_pattern: str) -> dict:
         """Find methods with specific annotations/decorators."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         # Case-insensitive wildcard search
         query = f"""
@@ -998,7 +1015,7 @@ class JoernProvider:
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
             val annots = m.annotation.name.mkString(", ")
-            s"$name__KG_SEP__$line__KG_SEP__$file__KG_SEP__$annots"
+            s"${{name}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__$annots"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -1022,15 +1039,14 @@ class JoernProvider:
 
     def find_imports(self, cpg_path: Path, import_pattern: str) -> dict:
         """Find imports/dependencies matching a pattern."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         # Case-insensitive wildcard search
         query = f"""
         cpg.imports.code("(?i).*{import_pattern}.*").map{{ i =>
             val code = i.code
             val file = i.file.name.headOption.getOrElse("unknown")
-            s"$code__KG_SEP__$file"
+            s"${{code}}__KG_SEP__$file"
         }}.dedup.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -1055,8 +1071,7 @@ class JoernProvider:
 
     def analyze_structures(self, cpg_path: Path, method_pattern: str) -> dict:
         """Analyze control structures (loops, ifs) in methods."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         # Ensure we have a valid pattern, default to all if wildcard passed
         # Joern regex: use (?i) for case insensitive, wrap in .* for partial
@@ -1069,7 +1084,7 @@ class JoernProvider:
             val name = m.name
             val line = m.lineNumber.getOrElse(-1)
             val file = m.filename
-            s"$name__KG_SEP__$line__KG_SEP__$file__KG_SEP__$loops__KG_SEP__$ifs"
+            s"${{name}}__KG_SEP__${{line}}__KG_SEP__${{file}}__KG_SEP__${{loops}}__KG_SEP__$ifs"
         }}.l
         """
         result = executor.execute_query(cpg_path, query)
@@ -1094,8 +1109,7 @@ class JoernProvider:
 
     def list_files(self, cpg_path: Path) -> dict:
         """List all source files in the CPG."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = "cpg.file.name.dedup.l"
         result = executor.execute_query(cpg_path, query)
@@ -1110,8 +1124,7 @@ class JoernProvider:
 
     def list_namespaces(self, cpg_path: Path) -> dict:
         """List all namespaces/packages."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = "cpg.namespace.name.dedup.l"
         result = executor.execute_query(cpg_path, query)
@@ -1126,8 +1139,7 @@ class JoernProvider:
 
     def list_types(self, cpg_path: Path) -> dict:
         """List all defined types/classes."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         query = "cpg.typeDecl.fullName.dedup.l"
         result = executor.execute_query(cpg_path, query)
@@ -1142,8 +1154,7 @@ class JoernProvider:
 
     def run_custom_query(self, cpg_path: Path, query: str) -> dict:
         """Execute a raw custom Joern query string."""
-        from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
-        executor = JoernQueryExecutor(Path(self.joern_path))
+        executor = self._executor()
 
         # Determine if it's a list operation to append .l if missing
         final_query = query.strip()

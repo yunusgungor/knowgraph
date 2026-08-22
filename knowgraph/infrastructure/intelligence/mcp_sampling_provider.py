@@ -4,7 +4,6 @@ import json
 from typing import Any
 
 import mcp.types as types
-from mcp.server import Server
 
 from knowgraph.domain.intelligence.provider import (
     Entity,
@@ -20,17 +19,17 @@ from knowgraph.infrastructure.intelligence.prompts import (
 class MCPSamplingProvider(IntelligenceProvider):
     """Intelligence provider using MCP Sampling (delegation to Agent)."""
 
-    def __init__(self, server: Server, request_context: Any = None):
-        """Initialize MCP Sampling provider."""
-        self.server = server
-        self.request_context = request_context
+    def __init__(self) -> None:
+        """Initialize MCP Sampling provider.
+
+        The live ServerSession is obtained from ``mcp.request_context()`` at
+        call time (FastMCP public API), so no server handle needs to be wired
+        through construction.
+        """
+        self.request_context: Any = None
 
     async def _sample(self, prompt: str) -> str:
         """Send a sampling request to the connected client."""
-        # Create the sampling message
-        # Note: The exact API for sampling depends on the mcp python SDK version.
-        # Assuming server.create_message or similar exists, or using the request context.
-
         # Construct a message for the agent
         messages = [
             types.SamplingMessage(
@@ -39,18 +38,23 @@ class MCPSamplingProvider(IntelligenceProvider):
             )
         ]
 
-        # Send request
-        # In MCP python SDK, we usually use the request context to send sampling requests
-        # if we are within a tool call.
-        if self.request_context:
-            result = await self.request_context.session.create_message(
-                messages=messages,
-                max_tokens=2000,
-                system_prompt="You are a helpful coding assistant analyzing code for a Knowledge Graph.",
-            )
-        else:
-            # Fallback or error if no context
-            raise RuntimeError("No request context available for sampling.")
+        # The public FastMCP API exposes the current request's session.
+        try:
+            import mcp
+
+            session = mcp.request_context().session
+        except Exception:
+            # Back-compat fallback for callers that inject a request context.
+            if self.request_context is not None:
+                session = self.request_context.session
+            else:
+                raise RuntimeError("No request context available for sampling.") from None
+
+        result = await session.create_message(
+            messages=messages,
+            max_tokens=2000,
+            system_prompt="You are a helpful coding assistant analyzing code for a Knowledge Graph.",
+        )
 
         # Parse result
         # result is likely a CreateMessageResult

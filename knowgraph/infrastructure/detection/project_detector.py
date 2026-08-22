@@ -64,6 +64,7 @@ def detect_git_root(start_path: Path | None = None) -> Path | None:
         result = subprocess.run(  # noqa: UP022
             ["git", "rev-parse", "--show-toplevel"],
             cwd=str(start_path),
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

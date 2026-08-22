@@ -26,12 +26,12 @@ def vulnerable_app_graph():
     import knowgraph.config as config_module
     import knowgraph.domain.intelligence.code_analyzer as ca_module
 
-    # Force enable CPG nodes and override language checks
+    # Force enable CPG nodes. Joern is already the default extractor for all
+    # files (no size/language thresholds), so the old *_FAST_LANGUAGES /
+    # MIN_FILE_SIZE overrides are no longer needed.
     with patch.object(config_module, "CPG_NODES_ENABLED", True), \
          patch.object(config_module, "JOERN_ENABLED", True), \
-         patch.object(ca_module, "JOERN_ENABLED", True), \
-         patch.object(ca_module, "JOERN_FAST_LANGUAGES", []), \
-         patch.object(ca_module, "JOERN_MIN_FILE_SIZE", 0):
+         patch.object(ca_module, "JOERN_ENABLED", True):
 
         # Index the vulnerable code
         # Use asyncio.run + run_index helper
