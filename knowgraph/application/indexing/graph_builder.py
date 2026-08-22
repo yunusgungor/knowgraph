@@ -401,7 +401,28 @@ class SmartGraphBuilder:
             final_nodes_map: dict[UUID, Node] = {}
             nodes_needing_llm: list[Node] = []
 
-            # Phase 1: Cache & AST Check
+            # Phase 1: Cache, Joern (directory CPG) & AST fallback
+            # Build a shared directory-level CPG once; per-file entity
+            # extraction queries it via native Joern DSL (no per-chunk
+            # joern-parse). Falls back to CodeAnalyzer (AST) when Joern is
+            # unavailable or generation fails.
+            cpg_provider = None
+            try:
+                if self.code_analyzer.use_joern:
+                    from knowgraph.domain.intelligence.cpg_provider import CPGProvider
+
+                    cpg_provider = CPGProvider(graph_path=Path(graph_path))
+                    if not cpg_provider.ensure_cpg(Path(file_path)):
+                        # No Joern-supported files or generation failed:
+                        # fall back to AST for every file.
+                        cpg_provider = None
+            except Exception as e:
+                logger.warning(f"Directory CPG generation failed, falling back to per-file analyzer: {e}")
+                cpg_provider = None
+
+            # Per-file entity cache: same file's chunks share one extraction
+            file_entity_cache: dict[str, list[Any]] = {}
+
             with self.perf_tracker.track("cache_ast_phase"):
                 for node in initial_nodes:
                     self.metrics.total_chunks += 1
@@ -417,39 +438,49 @@ class SmartGraphBuilder:
 
                     self.metrics.record_cache_miss()
 
-                    # Check CodeAnalyzer (Hybrid AST/Joern strategy)
-                    # CodeAnalyzer intelligently selects backend based on language and file size
                     try:
-                        # Extract entities and optionally get CPG
-                        entities, cpg = self.code_analyzer.extract_entities_with_cpg(
-                            node.content,
-                            file_path=file_path  # Pass file path for language detection
-                        )
+                        entities: list[Any] = []
+                        file_key = node.path or file_path
+
+                        # Joern (directory CPG) extraction, shared per file
+                        if cpg_provider is not None:
+                            if file_key not in file_entity_cache:
+                                file_entity_cache[file_key] = cpg_provider.extract_entities_for_file(file_key)
+                            entities = file_entity_cache[file_key]
+                        else:
+                            # AST fallback (no directory CPG available)
+                            entities = self.code_analyzer.ast_analyzer.extract_entities(node.content)
 
                         if entities:
-                            # Record success (may be AST or Joern depending on strategy)
+                            # Record success (Joern or AST depending on path)
                             self.metrics.record_ast_success()
                             self.cache_manager.save_entities(node.hash, entities)
                             final_nodes_map[node.id] = replace(
                                 node, metadata={"entities": [e._asdict() for e in entities]}
                             )
 
-                            # NEW: If CPG available and CPG nodes enabled, create entity nodes + edges
-                            if cpg and self.enable_cpg_nodes:
-                                logger.info(f"Converting CPG for {file_path}: {cpg.metadata.get('num_nodes')} nodes")
+                            # NEW: If CPG nodes enabled, create entity nodes + hierarchy edges
+                            if self.enable_cpg_nodes:
+                                logger.info(f"Converting CPG entities for {node.path or file_key}: {len(entities)} entities")
 
                                 try:
-                                    cpg_result = self.cpg_converter.convert_cpg_to_graph(
-                                        cpg,
+                                    # CPG entity nodes are built from the
+                                    # per-file native-query entities (directory
+                                    # CPG). The GraphML export/parse path is
+                                    # gone, so CPG edges (AST/CFG/DDG) are not
+                                    # produced here — entity nodes still link
+                                    # to their chunk via hierarchy edges.
+                                    cpg_result = self.cpg_converter.convert_entities_to_graph(
+                                        entities,
                                         chunk_node_id=node.id,
-                                        file_path=file_path,
+                                        file_path=node.path or file_key,
                                     )
 
                                     # Add CPG entity nodes to graph
                                     for entity_node in cpg_result.entity_nodes:
                                         final_nodes_map[entity_node.id] = entity_node
 
-                                    # Add CPG edges to collection
+                                    # Add CPG edges to collection (empty for now)
                                     cpg_edges.extend(cpg_result.cpg_edges)
 
                                     # Add hierarchy edges: entity nodes -> chunk node
@@ -465,12 +496,11 @@ class SmartGraphBuilder:
                                         cpg_edges.append(hierarchy_edge)
 
                                     logger.info(
-                                        f"✅ CPG integration: +{len(cpg_result.entity_nodes)} nodes, "
-                                        f"+{len(cpg_result.cpg_edges)} edges"
+                                        f"✅ CPG integration: +{len(cpg_result.entity_nodes)} nodes"
                                     )
 
                                 except Exception as cpg_err:
-                                    logger.warning(f"CPG conversion failed for {file_path}: {cpg_err}")
+                                    logger.warning(f"CPG conversion failed for {file_key}: {cpg_err}")
                                     # Continue with metadata-only (graceful degradation)
 
                             continue

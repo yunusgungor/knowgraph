@@ -74,6 +74,12 @@ class CodeIndexIntegration:
             # Step 2.5: Check for incremental updates (NEW - Phase 4)
             from knowgraph.infrastructure.indexing.incremental_cpg import IncrementalCPGUpdater
 
+            # Reuse a CPG persisted by SmartGraphBuilder / run_index (stored in
+            # graph_path/metadata/cpg.bin) rather than regenerating it here.
+            from knowgraph.infrastructure.indexing.cpg_metadata import get_cpg_path
+
+            persisted_cpg = get_cpg_path(graph_path)
+
             updater = IncrementalCPGUpdater(graph_path)
             changes = updater.detect_changes(code_files)
             change_summary = updater.get_change_summary(changes)
@@ -84,24 +90,35 @@ class CodeIndexIntegration:
             if not updater.should_regenerate_cpg(changes):
                 logger.info("No file changes detected - skipping CPG regeneration")
 
-                # Try to use cached CPG
-                from knowgraph.infrastructure.caching import CPGCache
-                cache = CPGCache()
-                cached_cpg = cache.get_cached_cpg(input_path)
-
-                if cached_cpg:
-                    logger.info(f"Using cached CPG: {cached_cpg}")
+                # Prefer a CPG persisted by run_index (SmartGraphBuilder), then
+                # cached CPG, then fall through to regenerate.
+                if persisted_cpg:
+                    logger.info(f"Using persisted CPG: {persisted_cpg}")
                     results["cpg_generated"] = True
-                    results["cpg_path"] = str(cached_cpg)
+                    results["cpg_path"] = str(persisted_cpg)
                     results["cpg_from_cache"] = True
-
-                    # Continue with entity extraction using cached CPG
-                    cpg_path = cached_cpg
+                    cpg_path = persisted_cpg
                     self.cpg_path = cpg_path
                     self.cpg_generated = True
                 else:
-                    logger.warning("No cached CPG available despite no changes")
-                    # Fall through to generate new CPG
+                    # Try to use cached CPG
+                    from knowgraph.infrastructure.caching import CPGCache
+                    cache = CPGCache()
+                    cached_cpg = cache.get_cached_cpg(input_path)
+
+                    if cached_cpg:
+                        logger.info(f"Using cached CPG: {cached_cpg}")
+                        results["cpg_generated"] = True
+                        results["cpg_path"] = str(cached_cpg)
+                        results["cpg_from_cache"] = True
+
+                        # Continue with entity extraction using cached CPG
+                        cpg_path = cached_cpg
+                        self.cpg_path = cpg_path
+                        self.cpg_generated = True
+                    else:
+                        logger.warning("No cached CPG available despite no changes")
+                        # Fall through to generate new CPG
 
             # Step 3: Generate CPG (if needed)
             if not results.get("cpg_from_cache"):
