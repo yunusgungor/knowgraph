@@ -477,3 +477,23 @@ class TestVersionOrdering:
         assert sorted_versions[1] == Version(1, 0, 0, prerelease="beta")
         assert sorted_versions[2] == Version(1, 0, 0, prerelease="rc")
         assert sorted_versions[3] == Version(1, 0, 0)
+
+
+class TestPackageVersionConsistency:
+    """The MCP registry must match the package version."""
+
+    def test_registry_matches_package_version(self):
+        """get_current_version() equals __version__ after server registration."""
+        from knowgraph.adapters.mcp import server
+        from knowgraph.version import __version__
+
+        server._register_api_versions()
+        current = get_current_version()
+        assert str(current) == __version__, (
+            f"API registry version {current} != package version {__version__}"
+        )
+
+    def test_negotiate_rejects_unknown_version(self):
+        """negotiate_version raises for a version not in the registry."""
+        with pytest.raises(ValueError):
+            negotiate_version("9.9.9")

@@ -100,15 +100,16 @@ def _register_api_versions():
             "Conversation discovery",
         ],
     )
-    # Version 1.0.0 - Current stable release
+    # Version 1.0.1 - Current stable release (matches package __version__)
     register_version(
-        version="1.0.0",
+        version=__version__,
         status=VersionStatus.STABLE,
         release_date=now,
         features=[
             "Taint Analysis Refinement",
             "Resilience Improvements",
             "Full System Verification",
+            "Version consistency with package release",
         ],
     )
     logger.debug(f"Registered API versions, current: {get_current_version()}")
