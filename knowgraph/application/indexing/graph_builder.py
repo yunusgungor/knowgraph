@@ -264,7 +264,10 @@ def create_semantic_edges(nodes: list[Node], threshold: float = 0.2, max_edges_p
     return edges
 
 
-def create_reference_edges(nodes: list[Node]) -> list[Edge]:
+def create_reference_edges(
+    nodes: list[Node],
+    existing_symbols: dict[str, list[UUID]] | None = None,
+) -> list[Edge]:
     """Create directed edges based on definition/reference roles.
 
     If Node A references symbol 'foo' and Node B defines symbol 'foo',
@@ -273,6 +276,10 @@ def create_reference_edges(nodes: list[Node]) -> list[Edge]:
     Args:
     ----
         nodes: List of nodes with metadata['entities']
+        existing_symbols: Pre-computed global symbol table
+            (symbol -> defining node IDs) from previously indexed nodes, so
+            callers can avoid re-reading the whole existing graph. When None,
+            the table is built only from ``nodes`` (default behavior).
 
     Returns:
     -------
@@ -282,7 +289,7 @@ def create_reference_edges(nodes: list[Node]) -> list[Edge]:
     created_at = int(time.time())
 
     # 1. Build Global symbol table (Symbol -> Defining Node IDs)
-    symbol_definitions: dict[str, list[UUID]] = {}
+    symbol_definitions: dict[str, list[UUID]] = dict(existing_symbols or {})
     node_references: dict[UUID, set[str]] = {}
 
     for node in nodes:
@@ -597,22 +604,54 @@ class SmartGraphBuilder:
 
             # 4. Create Edges (Semantic + Reference)
             with self.perf_tracker.track("edge_creation"):
-                # Load existing node metadata for global reference context (OPTIMIZED)
                 from knowgraph.infrastructure.storage.filesystem import (
                     list_all_nodes,
                     read_node_metadata_only,
                 )
 
-                existing_metadata = []
+                # Reference-context resolution: build/load the global symbol
+                # table (symbol -> defining node IDs) for previously indexed
+                # nodes. Cache it on disk so incremental builds don't re-read
+                # every existing node file (which is O(existing nodes) I/O).
                 graph_path_obj = Path(graph_path)
-                if graph_path_obj.exists():
+                cache_dir = Path(graph_path) / ".cache"
+                symbols_cache = cache_dir / "reference_symbols.json"
+
+                existing_metadata = []
+                existing_symbols: dict[str, list[str]] | None = None
+                existing_real_node_ids: set[UUID] = set()
+
+                # Try the on-disk symbol cache first (fast path).
+                if symbols_cache.exists():
+                    try:
+                        import json as _json
+
+                        loaded = _json.loads(symbols_cache.read_text(encoding="utf-8"))
+                        existing_symbols = {
+                            sym: [str(n) for n in ids] for sym, ids in loaded.items()
+                        }
+                        # Real node IDs for edge filtering: all IDs referenced by
+                        # the symbol table are existing (real) nodes.
+                        existing_real_node_ids = {
+                            UUID(nid) for ids in existing_symbols.values() for nid in ids
+                        }
+                        logger.info(
+                            f"Loaded {len(existing_symbols)} reference symbols from cache"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Reference symbol cache unreadable: {e}")
+                        existing_symbols = None
+
+                # Cache miss: fall back to reading every existing node's metadata.
+                if existing_symbols is None and graph_path_obj.exists():
                     try:
                         node_ids = list_all_nodes(graph_path_obj)
+                        final_node_ids = {fn.id for fn in final_nodes}
 
                         # Parallel metadata loading
                         async def load_metadata(n_id):
                             # Skip nodes we just built
-                            if any(fn.id == n_id for fn in final_nodes):
+                            if n_id in final_node_ids:
                                 return None
 
                             # Load ONLY metadata (95% memory reduction)
@@ -620,6 +659,7 @@ class SmartGraphBuilder:
                                 None, read_node_metadata_only, n_id, graph_path_obj
                             )
                             if metadata_dict and metadata_dict.get("entities"):
+                                existing_real_node_ids.add(n_id)
                                 return Node(
                                     id=metadata_dict["id"],
                                     hash="",
@@ -654,8 +694,29 @@ class SmartGraphBuilder:
                 logger.info(f"Created {len(semantic_edges)} semantic edges from {len(final_nodes)} nodes")
 
                 # create_reference_edges uses global context to resolve symbols
-                reference_edges = create_reference_edges(all_context_nodes)
+                reference_edges = create_reference_edges(all_context_nodes, existing_symbols)
                 logger.info(f"Created {len(reference_edges)} reference edges (before filtering)")
+
+                # Persist the (now updated) reference symbol cache so the next
+                # incremental build skips re-reading all existing node files.
+                try:
+                    import json as _json
+
+                    merged_symbols = dict(existing_symbols or {})
+                    for node in final_nodes:
+                        ents = (node.metadata or {}).get("entities")
+                        if not isinstance(ents, list):
+                            continue
+                        for e in ents:
+                            if isinstance(e, dict) and e.get("type") == "definition" and e.get("name"):
+                                merged_symbols.setdefault(e["name"], []).append(str(node.id))
+                    cache_dir.mkdir(parents=True, exist_ok=True)
+                    symbols_cache.write_text(
+                        _json.dumps(merged_symbols, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not persist reference symbol cache: {e}")
 
                 # Filter reference_edges: We only want edges where BOTH ends are real nodes
                 # Real nodes = new nodes we just created (final_nodes)
@@ -663,12 +724,12 @@ class SmartGraphBuilder:
                 # We must NOT create edges pointing to these fake nodes!
                 new_node_ids = {n.id for n in final_nodes}
 
-                # Get IDs of all real nodes in the graph store (for validation)
-                existing_real_node_ids = set()
+                # Get IDs of all real nodes in the graph store (for validation).
+                # existing_real_node_ids may already be populated from the
+                # symbol cache (fast path); only augment from existing_metadata
+                # when we actually read node metadata (cache-miss path).
                 if existing_metadata:
-                    # existing_metadata contains fake nodes, but we need real node IDs
-                    # We already have them from list_all_nodes() call above (line 575)
-                    existing_real_node_ids = {n.id for n in existing_metadata}
+                    existing_real_node_ids |= {n.id for n in existing_metadata}
 
                 all_real_node_ids = new_node_ids | existing_real_node_ids
 
