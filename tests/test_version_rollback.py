@@ -573,3 +573,61 @@ class TestRollbackEdgeCases:
         final_manifest = read_manifest(temp_graph)
         assert final_manifest.node_count == 100
         assert final_manifest.edge_count == 50
+
+    def test_reindex_after_rollback_does_not_crash(self, temp_graph):
+        """Regression: writing a manifest after a rollback must not crash.
+
+        Previously a rollback stamped version_id as "vN-rollback"; the next
+        write_manifest with changed hashes did int("N-rollback") -> ValueError.
+        """
+        # Setup: v1 -> v2 (different file hashes)
+        version_mgr = VersionHistoryManager(temp_graph)
+        version_mgr.add_version(
+            node_count=100, edge_count=50, file_hashes={"file1.md": "hash1"}
+        )
+        version_mgr.add_version(
+            node_count=120, edge_count=60, file_hashes={"file1.md": "hash1", "file2.md": "hash2"}
+        )
+
+        manifest = Manifest(
+            version=1,
+            node_count=120,
+            edge_count=60,
+            file_hashes={"file1.md": "hash1", "file2.md": "hash2"},
+            edges_filename="edges.jsonl",
+            sparse_index_filename="sparse_index.pkl",
+            created_at=int(time.time()),
+            updated_at=int(time.time()),
+            semantic_edge_count=60,
+            finalized=True,
+            version_id="v2",
+        )
+        write_manifest(manifest, temp_graph)
+
+        # Rollback to v1
+        rollback_mgr = RollbackManager(temp_graph)
+        result = rollback_mgr.rollback_to_version("v1", create_backup=False)
+        assert result.success is True
+
+        # Reindex with NEW file hashes (this used to crash on the -rollback suffix)
+        updated = Manifest(
+            version=1,
+            node_count=90,
+            edge_count=40,
+            file_hashes={"file1.md": "hash1", "file2.md": "hash2", "file3.md": "hash3"},
+            edges_filename="edges.jsonl",
+            sparse_index_filename="sparse_index.pkl",
+            created_at=int(time.time()),
+            updated_at=int(time.time()),
+            semantic_edge_count=40,
+            finalized=True,
+            version_id="v1",  # will be auto-incremented by write_manifest
+        )
+        write_manifest(updated, temp_graph)
+
+        # Chain continues cleanly. The rollback keeps the manifest at the current
+        # version_id (v2, hashes unchanged), so the reindex bumps it to v3.
+        final_manifest = read_manifest(temp_graph)
+        assert final_manifest.version_id == "v3"
+        assert final_manifest.previous_version_id == "v2"
+        assert final_manifest.file_hashes == {"file1.md": "hash1", "file2.md": "hash2", "file3.md": "hash3"}

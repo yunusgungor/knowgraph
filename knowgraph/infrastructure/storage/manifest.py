@@ -237,8 +237,15 @@ def write_manifest(manifest: Manifest, graph_store_path: Path) -> None:
         if existing_manifest:
             # Check if this is an actual update (file hashes changed)
             if existing_manifest.file_hashes != manifest.file_hashes:
-                # Increment version
-                current_version_num = int(existing_manifest.version_id.lstrip("v"))
+                # Increment version. Use the shared suffix-safe parser so a
+                # "vN-rollback" version id never crashes the chain.
+                from knowgraph.infrastructure.storage.version_history import (
+                    VersionHistoryManager,
+                )
+
+                current_version_num = VersionHistoryManager.parse_version_num(
+                    existing_manifest.version_id
+                )
                 manifest.version_id = f"v{current_version_num + 1}"
                 manifest.previous_version_id = existing_manifest.version_id
             else:

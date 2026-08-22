@@ -269,6 +269,8 @@ async def knowgraph_query(
     max_tokens: Annotated[int, Field(description="Maximum token count for the context window (default: 3000).")] = 3000,
     enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
     lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
+    api_version: Annotated[str, Field(description="Requested API version to negotiate against the server registry (e.g., '1.0.1'). Omit to use the current version.")] = None,
+    min_api_version: Annotated[str, Field(description="Minimum acceptable API version. Rejected if `api_version` is below this.")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "query": query,
@@ -280,6 +282,8 @@ async def knowgraph_query(
         "max_tokens": max_tokens,
         "enable_hierarchical_lifting": enable_hierarchical_lifting,
         "lift_levels": lift_levels,
+        "api_version": api_version,
+        "min_api_version": min_api_version,
     }
     kwargs: dict[str, Any] = {}
     if ctx is not None:

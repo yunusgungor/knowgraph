@@ -505,3 +505,21 @@ class TestPackageVersionConsistency:
         info = get_version_info(get_current_version())
         assert info is not None
         assert isinstance(info.features, list)
+
+    def test_query_tool_exposes_api_version_parameters(self):
+        """The MCP query tool must expose api_version so negotiation is reachable.
+
+        Without these parameters the negotiation block in handle_query was dead
+        code: arguments.get("api_version") was always None because the tool's
+        schema did not accept it.
+        """
+        from inspect import signature
+
+        from knowgraph.adapters.mcp.server import knowgraph_query
+
+        params = signature(knowgraph_query).parameters
+        assert "api_version" in params
+        assert "min_api_version" in params
+        # Both default to None so existing clients are unaffected.
+        assert params["api_version"].default is None
+        assert params["min_api_version"].default is None

@@ -107,6 +107,21 @@ class VersionHistoryManager:
         if not self.versions_file.exists():
             self.versions_file.touch()
 
+    @staticmethod
+    def parse_version_num(version_id: str) -> int:
+        """Extract the numeric part of a version ID, ignoring any suffix.
+
+        Handles ids like "v1", "v2", and "v3-rollback" so a rollback marker or
+        other suffix never breaks the version chain (e.g. int("2-rollback")).
+
+        Args:
+            version_id: Version identifier (e.g., "v1")
+
+        Returns:
+            The numeric portion of the version ID
+        """
+        return int(version_id.lstrip("v").split("-")[0])
+
     def add_version(
         self,
         node_count: int,
@@ -131,7 +146,7 @@ class VersionHistoryManager:
         current_versions = self.list_versions(limit=1)
         if current_versions:
             last_version = current_versions[0]
-            version_num = int(last_version.version_id.lstrip("v")) + 1
+            version_num = self.parse_version_num(last_version.version_id) + 1
         else:
             version_num = 1
         version_id = f"v{version_num}"

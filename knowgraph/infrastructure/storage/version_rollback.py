@@ -136,7 +136,7 @@ class RollbackManager:
                 updated_at=int(time.time()),
                 semantic_edge_count=target_snapshot.edge_count,
                 finalized=True,
-                version_id=f"{target_version_id}-rollback",
+                version_id=target_version_id,
                 previous_version_id=current_version,
             )
 

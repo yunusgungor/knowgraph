@@ -86,9 +86,10 @@ async def handle_query(
             # are surfaced (telemetry) so version gating is observable, and an
             # unsupported version is rejected up front.
             requested_version = arguments.get("api_version")
+            min_api_version = arguments.get("min_api_version")
             if requested_version:
                 try:
-                    version = negotiate_version(requested_version)
+                    version = negotiate_version(requested_version, min_api_version)
                     features = []
                     try:
                         from knowgraph.shared.versioning import get_version_info
