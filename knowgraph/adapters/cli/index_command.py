@@ -194,8 +194,17 @@ async def run_index(
             link_conversations, input_path, source_type, graph_store_path, verbose
         )
 
-        # Step 9: Garbage-collect nodes whose source files were deleted
-        if gc and file_hash_map and base_path:
+        # Step 9: Garbage-collect nodes whose source files were deleted.
+        # Only run for local sources (markdown / local directory). Repository
+        # and conversation sources are indexed through ephemeral temp dirs, so
+        # their node paths point at transient files; GC against them would
+        # wrongly treat every node as orphaned and wipe the graph.
+        if (
+            gc
+            and file_hash_map
+            and base_path
+            and source_type not in ("repository", "conversation")
+        ):
             from knowgraph.adapters.cli.index_helpers import perform_gc
 
             garbage_count = await perform_gc(
