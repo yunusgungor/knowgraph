@@ -561,7 +561,22 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
             _log_verbose(verbose, f"Warning: Could not merge existing edges: {e}")
 
     click.echo(f"Writing {len(merged_edges)} edges to storage...")
-    await write_all_edges_async(merged_edges, graph_store_path)
+    # Optimize the common incremental case: when no existing edge touches a
+    # re-indexed node (filtered_old == old_edges, i.e. no stale edges), the
+    # merge is a pure append of the new edges — far cheaper than rewriting the
+    # whole edges.jsonl. Only fall back to the full atomic rewrite when some
+    # existing edge was dropped (stale).
+    _append_ok = False
+    if existing_manifest:
+        try:
+            _append_ok = (filtered_old_edges == old_edges)
+        except Exception:
+            _append_ok = False
+    if _append_ok:
+        _log_verbose(verbose, f"✓ Appending {len(edges)} new edges (no stale)")
+        await write_all_edges_async(edges, graph_store_path, append=True)
+    else:
+        await write_all_edges_async(merged_edges, graph_store_path)
     return sparse_embeddings
 
 

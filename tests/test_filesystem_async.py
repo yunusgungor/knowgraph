@@ -144,5 +144,53 @@ async def test_concurrent_node_reads(store_path):
     assert all(r.id == uid for r in results)
 
 
+@pytest.mark.asyncio
+async def test_async_edges_append(store_path):
+    """Append mode adds edges to the existing file instead of overwriting."""
+    e1 = Edge(
+        source=uuid4(), target=uuid4(), type="t1", score=0.9,
+        created_at=1, metadata={"k": 1},
+    )
+    e2 = Edge(
+        source=uuid4(), target=uuid4(), type="t2", score=0.8,
+        created_at=2, metadata={"k": 2},
+    )
+
+    # Initial write (overwrite).
+    await write_all_edges_async([e1], store_path)
+    # Append a second edge.
+    await write_all_edges_async([e2], store_path, append=True)
+
+    loaded = await read_all_edges_async(store_path)
+    assert len(loaded) == 2
+    assert {e.type for e in loaded} == {"t1", "t2"}
+
+
+@pytest.mark.asyncio
+async def test_async_edges_append_after_rewrite(store_path):
+    """Append after a full rewrite keeps prior edges then adds new ones."""
+    e1 = Edge(
+        source=uuid4(), target=uuid4(), type="a", score=1.0,
+        created_at=1, metadata={},
+    )
+    e2 = Edge(
+        source=uuid4(), target=uuid4(), type="b", score=1.0,
+        created_at=2, metadata={},
+    )
+
+    await write_all_edges_async([e1], store_path)
+    await write_all_edges_async([e2], store_path, append=True)
+    # A subsequent full rewrite replaces everything.
+    e3 = Edge(
+        source=uuid4(), target=uuid4(), type="c", score=1.0,
+        created_at=3, metadata={},
+    )
+    await write_all_edges_async([e3], store_path)  # append=False default
+
+    loaded = await read_all_edges_async(store_path)
+    assert len(loaded) == 1
+    assert loaded[0].type == "c"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

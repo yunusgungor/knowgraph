@@ -482,13 +482,18 @@ def read_all_edges(graph_store_path: Path) -> list[Edge]:
     return edges
 
 
-async def write_all_edges_async(edges: list[Edge], graph_store_path: Path) -> None:
-    """Write all edges to JSONL file (overwrites existing) - async version.
+async def write_all_edges_async(
+    edges: list[Edge], graph_store_path: Path, append: bool = False
+) -> None:
+    """Write all edges to JSONL file - async version.
 
     Args:
     ----
         edges: List of edges to write
         graph_store_path: Root graph storage directory
+        append: When True, append ``edges`` to the existing file instead of
+            overwriting it. Use only when no existing edge is being replaced
+            (no stale edges); a crash mid-append can leave a partial line.
 
     Raises:
     ------
@@ -499,6 +504,23 @@ async def write_all_edges_async(edges: list[Edge], graph_store_path: Path) -> No
     await ensure_directory_async(edges_dir)
 
     edges_file = edges_dir / "edges.jsonl"
+
+    if append:
+        try:
+            # Append without temp+rename. Every edge is written followed by a
+            # newline; write_all_edges_async (the full rewrite) always ends with
+            # "\n", so appended lines stay on their own rows.
+            async with aiofiles.open(edges_file, "a", encoding="utf-8") as file:
+                for edge in edges:
+                    edge_json = json.dumps(edge.to_dict(), ensure_ascii=False)
+                    await file.write(edge_json + "\n")
+            return
+        except Exception as error:
+            raise StorageError(
+                "Failed to append edges file",
+                {"error": str(error), "path": str(edges_file)},
+            ) from error
+
     temp_file = edges_file.with_suffix(".tmp")
 
     try:
