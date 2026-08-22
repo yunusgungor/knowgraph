@@ -7,12 +7,11 @@ import shutil
 
 import pytest
 
-# Disable the persistent Joern daemon in the unit test suite. Each test file
-# runs in its own subprocess in CI/pytest, so a daemon would pay the ~60s JVM
-# boot per module. Executors fall back to one-shot --script, which is
-# deterministic and fast enough. The daemon itself is exercised explicitly by
-# tests/test_joern_daemon.py (which passes use_daemon=True explicitly).
-os.environ.setdefault("KNOWGRAPH_JOERN_DAEMON", "false")
+# Use the persistent Joern daemon (default true) so the test suite exercises
+# the same code path as production and runs faster: --script pays a fresh JVM
+# per query, while the daemon reuses one JVM across the whole pytest process.
+# Set KNOWGRAPH_JOERN_DAEMON=false to force --script when needed.
+os.environ.setdefault("KNOWGRAPH_JOERN_DAEMON", "true")
 
 from knowgraph.core.joern.provider import JoernProvider
 
