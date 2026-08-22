@@ -183,7 +183,7 @@ class QueryRetriever:
                             enrich_with_conversations,
                         )
 
-                        nodes, _ = enrich_with_conversations(nodes, self.graph_store_path)
+                        nodes, _ = enrich_with_conversations(nodes, self.graph_store_path, edges=edges)
                     except Exception:
                         # Enrichment is best-effort; never fail retrieval over it.
                         pass
@@ -321,7 +321,7 @@ class QueryRetriever:
                             enrich_with_conversations,
                         )
 
-                        nodes, _ = enrich_with_conversations(nodes, self.graph_store_path)
+                        nodes, _ = enrich_with_conversations(nodes, self.graph_store_path, edges=edges)
                     except Exception:
                         pass
 

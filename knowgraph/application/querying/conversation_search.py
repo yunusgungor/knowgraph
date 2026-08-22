@@ -6,6 +6,7 @@ across both code and conversation history.
 
 from pathlib import Path
 
+from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
 
 
@@ -130,6 +131,7 @@ def enrich_with_conversations(
     query_result_nodes: list[Node],
     graph_store_path: Path,
     max_conversations: int = 3,
+    edges: list[Edge] | None = None,
 ) -> tuple[list[Node], dict]:
     """Enrich query results with related conversations.
 
@@ -140,6 +142,8 @@ def enrich_with_conversations(
         query_result_nodes: Nodes from query
         graph_store_path: Path to graph storage
         max_conversations: Max conversations to add
+        edges: Pre-loaded graph edges (avoids re-reading the edge file per query).
+            When omitted, edges are read from storage.
 
     Returns:
     -------
@@ -148,11 +152,13 @@ def enrich_with_conversations(
     """
     from knowgraph.infrastructure.storage.filesystem import read_all_edges, read_node_json
 
+    edge_list = edges if edges is not None else read_all_edges(graph_store_path)
+
     # Find conversation nodes that reference our result nodes
     result_node_ids = {node.id for node in query_result_nodes}
     conversation_nodes = []
 
-    for edge in read_all_edges(graph_store_path):
+    for edge in edge_list:
         # Look for conversation_references_code edges pointing to our results
         if edge.type == "conversation_references_code" and edge.target in result_node_ids:
             # Find the conversation node
