@@ -82,12 +82,25 @@ async def handle_query(
             await _global_rate_limiter.allow(identifier)
             trace.add_event("rate_limit_passed", {"identifier": identifier})
 
-            # Version negotiation
+            # Version negotiation. The negotiated version's advertised features
+            # are surfaced (telemetry) so version gating is observable, and an
+            # unsupported version is rejected up front.
             requested_version = arguments.get("api_version")
             if requested_version:
                 try:
                     version = negotiate_version(requested_version)
-                    trace.add_event("version_negotiated", {"version": str(version)})
+                    features = []
+                    try:
+                        from knowgraph.shared.versioning import get_version_info
+
+                        info = get_version_info(version)
+                        features = list(info.features) if info else []
+                    except Exception:
+                        pass
+                    trace.add_event(
+                        "version_negotiated",
+                        {"version": str(version), "features": features},
+                    )
                 except ValueError as e:
                     trace.add_event("version_error", {"error": str(e)})
                     return [

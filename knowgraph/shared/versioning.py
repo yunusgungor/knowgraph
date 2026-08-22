@@ -385,3 +385,8 @@ def negotiate_version(
 ) -> Version:
     """Negotiate version using the global registry."""
     return _registry.negotiate_version(requested, minimum)
+
+
+def get_version_info(version: Version | str) -> "VersionInfo | None":
+    """Get info (incl. features) for a registered API version."""
+    return _registry.get_version_info(version)

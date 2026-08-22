@@ -497,3 +497,11 @@ class TestPackageVersionConsistency:
         """negotiate_version raises for a version not in the registry."""
         with pytest.raises(ValueError):
             negotiate_version("9.9.9")
+
+    def test_get_version_info_exposes_features(self):
+        """Registered versions expose their advertised features."""
+        from knowgraph.shared.versioning import get_version_info
+
+        info = get_version_info(get_current_version())
+        assert info is not None
+        assert isinstance(info.features, list)
