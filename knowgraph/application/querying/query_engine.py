@@ -974,6 +974,23 @@ class QueryEngine:
                     # Allow cancellation
                     await asyncio.sleep(0)
 
+                    # Step 1.5: Hierarchical Context Lifting (if enabled).
+                    # Mirrors the sync `query()` path so async/MCP queries get the
+                    # same parent-directory context enrichment.
+                    if enable_hierarchical_lifting:
+                        from knowgraph.application.querying.hierarchical_lifting import (
+                            lift_hierarchical_context,
+                        )
+
+                        original_count = len(nodes)
+                        nodes = lift_hierarchical_context(
+                            nodes, self.graph_store_path, lift_levels=lift_levels, max_additional_nodes=5
+                        )
+                        if len(nodes) > original_count:
+                            # seed_node_ids stays the same: lifted nodes are context,
+                            # not direct matches.
+                            pass
+
                     # Step 2: Compute centrality on active subgraph (ASYNC with multiprocessing)
                     centrality_start = time.time()
                     active_node_ids = {node.id for node in nodes}
@@ -1190,6 +1207,8 @@ class QueryEngine:
         batch_size: int = 5,
         timeout: float | None = None,
         progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
+        enable_grounding: bool = False,
+        enable_temporal_filter: bool = False,
     ) -> list[QueryResult]:
         """Execute multiple queries concurrently with advanced features.
 
@@ -1255,6 +1274,8 @@ class QueryEngine:
                         enable_hierarchical_lifting=enable_hierarchical_lifting,
                         lift_levels=lift_levels,
                         with_explanation=False,  # Disable for batch performance
+                        enable_grounding=enable_grounding,
+                        enable_temporal_filter=enable_temporal_filter,
                     ),
                     timeout=timeout,
                 )

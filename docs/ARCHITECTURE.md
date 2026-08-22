@@ -1,8 +1,8 @@
 # KnowGraph Architecture & Joern Integration
 
-**Version**: 1.0.0  
+**Version**: 1.0.1  
 **Status**: Production Ready  
-**Last Updated**: December 27, 2024
+**Last Updated**: August 22, 2026
 
 ---
 
@@ -24,21 +24,54 @@ KnowGraph combines **Graph RAG** with **Joern Code Property Graph** analysis for
 │  ┌──────────────────────────────────────┐                   │
 │  │      Graph Storage (NetworkX)        │                   │
 │  │  • Nodes: Code entities, docs        │                   │
-│  │  • Edges: Relationships, flows       │                   │
+│  │  • Edges: Relationships, flows,      │                   │
+│  │           grounded, SUPERSEDES       │                   │
 │  └──────────────────────────────────────┘                   │
-│         │                        │                           │
-│         ▼                        ▼                           │
-│  ┌─────────────┐         ┌─────────────┐                    │
-│  │ Joern CPG   │         │  Semantic   │                    │
-│  │  Analysis   │         │   Search    │                    │
-│  └─────────────┘         └─────────────┘                    │
+│         │           │                  │                     │
+│         ▼           ▼                  ▼                     │
+│  ┌─────────────┐ ┌────────────────┐ ┌────────────────┐      │
+│  │ Joern CPG   │ │ Graph Eng.     │ │  Semantic      │      │
+│  │  Analysis   │ │ Claims Layer   │ │   Search       │      │
+│  │             │ │ (grounding,    │ │                │      │
+│  │             │ │ temporal, SC)  │ │                │      │
+│  └─────────────┘ └────────────────┘ └────────────────┘      │
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Joern Integration Architecture (v1.0.0)
+## Graph Engineering / Claims Layer (v1.0.1)
+
+KnowGraph ports the **Graph Engineering verification layer** —
+`knowgraph.domain.claims` — to ground answers in real graph evidence with
+**zero extra LLM calls** during query time.
+
+| Module | Role | Live? |
+|--------|------|-------|
+| `sc_extractor` | R-008 SC-quote + P3 entailment chain: forces verbatim both-entity quotes on every extracted relation, verifies entailment before publication. | ✅ **live** — indexing (`--enable-short-unit`) |
+| `unitizer` | D-1 deterministic, LLM-free sentence → self-contained subject-anchored proposition decomposition + rule edges. | ✅ **live** — called by `sc_extractor` |
+| `temporal_filter` | `filter_edges_by_temporal` — drops edges sourced from superseded nodes before traversal. | ✅ **live** — retriever (`enable_temporal_filter`) |
+| `temporal_resolver` | Builds `SUPERSEDES` / `CONTRADICTS` edges from claim timestamps; point-in-time queries. | ✅ **live** — post-index `build_temporal_edges` hook |
+| `grounding_evaluator` | Entity-in-answer classification (`grounded` / `isolated` / `absent`) against the active subgraph. | ⚠️ **partially live** — only `verify_entities_in_answer` (MCP answer annotation). `GroundingEvaluator.evaluate_and_filter`, `RatchetLoop`, `QueryPathEvaluator` are tested-library only (no production call). |
+| `entity_resolver` | Canonical entity resolution, contextual disambiguation, inspectable merges. | ❌ **dead code (production)** — no production import; tested library only. |
+| `dag_planner`, `reflective_loop`, `traversal_engine` | — | ❌ dead code (kept as tested library modules, YAGNI) |
+
+**Where it hooks in:**
+- **Indexing** (`--enable-short-unit`): after LLM entity extraction, non-code
+  chunks run the SC-quote + P3 chain; published relations become `grounded`
+  graph edges (`score=0.9`, `source="sc_p3"`).
+- **Query** (`enable_grounding`): grounded (evidence-backed) nodes are preferred
+  in context ranking (×1.2 bonus, isolated ×0.5 penalty); the raw LLM answer is
+  annotated with unbacked entities via `grounding_evaluator.verify_entities_in_answer`
+  (annotation, never a strip).
+- **Query** (`enable_temporal_filter`): `filter_edges_by_temporal` drops edges
+  originating from superseded nodes before traversal.
+- **Grounding implies temporal filtering** (a single evidence-awareness lever).
+
+---
+
+## Joern Integration Architecture
 
 ### Component Overview
 
@@ -65,18 +98,18 @@ KnowGraph combines **Graph RAG** with **Joern Code Property Graph** analysis for
 │  │ CodeQueryHandler  Semantic   Both            │            │
 │  └──────────────────────────────────────────────┘            │
 │                                                               │
-│  Phase 3: Entity Extraction                                  │
+│  Phase 3: Code relation extraction (CodeIndexIntegration)    │
 │  ┌──────────────────────────────────────────────┐            │
-│  │ CallGraphExtractor → Graph Edges             │            │
-│  │ DataFlowAnalyzer → Security Flows            │            │
-│  │ CodeDocsLinker → Documentation Links         │            │
+│  │ CallGraphExtractor → call edges              │            │
+│  │ DataFlowAnalyzer → data_flow edges           │            │
+│  │ CodeDocsLinker → documentation links         │            │
 │  └──────────────────────────────────────────────┘            │
 │                                                               │
-│  Phase 4: Performance                                        │
+│  Phase 4: Performance & incremental                          │
 │  ┌──────────────────────────────────────────────┐            │
 │  │ CPGCache → 24h caching                       │            │
-│  │ IncrementalCPGUpdater → Change detection     │            │
-│  │ ParallelCPGGenerator → Large repos           │            │
+│  │ IncrementalCPGUpdater → change detection     │            │
+│  │ ParallelCPGGenerator → parallel CPG          │            │
 │  └──────────────────────────────────────────────┘            │
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
@@ -91,11 +124,11 @@ KnowGraph combines **Graph RAG** with **Joern Code Property Graph** analysis for
 ```
 Input Directory
     ↓
-CodeFileDetector (15 languages)
+CodeFileDetector (14+ languages)
     ↓
 IncrementalCPGUpdater (change detection)
     ↓
-    ├─ No changes → Use cached CPG
+    ├─ No changes → Use cached / persisted CPG
     └─ Changes detected
         ↓
         ├─ Small repo → Single CPG
@@ -105,11 +138,9 @@ IncrementalCPGUpdater (change detection)
             ↓
         CodeEntityExtractor (methods, classes)
             ↓
-        CallGraphExtractor (relationships)
-            ↓
-        DataFlowAnalyzer (security flows)
-            ↓
-        CodeDocsLinker (doc links)
+        CallGraphExtractor (call edges)      ─┐
+        DataFlowAnalyzer (data_flow edges)    ├→ written to Graph Storage
+        CodeDocsLinker (documentation links)  ─┘
             ↓
         CPGCache (24h storage)
             ↓
@@ -121,7 +152,7 @@ IncrementalCPGUpdater (change detection)
 ```
 User Query
     ↓
-QueryClassifier (100% accuracy)
+QueryClassifier (pattern-based routing)
     ↓
     ├─ CODE → CodeQueryHandler
     │           ↓
@@ -135,6 +166,11 @@ QueryClassifier (100% accuracy)
     └─ HYBRID → Both (parallel)
                 ↓
             Merge results
+                ↓
+   [optional] enable_grounding / enable_temporal_filter
+                ↓
+       Grounded ranking + entity-in-answer
+       verification (zero extra LLM calls)
 ```
 
 ---
@@ -158,7 +194,7 @@ QueryClassifier (100% accuracy)
 - Purpose: Extract methods and classes from CPG
 - Input: CPG path
 - Output: Entity list (methods, classes)
-- Performance: 474 entities in 30s
+- Performance: ~474 entities in 30s on a small repo
 
 **CPG Metadata**
 - Purpose: Persist CPG paths for query-time use
@@ -170,8 +206,8 @@ QueryClassifier (100% accuracy)
 **QueryClassifier**
 - Purpose: Classify query type
 - Algorithm: Keyword matching + pattern recognition
-- Accuracy: 100% (14/14 test cases)
-- Types: CODE, TEXT, HYBRID
+- Accuracy: High (verified in `tests/test_query_integration.py`)
+- Types: CODE, TEXT, HYBRID, DATAFLOW
 
 **CodeQueryHandler**
 - Purpose: Route CODE queries to Joern tools
@@ -179,26 +215,35 @@ QueryClassifier (100% accuracy)
 - Execution: Async with timeout
 - Performance: 2-5s per query
 
-### Phase 3: Entity Extraction
+### Phase 3: Code Relation Extraction (CodeIndexIntegration)
+
+These modules run during indexing (via `CodeIndexIntegration.process_code_directory`,
+invoked by the MCP `knowgraph_index` tool on local directories) and **write
+`call` / `data_flow` edges into the graph store**:
 
 **CallGraphExtractor**
 - Purpose: Extract function call relationships
 - Input: CPG
-- Output: Call edges (caller → callee)
-- Performance: 85 edges per project
+- Output: `call` edges (caller → callee), written against real code nodes
+- Used by: `code_index_integration` (index time); `knowgraph_analyze_call_graph` (query time)
 
 **DataFlowAnalyzer**
-- Purpose: Track tainted data flows
+- Purpose: Extract tainted data flows
 - Algorithm: Source → Sink analysis
-- Use case: Security vulnerability detection
-- Performance: 45 flows per project
+- Output: `data_flow` edges
+- Used by: `code_index_integration` (index time); `knowgraph_security_scan` with `scan_type` (query time)
 
 **CodeDocsLinker**
 - Purpose: Link code entities to documentation
 - Strategy: Name matching + proximity
-- Output: Code-doc edges
+- Output: Code-doc links
 
-### Phase 4: Performance
+**JoernQueryExecutor** (query-time)
+- Purpose: Execute arbitrary native Joern DSL queries on demand
+- Used by: `knowgraph_joern_query`, `knowgraph_security_scan` (policy scan)
+- Backed by the persistent Joern daemon (`KNOWGRAPH_JOERN_DAEMON`)
+
+### Phase 4: Performance & Incremental
 
 **CPGCache**
 - Purpose: Cache generated CPGs
@@ -207,16 +252,23 @@ QueryClassifier (100% accuracy)
 - Benefit: <1s re-indexing
 
 **IncrementalCPGUpdater**
-- Purpose: Detect file changes
-- Algorithm: MD5 hash comparison
-- Output: Added/modified/deleted lists
-- Benefit: Skip unchanged files
+- Purpose: Detect file changes (added/modified/deleted)
+- Algorithm: change detection over code files
+- Output: skip CPG regeneration when unchanged
 
 **ParallelCPGGenerator**
-- Purpose: Generate CPGs in parallel
-- Strategy: Split by language
-- Threshold: 50+ files or 3+ languages
-- Benefit: 2-3x faster for large repos
+- Purpose: Generate CPGs in parallel (large / multi-language repos)
+
+**JoernDaemon**
+- Purpose: Persistent single-JVM Joern REPL (avoids per-query JVM boot)
+- Flag: `KNOWGRAPH_JOERN_DAEMON` (default `true`)
+- Disable for one-shot environments (e.g. tests)
+
+> The CLI `knowgraph index` path (`run_index` → `SmartGraphBuilder`) folds CPG
+> **entity nodes** + `hierarchy` edges into the graph but does **not** emit CPG
+> `call`/`data_flow` edges; those are produced by the MCP `knowgraph_index`
+> code-analysis stage (`CodeIndexIntegration`). The stored CPG is available for
+> query-time native Joern queries in both cases.
 
 ---
 
@@ -224,15 +276,20 @@ QueryClassifier (100% accuracy)
 
 ### Indexing Performance
 
+Typical values for a small project (~9 files); scale with project size.
+
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Code detection | <1s | 15 languages |
-| CPG generation | 20-30s | 9 files |
-| Entity extraction | 5-10s | 474 entities |
-| Call graph | 2-5s | 85 edges |
-| Data flow | 2-5s | 45 flows |
+| Code detection | <1s | 14+ languages |
+| CPG generation | 20-30s | small project |
+| Entity extraction | 5-10s | ~474 entities on a small repo |
 | **Total (first run)** | **~30s** | Full analysis |
 | **Total (cached)** | **<1s** | Incremental |
+
+> Call-graph and data-flow extraction runs as part of the **code-analysis
+> indexing stage** (`CodeIndexIntegration`, MCP `knowgraph_index` on local
+> directories); security/Joern tool queries are **query-time** over the stored
+> CPG — see [Phase 3](#phase-3-code-relation-extraction-codeindexintegration).
 
 ### Query Performance
 
@@ -329,18 +386,16 @@ if query_type == QueryType.CODE:
 
 ## Testing Architecture
 
-### Test Suites
+The project has an extensive test suite (`tests/`, 800+ tests) covering graph
+building, query engine (sync + async), retrieval, traversal, grounding
+(`test_grounding_evaluator.py`, `test_entity_resolver.py`, `test_sc_extractor.py`),
+temporal filtering (`test_temporal_edges.py`, `test_temporal_resolver.py`), claims
+unitizer (`test_claims_unitizer.py`), versioning, conversation linking, security /
+taint analysis, MCP e2e, and resilience (circuit breaker, throttling).
 
-1. **test_integration_full.py** - Full integration (4/4 passing)
-2. **test_e2e_simple.py** - End-to-end (6/6 passing)
-3. **test_query_integration.py** - Query routing (100%)
-
-### Test Coverage
-
-- **Modules**: 13/13 tested
-- **Features**: 6/6 verified
-- **Integration**: 100% confirmed
-- **Dead Code**: 0
+Key suites include `test_integration_full.py`, `test_e2e_simple.py`,
+`test_query_integration.py`, `test_grounding_evaluator.py`, and
+`test_mcp_e2e.py`.
 
 ---
 
@@ -391,8 +446,10 @@ if query_type == QueryType.CODE:
 
 - **Streaming CPG**: Process large files incrementally
 - **Delta CPG**: Only analyze changed functions
-- **Persistent Daemon**: Keep Joern process running
-- **Query Caching**: Cache query results
+- **Persistent Daemon**: ✅ *implemented* — single-JVM Joern daemon
+  (`KNOWGRAPH_JOERN_DAEMON`, default on)
+- **Query Caching**: ✅ *implemented* — LLM answer cache + query-result cache
+  (both invalidated on graph change)
 
 ---
 
@@ -404,5 +461,8 @@ KnowGraph's architecture combines:
 - ✅ Semantic search (embeddings)
 - ✅ Smart caching (performance)
 - ✅ Incremental updates (efficiency)
+- ✅ Answer grounding (Graph Engineering claims layer)
 
-**Result**: Production-ready system with 100% test coverage and zero dead code.
+**Result**: Production-ready system with a large, actively maintained test
+suite (graph, query, grounding, Joern, MCP, resilience) covering the full
+indexing → storage → query → grounding pipeline.

@@ -397,6 +397,8 @@ async def handle_batch_query(
         max_tokens = arguments.get("max_tokens", 3000)
         enable_hierarchical_lifting = arguments.get("enable_hierarchical_lifting", True)
         lift_levels = arguments.get("lift_levels", 2)
+        enable_grounding = arguments.get("enable_grounding", False)
+        enable_temporal_filter = arguments.get("enable_temporal_filter", False)
 
         engine = QueryEngine(graph_path, provider=provider)
 
@@ -408,13 +410,14 @@ async def handle_batch_query(
             max_tokens=max_tokens,
             enable_hierarchical_lifting=enable_hierarchical_lifting,
             lift_levels=lift_levels,
+            enable_grounding=enable_grounding,
+            enable_temporal_filter=enable_temporal_filter,
         )
 
         # Format results with LLM generation if provider available (PARALLELIZED)
         async def generate_answer_for_result(query: str, result: Any) -> dict:
             """Generate LLM answer for a single query result."""
             answer = result.context
-            enable_grounding = arguments.get("enable_grounding", False)
             if provider and result.answer:  # Only if we have context
                 try:
                     prompt = build_llm_prompt(query, result.context)

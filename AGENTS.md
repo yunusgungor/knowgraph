@@ -6,7 +6,7 @@ source code (via the Joern CLI) into a graph store and answers security/code
 queries. Python 3.10–3.13 supported.
 
 ## Key facts
-- `__version__` lives in `knowgraph/version.py` (currently `1.0.0`).
+- `__version__` lives in `knowgraph/version.py` (currently `1.0.1`).
 - `CURRENT_API_VERSION` in `knowgraph/shared/versioning.py` is derived from
   `__version__` — keep them in sync by editing only `knowgraph/version.py`.
 - Coverage threshold is defined ONCE in `pytest.ini` (`--cov-fail-under=3`).
@@ -15,8 +15,8 @@ queries. Python 3.10–3.13 supported.
 
 ## Dependencies / version pins
 - `mcp` is pinned `>=2.0.0`. The MCP server (`knowgraph/adapters/mcp/server.py`)
-  uses FastMCP (`mcp.server.fastmcp.FastMCP`) — the decorator-based low-level
-  `Server` API was removed in 2.0.
+  uses the `mcp.server.MCPServer` decorator API (`@app.tool`, `@app.resource`,
+  `@app.prompt`) — the low-level `Server` methods API was removed in 2.0.
 - `pydantic-settings` is required by `knowgraph/config.py` (`BaseSettings`).
 
 ## Testing

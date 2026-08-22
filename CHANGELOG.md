@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-08-22
+
+### ⚓ Graph Engineering: Grounding & Anti-Hallucination
+- **Answer Grounding**: `enable_grounding` query flag prefers graph-evidence-backed nodes in context; generated answers are annotated with entities not found in the retrieved graph — zero extra LLM calls (`grounding_evaluator.verify_entities_in_answer`).
+- **Entity Resolution**: Cloned `entity_resolver` exact-name fast-path for resolving SC-extractor relation objects at build time.
+- **Temporal Filtering**: `enable_temporal_filter` drops superseded-conversation edges before traversal; grounding implies temporal filtering.
+- **SC-Quoted Extraction** (`index --enable-short-unit`): R-008 SC-quote + P3 entailment chain publiches verified relations as `grounded` graph edges (`score=0.9`, `source="sc_p3"`).
+- **Version Negotiation**: MCP queries accept `api_version` / `min_api_version`; negotiation against the server registry, unsupported versions rejected up front.
+
+### 🚀 Indexing & Storage
+- Surface SC-extractor relations as grounded graph edges; relations whose object lives only inside the subject's own document are skipped (anti-fabrication).
+- Reference-symbol table cached on disk to skip re-reading all existing nodes on incremental builds.
+- CPG entity nodes built once per file (not per chunk); edges appended to `edges.jsonl` instead of full rewrite on incremental index.
+- LLM skipped for code chunks (Joern is the code extractor); auto-tuned LLM batch size to available RAM.
+
+### ⚡ Performance & Resilience
+- Persistent single-JVM Joern daemon (`KNOWGRAPH_JOERN_DAEMON`, default on); Joern balances fixed auto-detect worker cap to avoid rate limits.
+- LLM retry loop + circuit breaker in the OpenAI provider; dynamic rate limiting on all provider calls.
+- Cached generated LLM answers (avoid re-billing the same question) and query-result cache invalidated on graph change.
+- `MAX_TOKENS` (context cap) decoupled from `LLM_MAX_TOKENS` (output cap).
+
+### 🔧 Fixes
+- Conversation auto-linking wired (was raising `TypeError`); conversation enrichment reuses cached edges.
+- Query sync path routes CODE/HYBRID/DATAFLOW through the code handler; Joern CLI-unavailable degrades safely.
+- GC disabled for repository/conversation sources; version chain preserved on stats update; suffix-safe version parser.
+- Graph store path resolution unified across CLI and MCP.
+
 ## [1.0.0] - 2026-01-18
 
 ### 🚀 Stability & Correctness
@@ -55,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Search**: FTS5-based bookmark search and indexing.
 - **Health**: Added diagnostic handlers for system health checks.
 
+[1.0.1]: https://github.com/yunusgungor/knowgraph/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/yunusgungor/knowgraph/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/yunusgungor/knowgraph/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/yunusgungor/knowgraph/compare/v0.8.0...v0.8.1

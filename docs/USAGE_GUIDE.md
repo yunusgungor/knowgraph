@@ -13,6 +13,9 @@ Bu kılavuz, KnowGraph'ın kod analizi yeteneklerini (Joern entegrasyonu dahil) 
 6. [Genel Arama ve Keşif](#6-genel-arama-ve-keşif)
 7. [Power User: Ham Sorgular (Raw Query)](#7-power-user-ham-sorgular-raw-query)
 8. [Örnek İş Akışları (Kombinasyonlar)](#8-örnek-iş-akışları-kombinasyonlar)
+8.5. [Graph Engineering: Grounding & Anti-Halüsinasyon](#85-graph-engineering-grounding--anti-halüsinasyon)
+9. [İpuçları ve Püf Noktaları](#9-ipuçları-ve-püf-noktaları)
+10. [Sorun Giderme (Troubleshooting)](#10-sorun-giderme-troubleshooting)
 
 ---
 
@@ -130,6 +133,60 @@ Bu özellikleri birleştirerek karmaşık senaryoları çözebilirsiniz.
 2.  `Which files import outdated_lib?` (Eski kütüphaneyi kullananları bul)
 3.  `Where is LegacyClass used?` (Eski sınıfın kullanım yerlerini tespit et)
 4.  `Find comments about "remove"` (Silinmesi gereken notları bul)
+
+## 8.5. Graph Engineering: Grounding & Anti-Halüsinasyon 🛡️
+
+KnowGraph v1.0.1, üretilen cevapları grafik kanıtına bağlayan bir **doğrulama katmanı** sunar. Tümü **sıfır ekstra LLM çağrısı** ile çalışır.
+
+*   **Answer Grounding (Cevaplama Dayanağı):** Sorguya `enable_grounding` ekleyin. Grafikte kanıtı olan (kenara bağlı) düğümler önceliklendirilir; izole düğümler arka plana atılır. LLM cevabı üretildikten sonra, cevaptaki varlıklar (entity'ler) grafikle doğrulanır:
+    *   `grounded`: Cevapta var + grafik kenarının ucu.
+    *   `isolated`: Cevapta var + grafikte biliniyor ama aktif alt-grafta kenarı yok.
+    *   `absent`: Cevapta var ama grafiğin varlık kümesinde yok.
+    *   `isolated`/`absent` varlıklar cevabın sonuna "doğrula" notu olarak eklenir. **Hiçbir içerik silinmez** — bu bir filtre değil, dürüst bir etikettir.
+
+    ```python
+    # MCP
+    knowgraph_query(query="Kim Nova Dynamics'in CEO'su?", enable_grounding=True)
+
+    # CLI
+    knowgraph query "Nova Dynamics CEO'su kim?" --enable-grounding
+    ```
+
+    **Not:** `enable_grounding` açıldığında zaman filtrelemesi de otomatik devreye girer (birbirini kapsayan kaldıraçlar).
+
+*   **Temporal Filtering (Zaman Filtresi):** Konuşmalar zamanla çelişen/eski bilgiler üretebilir. `enable_temporal_filter=True` ile aşılması gereken (superseded) konuşmalardan gelen kenarlar travers öncesi düşürülür — "eski bilgi asla güncel görünmez, en yeni iddia kazanır."
+
+    ```python
+    result = await engine.query_async(
+        "Nova Dynamics'in CEO'su kimdi?",
+        enable_temporal_filter=True,
+    )
+    ```
+
+*   **SC-Quoted Extraction (`--enable-short-unit`):** İndeksleme sırasında kod olmayan chunk'lar (docs, README, düz metin) üzerinde R-008 SC-quote + P3 entailment zinciri çalışır:
+    1.  **Unitizer (D-1):** Deterministik, LLM'siz cümle → özne-eksenli önerme ayrıştırma.
+    2.  **SC-quote (D-2):** LLM, her ilişkiye kaynak metinden **kelimesi kelimesine, her iki varlığı da içeren bir alıntı** eklemek zorundadır; alıntısız ilişkiler tamamen atlanır (anti-üretim).
+    3.  **P3 doğrulama (D-3):** Alıntının (özne, yüklem, nesne) ilişkisini gerçekten destekleyip desteklemediği denetlenir.
+    4.  Sonuç, grafikte `grounded` kenar olarak yayınlanır.
+
+    ```bash
+    knowgraph index ./my-project --enable-short-unit
+    ```
+
+    Yayınlanan ilişkiler düğüm `metadata["relations"]` altında saklanır ve `score=0.9`, `source="sc_p3"` ile sorgulanabilir `grounded` kenarlara dönüşür.
+
+*   **API Version Negotiation:** MCP istemcisi istediği API sürümünü ve minimum kabul edilebilir sürümü belirtebilir:
+
+    ```json
+    {
+      "tool": "knowgraph_query",
+      "arguments": {
+        "query": "…",
+        "api_version": "1.0.1",
+        "min_api_version": "1.0.0"
+      }
+    }
+    ```
 
 ## 9. İpuçları ve Püf Noktaları 💡
 

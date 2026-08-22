@@ -1,4 +1,4 @@
-# 🧠 KnowGraph: Graph RAG & MCP Server for Code (v1.0.0 🚀)
+# 🧠 KnowGraph: Graph RAG & MCP Server for Code (v1.0.1 🚀)
 
 [![CI](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml)
 [![Joern](https://img.shields.io/badge/Powered_by-Joern_CPG-orange?style=flat-square)](https://joern.io)
@@ -13,6 +13,10 @@
 > **"Your code is not just text, it's a living graph."**  
 > Shift from vector similarity to the deterministic clarity of **Graph Theory** and **Joern Code Property Graph**.
 
+> **v1.0.1 — Answer Grounding & Anti-Hallucination.** Evidence-backed answers
+> with entity-level verification, temporal filtering, SC-quoted (P3-verified)
+> relation extraction, and API version negotiation.
+
 [⚡ Quick Start](#-quick-start) • [📚 Full Documentation](docs/USER_GUIDE.md) • [📘 Example Usage Guide](docs/USAGE_GUIDE.md)
 
 </div>
@@ -24,7 +28,8 @@
 KnowGraph is an **MCP (Model Context Protocol) server** that enhances AI coding assistants with:
 
 - **🎯 Graph-Based Code Understanding**: Follows real relationships (imports, calls, inheritance)
-- **🔍 Deep Security Analysis**: Joern-powered vulnerability detection (SQL injection, XSS, buffer overflows)
+- **🔍 Deep Security Analysis**: Joern-powered vulnerability detection (SQL injection, buffer overflows via policy scans; XSS/XXE/SSRF via taint analysis)
+- **⚓ Answer Grounding**: Verifies generated answers against graph evidence (anti-hallucination)
 - **📊 Impact Analysis**: Predict ripple effects of code changes
 - **🕰️ Time-Travel Debugging**: Version control for your knowledge graph
 - **💬 Conversational Memory**: Index and search your AI chat history
@@ -136,11 +141,14 @@ For detailed usage, configuration, and advanced features, see the **[User Guide]
 **Quick Links:**
 - [Installation & Setup](docs/USER_GUIDE.md#3-installation)
 - [MCP Server Integration](docs/USER_GUIDE.md#8-mcp-server-integration)
-- [Joern Code Analysis](docs/USER_GUIDE.md#6-joern-code-analysis-new-v100)
+- [Joern Code Analysis](docs/USER_GUIDE.md#6-joern-code-analysis)
+- [Graph Engineering: Grounding & Anti-Hallucination](docs/USER_GUIDE.md#10-graph-engineering-grounding--anti-hallucination)
 - [Advanced Querying](docs/USER_GUIDE.md#9-advanced-querying)
-- [Performance Optimization](docs/USER_GUIDE.md#13-performance-optimization)
-- [Security Analysis](docs/USER_GUIDE.md#14-security-analysis-deep-dive)
-- [Troubleshooting](docs/USER_GUIDE.md#17-troubleshooting--faq)
+- [Performance Optimization](docs/USER_GUIDE.md#14-performance-optimization)
+- [Security Analysis](docs/USER_GUIDE.md#15-security-analysis-deep-dive)
+- [Troubleshooting](docs/USER_GUIDE.md#18-troubleshooting--faq)
+- **[📘 Example Usage Guide (New!)](docs/USAGE_GUIDE.md)**: All commands, combinations and workflows.
+- [Architecture](docs/ARCHITECTURE.md)
 - **[📘 Example Usage Guide (New!)](docs/USAGE_GUIDE.md)**: All commands, combinations and workflows.
 - [Architecture](docs/ARCHITECTURE.md)
 

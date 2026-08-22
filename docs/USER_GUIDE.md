@@ -1,7 +1,7 @@
 # KnowGraph User Guide
 
-**Version:** 1.0.0  
-**Last Updated:** January 17, 2026
+**Version:** 1.0.1  
+**Last Updated:** August 22, 2026
 
 Welcome to the comprehensive KnowGraph User Guide. This document covers everything you need to know to effectively use KnowGraph as a Graph RAG system with **integrated Joern code analysis** and MCP server for your AI coding assistants.
 
@@ -14,18 +14,19 @@ Welcome to the comprehensive KnowGraph User Guide. This document covers everythi
 3. [Installation](#3-installation)
 4. [Configuration](#4-configuration)
 5. [Indexing Your Knowledge Base](#5-indexing-your-knowledge-base)
-6. [Joern Code Analysis (NEW v1.0.0)](#6-joern-code-analysis-new-v100)
+6. [Joern Code Analysis](#6-joern-code-analysis)
 7. [Querying the Knowledge Graph](#7-querying-the-knowledge-graph)
 8. [MCP Server Integration](#8-mcp-server-integration)
 9. [Advanced Querying](#9-advanced-querying)
-10. [Graph Versioning (Time Travel)](#10-graph-versioning-time-travel)
-11. [Conversational Memory](#11-conversational-memory)
-12. [Post-Indexing Automation](#12-post-indexing-automation)
-13. [Performance Optimization](#13-performance-optimization)
-14. [Security Analysis Deep Dive](#14-security-analysis-deep-dive)
-15. [Enterprise Resilience & Production](#15-enterprise-resilience--production)
-16. [Command Reference](#16-command-reference)
-17. [Troubleshooting & FAQ](#17-troubleshooting--faq)
+10. [Graph Engineering: Grounding & Anti-Hallucination](#10-graph-engineering-grounding--anti-hallucination)
+11. [Graph Versioning (Time Travel)](#11-graph-versioning-time-travel)
+12. [Conversational Memory](#12-conversational-memory)
+13. [Post-Indexing Automation](#13-post-indexing-automation)
+14. [Performance Optimization](#14-performance-optimization)
+15. [Security Analysis Deep Dive](#15-security-analysis-deep-dive)
+16. [Enterprise Resilience & Production](#16-enterprise-resilience--production)
+17. [Command Reference](#17-command-reference)
+18. [Troubleshooting & FAQ](#18-troubleshooting--faq)
 
 ---
 
@@ -39,7 +40,10 @@ KnowGraph is a **Graph RAG (Retrieval-Augmented Generation)** system that transf
 - **Centrality Analysis**: Identifies architecturally critical components
 - **Deterministic Provenance**: Provides verifiable reasoning paths
 - **Hierarchical Understanding**: Interprets code within project context
-- **Deep Code Analysis**: Joern-powered security and data flow analysis (NEW v1.0.0)
+- **Deep Code Analysis**: Joern-powered security and data flow analysis
+- **Answer Grounding**: Verifies generated answers against graph evidence (anti-hallucination)
+- **Temporal Filtering**: Drops superseded-conversation edges before traversal
+- **SC-Quoted Extraction**: Self-contained, P3-verified relation extraction with zero fabricated edges
 
 ### Key Benefits
 
@@ -47,9 +51,10 @@ KnowGraph is a **Graph RAG (Retrieval-Augmented Generation)** system that transf
 - 🔍 **Deep Understanding**: Follows dependency chains and architectural patterns
 - 🔬 **Code Analysis**: Automatic vulnerability detection and data flow tracking
 - 📊 **Impact Analysis**: Predict ripple effects of code changes
+- ⚓ **Answer Grounding**: Evidence-backed answers with entity-level verification
 - 🚀 **High Performance**: Smart caching and hybrid intelligence (CPG caching, incremental updates)
 - 🔌 **MCP Compatible**: Works with Claude Desktop, Cursor, and other AI editors
-- 🛡️ **Production Ready**: Enterprise resilience patterns + 100% test coverage
+- 🛡️ **Production Ready**: Enterprise resilience patterns + full test coverage
 - 🕰️ **Time Travel**: Version control for your knowledge graph
 - 💬 **Conversational Memory**: Indexes your chats alongside your code
 
@@ -129,7 +134,7 @@ Add to `~/.gemini/antigravity/mcp_config.json`:
       "args": ["serve"],
       "env": {
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
-        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-2-1212",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
         "KNOWGRAPH_API_KEY": "sk-or-v1-your-openrouter-key-here"
       },
       "disabled": false
@@ -181,7 +186,7 @@ pip install knowgraph
 **Verify installation:**
 ```bash
 knowgraph --version
-# Output: KnowGraph 1.0.0
+# Output: KnowGraph 1.0.1
 ```
 
 **Configure MCP server** (see [Getting Started](#2-getting-started) above)
@@ -249,23 +254,22 @@ mypy .
 
 ### 3.5 Verification
 
-**Test MCP server:**
+**Test the CLI:**
 ```bash
-# In your AI editor, ask:
-"Run knowgraph diagnostic"
+knowgraph --version
+# Output: KnowGraph 1.0.1
+
+# Index a small folder and run a query
+knowgraph index ./tests/fixtures
+knowgraph query "how does authentication work?"
 ```
 
-**Test CLI:**
-```bash
-knowgraph diagnostic
-```
+**Test the MCP server (health check):**
+The `knowgraph_diagnostic` tool checks Graph Store health, LLM provider
+connectivity, and configuration validity. In your AI editor, ask:
 
-Expected output:
 ```
-✅ Graph Store: OK
-✅ LLM Provider: OK (OpenAI)
-✅ Joern: OK (v2.0.0)
-✅ Configuration: Valid
+"Run the knowgraph diagnostic"
 ```
 
 
@@ -284,19 +288,33 @@ KnowGraph uses environment variables for configuration. **Bold keys** are common
 | `KNOWGRAPH_LLM_MODEL` | No | LLM model to use | `gpt-4o-mini` |
 | `KNOWGRAPH_GRAPH_PATH` | No | Path to graph storage | `./graphstore` |
 | `KNOWGRAPH_PROJECT_ROOT` | No | Override project root detection | Auto-detect |
-| `KNOWGRAPH_WORKERS` | No | Concurrent indexing workers | Auto-detect (Max 30) |
+| `KNOWGRAPH_WORKERS` | No | Concurrent API requests / indexing workers | Auto-detect (Max 5) |
+| `KNOWGRAPH_BATCH_SIZE` | No | LLM batch size for entity extraction (auto-tuned to RAM) | Auto-detect |
 | `KNOWGRAPH_LLM_RETRY_COUNT` | No | Max LLM retries | `5` |
 | `KNOWGRAPH_LLM_RETRY_DELAY` | No | Base delay for backoff (sec) | `1.0` |
+| `KNOWGRAPH_LLM_MAX_TOKENS` | No | Max tokens the LLM may GENERATE per completion (output cap) | `4096` |
+| `KNOWGRAPH_LLM_MAX_INPUT_TOKENS` | No | Approx. max INPUT tokens per completion (model context guard) | `32000` |
 | `KNOWGRAPH_JOERN_ENABLED` | No | Enable/disable Joern analysis | `true` |
-| `KNOWGRAPH_CPG_NODES_ENABLED` | No | Fold Joern CPG nodes (method/call/…) into the graph | `true` |
-| `KNOWGRAPH_CPG_TIMEOUT` | No | CPG generation timeout (sec) | `600` |
-| `KNOWGRAPH_LOG_LEVEL` | No | Logging level (DEBUG/INFO/WARNING) | `INFO` |
+| `KNOWGRAPH_JOERN_PATH` | No | Explicit Joern installation path (auto-detected if unset) | Auto-detect |
+| `KNOWGRAPH_JOERN_TIMEOUT` | No | Joern query/analysis timeout (sec) | `120` |
+| `KNOWGRAPH_JOERN_DAEMON` | No | Run a persistent single-JVM Joern daemon (vs. per-query JVM) | `true` |
+| `KNOWGRAPH_JOERN_DAEMON_BOOT_TIMEOUT` | No | Initial daemon boot timeout (sec) | `120` |
+| `KNOWGRAPH_JOERN_EXPORT_TIMEOUT` | No | CPG export timeout (sec) | `300` |
+| `KNOWGRAPH_CPG_NODES_ENABLED` | No | Fold Joern CPG nodes into the graph | `true` |
+| `KNOWGRAPH_CPG_NODE_TYPES` | No | CPG node types to create graph nodes for | `METHOD,CALL,TYPE_DECL,IDENTIFIER,LOCAL` |
+| `KNOWGRAPH_LOG_LEVEL` | No | Logging level (DEBUG/INFO/WARNING/ERROR) | `INFO` |
+| `KNOWGRAPH_MCP_TRANSPORT` | No | MCP transport: `stdio`, `http`, or `sse` | `stdio` |
+| `KNOWGRAPH_MCP_HOST` | No | MCP HTTP/SSE bind host | `127.0.0.1` |
+| `KNOWGRAPH_MCP_PORT` | No | MCP HTTP/SSE bind port | `8000` |
+| `KNOWGRAPH_PERF_*` | No | Pydantic perf settings (`max_workers`, `cache_size`, `batch_size`) | See config |
+| `KNOWGRAPH_MEMORY_*` | No | Pydantic memory settings (`warning_threshold_mb`, `critical_threshold_mb`, `auto_gc`) | 500/1000/true |
+| `KNOWGRAPH_QUERY_*` | No | Pydantic query settings (`top_k`, `max_hops`, `enable_query_expansion`, `timeout_seconds`) | See config |
 | `GITHUB_TOKEN` | No | GitHub PAT for private repos | - |
 
 **OpenRouter Example:**
 ```bash
 export KNOWGRAPH_API_BASE_URL="https://openrouter.ai/api/v1"
-export KNOWGRAPH_LLM_MODEL="x-ai/grok-2-1212"
+export KNOWGRAPH_LLM_MODEL="x-ai/grok-4.1-fast"
 export KNOWGRAPH_API_KEY="sk-or-v1-your-key-here"
 ```
 
@@ -325,22 +343,56 @@ KnowGraph supports four input formats:
 knowgraph index /path/to/project
 ```
 
-### Repository Indexing
+### Index Options (CLI)
 ```bash
-knowgraph index https://github.com/user/repo --include "*.py"
+# Incremental indexing — only process new/modified files (faster re-index)
+knowgraph index /path/to/project --incremental
+
+# Auto-discover and link AI editor conversations after indexing
+knowgraph index /path/to/project --link-conversations
+
+# Run the SC-quote + P3 anti-hallucination chain on non-code chunks.
+# Publishes verified relations as `grounded` graph edges (Graph Engineering).
+knowgraph index /path/to/project --enable-short-unit
+
+# Verbose output for indexing diagnostics
+knowgraph index /path/to/project --verbose
+
+# Custom output location
+knowgraph index /path/to/project --output ./my_graphstore
 ```
 
-For detailed conversation indexing, see [Section 11](#11-conversational-memory).
+### Index Options (MCP tool `knowgraph_index`)
+In addition to the above, the MCP tool exposes file filters and GC:
+```json
+{
+  "tool": "knowgraph_index",
+  "arguments": {
+    "input_path": "https://github.com/user/repo",
+    "include_patterns": ["*.py"],
+    "exclude_patterns": ["node_modules/*", "*.lock"],
+    "gc": true
+  }
+}
+```
+`gc` is also available on the `knowgraph update` CLI. GC is only meaningful for
+local sources (repository/conversation sources skip it automatically).
+
+> **GC note**: Garbage collection for repository and conversation sources is
+> automatically disabled — those are indexed through ephemeral temp dirs, and
+> GC against them would wrongly wipe the graph.
+
+For detailed conversation indexing, see [Section 12](#12-conversational-memory).
 
 ---
 
-## 6. Joern Code Analysis (NEW v1.0.0)
+## 6. Joern Code Analysis
 
-KnowGraph v1.0.0 includes **fully integrated Joern code analysis** for deep code understanding.
+KnowGraph includes **fully integrated Joern code analysis** for deep code understanding.
 
 ### 6.1 Automatic Code Detection
 
-**Zero configuration required!** KnowGraph automatically detects and analyzes code in 15 languages during indexing:
+**Zero configuration required!** KnowGraph automatically detects and analyzes code in 14+ languages during indexing:
 
 ```bash
 # Index any code directory - automatic code analysis
@@ -352,11 +404,23 @@ knowgraph index ./my-project
 
 ### 6.2 What Gets Analyzed
 
-During indexing, Joern automatically extracts:
-- ✅ **Methods and Classes**: 474 entities per typical project
-- ✅ **Call Relationships**: 85 function call edges
-- ✅ **Data Flows**: 45 tainted data paths
-- ✅ **Security Issues**: SQL injection, XSS, command injection risks
+During indexing, Joern extracts code entities and folds them into the graph:
+- ✅ **Methods, classes, identifiers, locals** (`KNOWGRAPH_CPG_NODE_TYPES`) become
+  graph **nodes**, linked to their source chunk via `hierarchy` edges (when
+  `KNOWGRAPH_CPG_NODES_ENABLED=true`, the default).
+- ✅ **Entity metadata** (`entities`) drives `semantic` and `reference` edges.
+
+Code relationships are extracted by the **code analysis pipeline**
+(`CodeIndexIntegration`):
+- ✅ **Call edges** (`call`): function call relationships between code nodes.
+- ✅ **Data-flow edges** (`data_flow`): tainted data flows (source → sink).
+
+> **Note**: the CLI `knowgraph index` path builds the graph via
+> `SmartGraphBuilder` (entity nodes + `hierarchy` edges only). The full
+> call/data-flow edge extraction runs through the **MCP `knowgraph_index`**
+> tool's code-analysis stage on local directories. In both cases the stored CPG
+> is available for query-time native Joern queries
+> (`knowgraph_analyze_call_graph`, `knowgraph_joern_query`, taint analysis).
 
 ### 6.3 Smart Query Routing
 
@@ -410,7 +474,7 @@ knowgraph index ./my-app
 #    - Returns detailed report
 ```
 
-For more examples, see [JOERN_USAGE.md](../JOERN_USAGE.md).
+For more query examples, see the [Example Usage Guide](USAGE_GUIDE.md).
 
 ---
 
@@ -424,9 +488,9 @@ result = engine.query("How does auth work?")
 print(result.answer)
 ```
 
-### 7.2 Advanced Parameters (v1.0.0)
+### 7.2 Advanced Parameters
 
-Fine-tune your query logic with new weighting parameters:
+Fine-tune your query logic with weighting parameters:
 
 ```json
 {
@@ -455,13 +519,13 @@ KnowGraph exposes a comprehensive suite of tools to your AI assistant. Here is t
 
 | Tool Name | Description |
 |-----------|-------------|
-| `knowgraph_query` | Semantic search with hierarchical lifting. |
-| `knowgraph_batch_query` | Execute multiple queries for efficient context gathering. |
+| `knowgraph_query` | Semantic search with hierarchical lifting, optional grounding & API version negotiation. |
+| `knowgraph_batch_query` | Execute multiple queries for efficient context gathering (supports `enable_grounding` / `enable_temporal_filter`). |
 | `knowgraph_index` | Trigger indexing of local or remote codebases. |
 | `knowgraph_analyze_impact` | Predict effects of code changes (Semantic or Path mode). |
 | `knowgraph_validate` | Check health and consistency of the graph. |
 | `knowgraph_get_stats` | Retrieve node/edge counts and density metrics. |
-| `knowgraph_discover_conversations` | Auto-index chats from Antigravity, Cursor, etc. |
+| `knowgraph_discover_conversations` | Auto-index chats from Antigravity, Cursor, GitHub Copilot. |
 | `knowgraph_analyze_conversations` | Analyze topics and trends in indexed chats. |
 | `knowgraph_tag_snippet` | Bookmark important AI responses as reusable snippets. |
 | `knowgraph_search_bookmarks` | Semantic search within your tagged snippets. |
@@ -471,11 +535,32 @@ KnowGraph exposes a comprehensive suite of tools to your AI assistant. Here is t
 | `knowgraph_rollback` | Revert graph state to a previous snapshot. |
 | `knowgraph_diagnostic` | Run system health checks (Graph Store, LLM, Config). |
 | `knowgraph_joern_query` | Execute native Joern DSL queries. |
-| `knowgraph_security_scan` | Scan for vulnerabilities using Joern policies. |
+| `knowgraph_security_scan` | Scan for vulnerabilities using Joern policies (or flow-based taint analysis via `scan_type`). |
 | `knowgraph_find_dead_code` | Detect unreachable methods using dominance analysis. |
 | `knowgraph_analyze_call_graph` | Analyze call paths and recursion. |
 | `knowgraph_export_cpg` | Export CPG to JSON/DOT/Neo4j/SARIF. |
 | `knowgraph_generate_cpg` | Manually trigger CPG generation for a path. |
+
+> The server also exposes **graph resources** under `knowgraph://graph/…`
+> (`/manifest`, `/nodes`, `/stats`) and reusable **prompt templates**
+> (`graph_summary`, `security_scan`, `impact_analysis`).
+
+#### Key `knowgraph_query` parameters (v1.0.1)
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enable_grounding` | bool | `false` | Prefer graph-evidence-backed nodes in context; demote graph-isolated content. Implies temporal filtering. |
+| `api_version` | string | current | Requested API version to negotiate against the server registry (e.g. `"1.0.1"`). |
+| `min_api_version` | string | - | Minimum acceptable API version. Rejected if `api_version` is below this. |
+| `expand_query` | bool | `false` | Uses AI to expand the query with synonyms and technical terms. |
+
+#### `knowgraph_security_scan` — flow-based taint analysis
+
+Instead of the policy scan (6 policy rules, see [§15](#15-security-analysis-deep-dive)),
+pass `scan_type` to run Joern taint-analysis for a specific vulnerability type —
+`all`, `sql_injection`, `xss`, `command_injection`, `path_traversal`, `xxe`,
+`ssrf` (the `xss`/`xxe`/`ssrf` types come from the `vulnerability_patterns`
+taint register, not the policy engine):
 
 ### 8.1 Configuring AI Clients
 
@@ -534,7 +619,7 @@ KnowGraph exposes a comprehensive suite of tools to your AI assistant. Here is t
       "args": ["serve"],
       "env": {
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
-        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-2-1212",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
         "KNOWGRAPH_API_KEY": "sk-or-v1-your-openrouter-key-here"
       },
       "disabled": false
@@ -668,6 +753,8 @@ for query, result in zip(queries, results):
 ### 9.5 Hierarchical Context Lifting
 
 Automatically includes context from parent directories (README files, package docs).
+Applies to the sync CLI path (`knowgraph query`) **and** async/MCP queries
+(`lift_hierarchical_context` is called in both `query()` and `query_async()`).
 
 **Example Structure:**
 ```
@@ -704,42 +791,156 @@ result = engine.query(
 | `query` | string | **required** | Natural language query |
 | `top_k` | int | 20 | Number of results to return |
 | `max_hops` | int | 4 | Graph traversal depth |
-| `max_tokens` | int | 3000 | Context window size |
+| `max_tokens` | int | `LLM_MAX_TOKENS` (4096) | LLM output token cap |
 | `expand_query` | bool | false | Enable AI query expansion |
 | `enable_hierarchical_lifting` | bool | true | Include parent context |
 | `lift_levels` | int | 2 | Parent directory levels |
 | `with_explanation` | bool | false | Include reasoning path |
+| `enable_grounding` | bool | false | Prefer graph-evidence-backed nodes (see [§10](#10-graph-engineering-grounding--anti-hallucination)) |
+| `enable_temporal_filter` | bool | false | Drop superseded-conversation edges before traversal |
 | `edge_type_weights` | dict | `{}` | Custom edge priorities |
 | `prioritize_reference_edges` | bool | false | Prefer documented code |
 
 ---
 
-## 10. Graph Versioning (Time Travel)
+## 10. Graph Engineering: Grounding & Anti-Hallucination
 
-KnowGraph v0.6.0 introduces a Git-like version control system for your knowledge graph. Every indexing operation creates a snapshot.
+KnowGraph v1.0.1 ships a **Graph Engineering verification layer** that anchors
+generated answers to the graph's actual evidence. This is an opt-in set of
+features that run with **zero extra LLM calls** — they reuse graph facts
+already retrieved during query execution.
 
-### 9.1 Concepts
+### 10.1 Answer Grounding (`enable_grounding`)
+
+When enabled on a query, two things happen:
+
+1. **Evidence-backed ranking**: nodes that appear in at least one edge of the
+   active subgraph (i.e. are *grounded*) are preferred in the assembled context;
+   isolated nodes are demoted. This makes the context budget favor content that
+   is actually connected to the rest of the graph.
+2. **Answer-level annotation**: after the LLM generates an answer, every
+   entity surface form in the answer is classified against the retrieved
+   subgraph:
+   - **grounded** — appears in the answer *and* is an endpoint of a grounded edge
+   - **isolated** — appears in the answer, known to the graph, but has no edge
+     in the active subgraph
+   - **absent** — appears in the answer but is not in the graph's entity set
+
+   Any *isolated* or *absent* entity is surfaced as a trailing note on the
+   answer (e.g. `[grounding] these entities in the answer were not found in the
+   retrieved graph; verify: …`). **Nothing is ever stripped** — grounding is an
+   annotation, not a filter, and grounding is not truth (a grounded entity can
+   still be the subject of a fabricated claim).
+
+```bash
+# CLI
+knowgraph query "How does authentication work?" --enable-grounding
+
+# MCP
+{
+  "tool": "knowgraph_query",
+  "arguments": {
+    "query": "How does authentication work?",
+    "enable_grounding": true
+  }
+}
+```
+
+> **Note**: enabling grounding implies temporal filtering (see below), so
+> superseded-conversation edges are dropped from the traversal too.
+
+### 10.2 Temporal Filtering (`enable_temporal_filter`)
+
+Conversation indexing can create duplicate/conflicting facts over time. When
+enabled, the retriever runs `filter_edges_by_temporal` before graph traversal,
+which drops edges that originate from a *superseded* node: it collects the
+**targets** of `SUPERSEDES` edges as stale, then removes **any** edge whose
+source is one of those stale nodes. This supports "stale fact never current" —
+the latest claim wins. (`SUPERSEDES`/`CONTRADICTS` edges themselves are already
+excluded from traversal independently, via the traversal engine.)
+
+```python
+result = await engine.query_async(
+    "Who was the CEO of Nova Dynamics?",
+    enable_temporal_filter=True,
+)
+```
+
+*Note:* grounding implies temporal filtering (`enable_grounding=True` turns on
+temporal filtering too).
+
+### 10.3 SC-Quoted Extraction (`--enable-short-unit`)
+
+During indexing, `--enable-short-unit` runs the **R-008 SC-quote + P3 entailment
+chain** on non-code chunks (docs, READMEs, prose) that passed LLM entity
+extraction:
+
+1. **Unitizer (D-1)**: deterministic, LLM-free sentence decomposition into
+   self-contained, subject-anchored propositions.
+2. **SC-quote extraction (D-2)**: forces the LLM to attach a **verbatim,
+   both-entity quote** from the source unit to every extracted relation.
+   Relations without a valid quote are omitted entirely (anti-fabrication).
+3. **P3 entailment verification (D-3)**: a verifier decides whether the quote
+   actually entails the claimed (subject, predicate, object) before the edge is
+   published.
+4. **Grounded edges**: each published relation becomes a `grounded` edge in the
+   graph (resolved against the producing node and best-matching *other* node).
+   A relation whose object only exists within the subject's own document is not
+   turned into an edge (a within-document relation is not a cross-document edge).
+
+```bash
+knowgraph index ./my-project --enable-short-unit
+```
+
+Verified relations are stored on node `metadata["relations"]` and become
+queryable `grounded` edges with `score=0.9` and `source="sc_p3"`.
+
+### 10.4 Version Negotiation
+
+MCP clients can request a specific API version and a minimum acceptable
+version. The server negotiates against its version registry and rejects
+unsupported versions up front:
+
+```json
+{
+  "tool": "knowgraph_query",
+  "arguments": {
+    "query": "…",
+    "api_version": "1.0.1",
+    "min_api_version": "1.0.0"
+  }
+}
+```
+
+---
+
+## 11. Graph Versioning (Time Travel)
+
+KnowGraph introduces a Git-like version control system for your knowledge graph. Every indexing operation creates a snapshot.
+
+### 11.1 Concepts
 - **Manifest**: A JSON file tracking the state of the graph.
 - **Snapshot**: A point-in-time record of all nodes and edges.
 - **Checkpoint**: Created automatically after `knowgraph index`.
 
-### 9.2 Listing Versions
+### 11.2 Listing Versions
 See the history of your knowledge base:
 
 ```bash
-$ knowgraph version list
-
-ID        | Date                 | Author   | Nodes | Edges | Message
-----------|----------------------|----------|-------|-------|-------------------
-v0.6.0-a1 | 2025-12-19 14:00:00 | System   | 150   | 450   | Initial index
-v0.6.1-b2 | 2025-12-19 15:30:00 | User     | 155   | 465   | Added auth.py
+$ knowgraph version versions --limit 50 --verbose
+# Output format (per version):
+#   v1.0.1      2026-08-22T…         Nodes: 1,234  Edges: 4,567  Files: 120
+#   v1.0.0      2026-08-20T…
 ```
 
-### 9.3 Diffing Versions
+Flags: `--limit N` (default 50), `--verbose` (shows added/modified/deleted
+change counts and metadata), `--graph-store <path>`.
+
+### 11.3 Diffing Versions
 See what changed between two points in time:
 
 ```bash
-knowgraph version diff v0.6.0-a1 v0.6.1-b2
+knowgraph version diff v1.0.0 v1.0.1
 ```
 
 **Output Explanation:**
@@ -747,43 +948,50 @@ knowgraph version diff v0.6.0-a1 v0.6.1-b2
 - `[-]` Deleted Nodes: Files removed from the codebase.
 - `[~]` Modified Nodes: Content changes (hash mismatch).
 
-### 9.4 Rollback (Safety)
-If an indexing operation corrupts your graph or adds unwanted data, you can roll back instantly.
+### 11.4 Rollback (Safety)
+If an indexing operation corrupts your graph or adds unwanted data, you can roll back instantly. Rollback is **metadata-only** (manifest) — you re-index to restore files.
 
 ```bash
-# Dry run to see what will happen
-knowgraph version rollback v0.6.0-a1 --dry-run
+# Execute rollback (requires a confirmation prompt when stdin is a TTY)
+knowgraph version rollback v1.0.0
 
-# Execute rollback
-knowgraph version rollback v0.6.0-a1
+# Non-interactive / CI: must pass --force (skips the prompt and validation)
+knowgraph version rollback v1.0.0 --force
+
+# Skip creating a backup before rollback
+knowgraph version rollback v1.0.0 --no-backup
 ```
 
-> **Warning:** Rollback is destructive for the versions *after* the target version. They will be removed from history.
+> **Warning:** Rollback is destructive for the versions *after* the target
+> version — they are removed from history. A backup is created by default
+> (`--no-backup` to skip). `--force` is required in non-interactive shells
+> where no TTY is attached.
 
 ---
 
-## 11. Conversational Memory
+## 12. Conversational Memory
 
 KnowGraph can now "read" your conversations with AI assistants and link them to your code.
 
-### 9.1 Supported Formats
+### 12.1 Supported Formats
 - **Antigravity**: Task and Walkthrough artifacts.
 - **Cursor**: `.aichat` files in your project.
 - **VS Code**: GitHub Copilot chat exports.
 - **Claude**: JSON export files.
 
-### 9.2 Auto-Discovery
+### 12.2 Auto-Discovery
 Scan your project for conversation files and index them:
 
 ```bash
 knowgraph discover-conversations
-  --editor all          # or 'cursor', 'antigravity'
-  --min-date 2024-01-01 # Optional date filter
-  --output ./graphstore
+  --editor all          # or 'antigravity', 'cursor', 'github_copilot'
+  --output ./graphstore # optional output location
+  --dry-run             # preview what would be indexed without writing
+  --verbose
 ```
 
-### 9.3 Semantic Tagging
-You can manually tag important AI responses using the MCP tool `knowgraph_tag_snippet` or CLI.
+### 12.3 Semantic Tagging
+You can manually tag important AI responses using the MCP tool `knowgraph_tag_snippet`.
 
 **Example Use Case:**
 You ask Claude "How do I implement specific Retry Logic?". Claude gives a perfect answer. You don't want to lose this.
@@ -807,40 +1015,53 @@ Later, you can query: "Show me the Retry Logic Pattern we discussed."
 
 ---
 
-## 12. Post-Indexing Automation
+## 13. Post-Indexing Automation
 
 KnowGraph runs a series of "Hooks" after every successful indexing job.
 
-### 10.1 How Hooks Work
-Hooks are Python scripts that subscribe to the `INDEXING_COMPLETE` event. They run in the background to enrich the graph.
+### 13.1 How Hooks Work
+After an indexing job, a set of post-index hooks is invoked synchronously from
+`index_helpers.run_post_index_hooks` (not via an event bus — there is no
+`INDEXING_COMPLETE` event). They live in
+`knowgraph.application.indexing.post_index_hooks`. Which hooks run depends on
+the index flags, not a generic "after every job" rule.
 
-### 10.2 Available Hooks
+### 13.2 Available Hooks
 
-1.  **ConversationLinker**:
-    *   Scans indexed conversations.
+1.  **Auto conversation linking** (`auto_link_conversations`):
+    *   Scans indexed conversations (triggered by `--link-conversations` or the MCP index tool).
     *   Finds file references (e.g., `src/auth.py`).
     *   Creates semantic edges between the *Conversation Node* and the *Code Node*.
     *   *Benefit*: When you query `auth.py`, you also get the discussions regarding `auth.py`.
 
-2.  **AutoTagger**:
-    *   Analyzes the content of new nodes.
-    *   Assigns tags like `security`, `database`, `api`, `frontend` based on keywords and embeddings.
-    *   *Benefit*: Enables filtered queries like "Show me all security-related nodes".
+2.  **Temporal edge building** (`build_temporal_edges`):
+    *   Builds `SUPERSEDES` / `CONTRADICTS` edges across conversation claims.
+    *   *Benefit*: powers `enable_temporal_filter` so stale facts never appear current.
 
-3.  **AnalyticsGenerator**:
-    *   Calculates graph statistics (density, diameter).
-    *   Updates the dashboard metrics.
+3.  **Bookmark auto-tagging** (`auto_tag_bookmarks`):
+    *   Analyzes the content of newly indexed snippets.
+    *   Assigns tags (e.g., `security`, `database`, `api`, `frontend`) based on keywords and embeddings.
+    *   *Benefit*: enables filtered queries like "Show me all security-related nodes".
 
-### 10.3 Configuration
-Hooks are enabled by default. You can disable them in `knowgraph.json` configuration (future feature).
+4.  **Stats collection** (`collect_index_stats`):
+    *   Calculates graph statistics (node/edge counts, density) for the manifest.
+
+### 13.3 When Each Hook Runs
+
+| Hook | Runs when |
+|------|-----------|
+| `auto_link_conversations` | `--link-conversations` flag, **or** the source type is `conversation` |
+| `build_temporal_edges` | **every** index job (best-effort) |
+| `auto_tag_bookmarks` | only when `--verbose` is set (not the MCP index path) |
+| `collect_index_stats` | only when `--verbose` is set (not the MCP index path) |
 
 ---
 
-## 13. Performance Optimization
+## 14. Performance Optimization
 
 KnowGraph is designed for high performance, but you can tune it further based on your workload.
 
-### 13.1 Caching System
+### 14.1 Caching System
 
 KnowGraph uses multiple caching layers for optimal performance.
 
@@ -894,7 +1115,7 @@ Tracks processed files to skip unchanged content.
 
 **Benefit:** 4-6x faster incremental updates
 
-### 13.2 Worker Tuning
+### 14.2 Worker Tuning
 
 Control parallelism for indexing and querying.
 
@@ -926,7 +1147,7 @@ Workers | Indexing Time | Memory Usage
 30      | 15s           | 3.5GB
 ```
 
-### 13.3 Memory Management
+### 14.3 Memory Management
 
 #### Lazy Edge Loading
 Edges are loaded on-demand to reduce memory footprint.
@@ -950,7 +1171,7 @@ Recommended limits for optimal performance:
 - Reduce `top_k` (default: 20 → 10)
 - Enable `prioritize_reference_edges` to filter results
 
-### 13.4 Async Best Practices
+### 14.4 Async Best Practices
 
 KnowGraph is 100% async for non-blocking I/O.
 
@@ -984,7 +1205,7 @@ for query in queries:
     print(result.answer)
 ```
 
-### 13.5 LLM Rate Limiting
+### 14.5 LLM Rate Limiting
 
 Configure retry logic for API rate limits.
 
@@ -1002,7 +1223,7 @@ export KNOWGRAPH_LLM_RETRY_DELAY=2.0
 - Delay = `base_delay * (2 ^ attempt) + random(0, 1)`
 - Example: 1s → 2s → 4s → 8s → 16s
 
-### 13.6 Incremental Updates
+### 14.6 Incremental Updates
 
 Only process changed files for faster re-indexing.
 
@@ -1030,7 +1251,7 @@ rm -rf ~/.knowgraph/cpg_cache/
 knowgraph index ./project
 ```
 
-### 13.7 Performance Monitoring
+### 14.7 Performance Monitoring
 
 Track system performance with built-in metrics.
 
@@ -1058,7 +1279,7 @@ knowgraph index ./project --verbose
 # Total: 45.9s
 ```
 
-### 13.8 Optimization Checklist
+### 14.8 Optimization Checklist
 
 ✅ **Enable caching** (default: enabled)  
 ✅ **Use batch queries** for multiple questions  
@@ -1070,33 +1291,48 @@ knowgraph index ./project --verbose
 
 ---
 
-## 14. Security Analysis Deep Dive
+## 15. Security Analysis Deep Dive
 
 KnowGraph's Joern integration provides industrial-grade security analysis capabilities.
 
-### 14.1 Predefined Security Policies
+### 15.1 Predefined Security Policies
 
-KnowGraph includes 10 CWE-mapped security policies out of the box.
+KnowGraph ships a set of CWE-mapped security policies in `PolicyEngine`
+(`knowgraph/application/security/policy_engine.py`). `policy_names` is matched
+**loosely** — e.g. `sql_injection`, `nosql`, or `SQLInjection` all find
+`NoSQLInjection`; a friendly lowercase form works.
 
-| Policy Name | CWE | Severity | Description |
-|-------------|-----|----------|-------------|
-| `sql_injection` | CWE-89 | CRITICAL | Detects unsanitized SQL queries |
-| `xss` | CWE-79 | HIGH | Cross-site scripting vulnerabilities |
-| `command_injection` | CWE-78 | CRITICAL | OS command injection risks |
-| `path_traversal` | CWE-22 | HIGH | Directory traversal attacks |
-| `buffer_overflow` | CWE-120 | CRITICAL | Buffer overflow vulnerabilities |
-| `use_after_free` | CWE-416 | CRITICAL | Memory safety issues |
-| `null_pointer` | CWE-476 | MEDIUM | Null pointer dereferences |
-| `hardcoded_credentials` | CWE-798 | HIGH | Embedded secrets |
-| `insecure_random` | CWE-338 | MEDIUM | Weak randomness |
-| `unvalidated_redirect` | CWE-601 | MEDIUM | Open redirect vulnerabilities |
+| Canonical Policy | Friendly names | CWE | Severity | Description |
+|------------------|---------------|-----|----------|-------------|
+| `NoSQLInjection` | `sql_injection`, `sqli` | CWE-89 | CRITICAL | Unsanitized SQL queries (parameterized/raw calls reachable from input) |
+| `NoCommandInjection` | `command_injection` | CWE-78 | CRITICAL | OS command injection risks |
+| `NoBufferOverflow` | `buffer_overflow` | CWE-120 | CRITICAL | Unsafe buffer copy operations |
+| `NoHardcodedSecrets` | `hardcoded_credentials`, `hardcoded_secrets` | CWE-798 | HIGH | Embedded passwords / API keys / tokens |
+| `NoWeakCrypto` | `insecure_random`, `weak_crypto` | CWE-327 | HIGH | Weak cryptographic algorithms (MD5/SHA1/DES/RC4) |
+| `NoPathTraversal` | `path_traversal` | CWE-22 | HIGH | Directory traversal attacks |
 
-### 14.2 Running Security Scans
+> **On xss/xxe/ssrf**: these are **not** in the `PolicyEngine` set, and there is
+> no `xss`/`use_after_free`/`null_pointer`/`unvalidated_redirect` *template* in
+> `joern_query_templates.py` either. To scan for cross-site scripting, XXE, or
+> SSRF, use `scan_type` (`xss`, `xxe`, `ssrf`) — those run taint analysis from
+> the `vulnerability_patterns` register. To extend the policy engine, pass a
+> custom `Policy` via `PolicyEngine(custom_policies=[...])`.
+
+### 15.2 Running Security Scans
+
+> Security scanning (and all Joern tools) runs through MCP tools
+> (`knowgraph_security_scan`) — there is no standalone `security-scan` CLI
+> subcommand. The CPG is auto-detected from `graph_path` or supplied via
+> `cpg_path`.
 
 **Full Scan (All Policies):**
-```bash
-# Via CLI (auto-detects CPG)
-knowgraph security-scan ./project
+```json
+{
+  "tool": "knowgraph_security_scan",
+  "arguments": {
+    "graph_path": "./graphstore"
+  }
+}
 ```
 
 **Filtered Scan:**
@@ -1104,22 +1340,43 @@ knowgraph security-scan ./project
 {
   "tool": "knowgraph_security_scan",
   "arguments": {
-    "policy_names": ["sql_injection", "xss"],
+    "policy_names": ["sql_injection", "command_injection"],
     "severity_filter": "HIGH"
   }
 }
 ```
 
-### 14.3 Export Formats
-
-**SARIF (for GitHub Security tab):**
-```bash
-knowgraph export-cpg --cpg-path ./project.bin --output ./report.sarif --format sarif
+**Flow-based taint analysis** (`scan_type`) — instead of the policy scan, run
+Joern taint-analysis for a specific vulnerability class:
+```json
+{
+  "tool": "knowgraph_security_scan",
+  "arguments": {
+    "scan_type": "sql_injection",
+    "graph_path": "./graphstore"
+  }
+}
 ```
 
-**Other Formats:** JSON, DOT, Neo4j, GraphML
+### 15.3 Export Formats
 
-### 14.4 Dead Code Detection
+CPG export runs through the `knowgraph_export_cpg` MCP tool.
+
+**SARIF (for GitHub Security tab):**
+```json
+{
+  "tool": "knowgraph_export_cpg",
+  "arguments": {
+    "cpg_path": "./project.bin",
+    "output_path": "./report.sarif",
+    "format": "sarif"
+  }
+}
+```
+
+**Other Formats:** `json`, `dot`, `neo4j`, `graphml`
+
+### 15.4 Dead Code Detection
 
 ```json
 {
@@ -1128,7 +1385,7 @@ knowgraph export-cpg --cpg-path ./project.bin --output ./report.sarif --format s
 }
 ```
 
-### 14.5 Call Graph Analysis
+### 15.5 Call Graph Analysis
 
 ```json
 {
@@ -1143,23 +1400,26 @@ knowgraph export-cpg --cpg-path ./project.bin --output ./report.sarif --format s
 
 ---
 
-## 15. Enterprise Resilience & Production
+## 16. Enterprise Resilience & Production
 
-KnowGraph is built to survive in production environments (v0.6.0).
+KnowGraph is built to survive in production environments.
 
-### 15.1 Circuit Breaker Status
+### 16.1 Circuit Breaker Status
 If an external dependency (like OpenAI API) fails repeatedly, KnowGraph opens the circuit to prevent cascading failures.
 - **Signs**: You see `CircuitBreakerOpenException`.
 - **Action**: Check your API status. The system will auto-retry after a timeout.
 
-### 15.2 Monitoring Metrics
-The server exposes Prometheus-compatible metrics. You can monitor:
-- **Indexing Speed**: `knowgraph_indexing_duration_seconds`
-- **Query Latency**: `knowgraph_query_latency_seconds`
-- **Error Rates**: `knowgraph_request_errors_total`
+### 16.2 Monitoring Metrics
+The server exposes Prometheus-compatible metrics (namespace `knowgraph`). Key gauges/counters:
+- **Indexing Speed**: `knowgraph_indexing_duration_seconds` (histogram)
+- **Query Latency**: `knowgraph_query_duration_seconds` (histogram)
+- **Request Duration**: `knowgraph_request_duration_seconds`
+- **Error Rates**: `knowgraph_errors_total`
+- **Cache**: `knowgraph_cache_hits_total`, `knowgraph_cache_misses_total`
+- **Graph**: `knowgraph_nodes_total`, `knowgraph_edges_total`
 
-### 15.3 System Health (Diagnostics)
-You can run a comprehensive health check of the KnowGraph system using the `knowgraph_diagnostic` tool or command.
+### 16.3 System Health (Diagnostics)
+You can run a comprehensive health check of the KnowGraph system using the `knowgraph_diagnostic` MCP tool.
 
 This checks:
 - **Graph Store**: Integrity and accessibility of the database.
@@ -1173,28 +1433,30 @@ knowgraph_diagnostic()
 
 ---
 
-## 16. Command Reference
+## 17. Command Reference
 
 ### Core Commands
-- `knowgraph index <path>`: Build the graph.
-- `knowgraph query "question"`: Ask a question.
-- `knowgraph serve`: Start MCP server.
+- `knowgraph index <path>`: Build the graph. Flags: `--incremental`, `--link-conversations`, `--enable-short-unit`, `--verbose`, `-o/--output`. (File filters `include_patterns`/`exclude_patterns` and `gc` are MCP-tool options.)
+- `knowgraph query "question"`: Ask a question. Flags: `--enable-grounding`, `--expand-query`, `--explain`, `--top-k`, `--max-hops`, `--mode query|impact`.
+- `knowgraph update <path>`: Incrementally update an existing graph. Flags: `--gc`, `--verbose`.
+- `knowgraph serve`: Start MCP server (transport: `KNOWGRAPH_MCP_TRANSPORT`).
 
 ### Versioning Commands
-- `knowgraph version list`: Show history.
+- `knowgraph version versions [--limit N] [--verbose]`: Show history.
 - `knowgraph version show <id>`: Show details.
 - `knowgraph version diff <id1> <id2>`: Compare.
-- `knowgraph version rollback <id>`: Revert.
+- `knowgraph version rollback <id> [--force] [--no-backup]`: Revert (metadata-only).
 
 ### Conversation Commands
-- `knowgraph discover-conversations`: Find and index chats.
-- `knowgraph tag <tag> <content>`: Manual tagging.
+- `knowgraph discover-conversations`: Find and index chats (`--editor all|cursor|antigravity|github_copilot`, `--dry-run`, `--verbose`).
+- `knowgraph list-conversations`: List indexed conversations.
+- Tag snippets via the MCP tool `knowgraph_tag_snippet` (no `tag` CLI subcommand).
 
 ---
 
-## 17. Troubleshooting & FAQ
+## 18. Troubleshooting & FAQ
 
-### 17.1 Installation & Setup Issues
+### 18.1 Installation & Setup Issues
 
 | Issue | Solution |
 |-------|----------|
@@ -1203,17 +1465,17 @@ knowgraph_diagnostic()
 | **Module Not Found** | Ensure you're using the correct Python environment. Run `pip install -e .` in dev mode. |
 | **API Key Not Found** | Set `export KNOWGRAPH_API_KEY="sk-..."` or add to `.env` file. |
 
-### 17.2 Indexing Issues
+### 18.2 Indexing Issues
 
 | Issue | Solution |
 |-------|----------|
-| **CPG Generation Timeout** | Increase timeout: `KNOWGRAPH_CPG_TIMEOUT=1200 knowgraph index ./project` |
+| **CPG Generation Timeout** | Increase timeout: `KNOWGRAPH_JOERN_TIMEOUT=1200 knowgraph index ./project` |
 | **Out of Memory (Indexing)** | Reduce workers: `KNOWGRAPH_WORKERS=5 knowgraph index ./project` |
-| **Files Not Detected** | Check file patterns. Use `--include "*.py" --include "*.js"` explicitly. |
+| **Files Not Detected** | Use the MCP tool `knowgraph_index` with `include_patterns: ["*.py", "*.js"]`. |
 | **Incremental Update Not Working** | Clear cache: `rm -rf ~/.knowgraph/cpg_cache/` and re-index. |
 | **Git Repository Clone Failed** | Check network connection. For private repos, set `GITHUB_TOKEN`. |
 
-### 17.3 Query Issues
+### 18.3 Query Issues
 
 | Issue | Solution |
 |-------|----------|
@@ -1222,33 +1484,33 @@ knowgraph_diagnostic()
 | **High Memory Usage** | Use `query_async()` for batch queries. Reduce graph size or split into sub-projects. |
 | **Incorrect Results** | Check if graph is up-to-date. Re-index with `knowgraph index ./project`. |
 
-### 17.4 Joern & CPG Issues
+### 18.4 Joern & CPG Issues
 
 | Issue | Solution |
 |-------|----------|
-| **CPG Not Generated** | Check if language is supported (15 languages). Verify file extensions. |
+| **CPG Not Generated** | Check if language is supported (14+ languages). Verify file extensions. |
 | **Joern Daemon Not Starting** | Kill existing process: `pkill -f joern` and restart. |
 | **CPG Corrupted** | Delete and regenerate: `rm ~/.knowgraph/cpg_cache/*.bin && knowgraph index ./project` |
-| **Language Not Detected** | Specify manually: `knowgraph generate-cpg ./project --language python` |
+| **Language Not Detected** | Use the MCP tool `knowgraph_generate_cpg` with `source_path` and `language="python"`. |
 
-### 17.5 Versioning Issues
+### 18.5 Versioning Issues
 
 | Issue | Solution |
 |-------|----------|
 | **Rollback Failed** | Ensure no other process is writing to the graph. Check file permissions. |
 | **Diff is Empty** | Versions might be identical. `knowgraph index` skips unchanged files. |
-| **Version Not Found** | Run `knowgraph version list` to see available versions. |
+| **Version Not Found** | Run `knowgraph version versions` to see available versions. |
 | **Manifest Corrupted** | Restore from backup: `cp ./graphstore/metadata/manifest.json.backup ./graphstore/metadata/manifest.json` |
 
-### 17.6 Conversation Indexing Issues
+### 18.6 Conversation Indexing Issues
 
 | Issue | Solution |
 |-------|----------|
-| **Conversations Not Found** | Check if `.aichat` files exist. Verify `--min-date` filter. |
+| **Conversations Not Found** | Check that `.aichat` files (Cursor) or editor artifacts exist. Run `knowgraph discover-conversations --dry-run` to see what would be indexed. |
 | **Antigravity Chats Not Indexed** | Ensure artifacts are in `~/.gemini/antigravity/brain/`. |
 | **Cursor Chats Not Indexed** | Check `.cursor/` directory in project root. |
 
-### 17.7 Performance Issues
+### 18.7 Performance Issues
 
 | Issue | Solution |
 |-------|----------|
@@ -1257,7 +1519,7 @@ knowgraph_diagnostic()
 | **Cache Not Working** | Check cache directory exists: `ls ~/.knowgraph/cpg_cache/`. Verify TTL not expired. |
 | **LLM Rate Limits** | Increase retry delay: `KNOWGRAPH_LLM_RETRY_DELAY=2.0` |
 
-### 17.8 MCP Integration Issues
+### 18.8 MCP Integration Issues
 
 | Issue | Solution |
 |-------|----------|
@@ -1265,7 +1527,7 @@ knowgraph_diagnostic()
 | **Tools Not Visible** | Restart AI editor (Claude/Cursor). Check MCP server status. |
 | **Project Root Not Detected** | Set manually: `export KNOWGRAPH_PROJECT_ROOT=/path/to/project` |
 
-### 17.9 Security Scan Issues
+### 18.9 Security Scan Issues
 
 | Issue | Solution |
 |-------|----------|
@@ -1273,7 +1535,7 @@ knowgraph_diagnostic()
 | **False Positives** | Use `severity_filter="HIGH"` to reduce noise. Review policy definitions. |
 | **SARIF Export Failed** | Ensure output directory exists. Check file permissions. |
 
-### 17.10 Debug Mode
+### 18.10 Debug Mode
 
 Enable verbose logging for troubleshooting:
 
@@ -1286,7 +1548,7 @@ knowgraph index ./project
 tail -f ~/.knowgraph/logs/knowgraph.log
 ```
 
-### 17.11 Common Error Messages
+### 18.11 Common Error Messages
 
 **Error:** `CircuitBreakerOpenException`  
 **Cause:** External API (OpenAI) is failing repeatedly.  
@@ -1298,17 +1560,18 @@ tail -f ~/.knowgraph/logs/knowgraph.log
 
 **Error:** `GraphValidationError: Orphaned nodes detected`  
 **Cause:** Graph corruption or incomplete indexing.  
-**Solution:** Run `knowgraph validate` and re-index if needed.
+**Solution:** Run the MCP tool `knowgraph_validate`, then re-index with
+`knowgraph index ./project`.
 
 **Error:** `MemoryError: Cannot allocate memory`  
 **Cause:** Graph too large for available RAM.  
 **Solution:** Reduce workers, split project, or upgrade system RAM.
 
-### 17.12 Getting Help
+### 18.12 Getting Help
 
 - **GitHub Issues:** [https://github.com/yunusgungor/knowgraph/issues](https://github.com/yunusgungor/knowgraph/issues)
 - **Documentation:** [https://github.com/yunusgungor/knowgraph/docs](https://github.com/yunusgungor/knowgraph/docs)
-- **Diagnostic Tool:** Run `knowgraph diagnostic` for system health check
+- **Diagnostic Tool:** Use the MCP tool `knowgraph_diagnostic` (or ask your AI editor to "run the knowgraph diagnostic") for a system health check
 
 ---
 

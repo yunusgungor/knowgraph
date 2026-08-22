@@ -36,11 +36,12 @@ Choose the right tool for the job to optimize strictness and token usage.
 
 | User Intent | Recommended Tool | Why? |
 | :--- | :--- | :--- |
-| **"Find security issues"** | `knowgraph_security_scan` | **(NEW)** Runs 10+ specific vulnerability checks (SQLi, XSS, etc.). |
+| **"Find security issues"** | `knowgraph_security_scan` | Runs 6 CWE-mapped policy checks (SQLi, command injection, …); use `scan_type` for taint-based XSS/XXE/SSRF. |
 | **"Is this code used?"** | `knowgraph_find_dead_code` | **(NEW)** Uses Reachability Analysis to find unused methods. |
 | **"Who calls this function?"** | `knowgraph_analyze_call_graph` | **(NEW)** Generates precise call chain paths. |
 | **"Find infinite loops"** | `knowgraph_analyze_call_graph` | Uses `analysis_type="recursive"` to find cycles. |
 | **"How does X work?"** | `knowgraph_query` | Semantic search + Smart Routing (automatically uses Joern if needed). |
+| **"Is this answer grounded in the code/docs?"** | `knowgraph_query` + `enable_grounding=True` | **(NEW)** Evidence-backed ranking + entity-in-answer verification (anti-hallucination). |
 | **"What happens if I change X?"** | `knowgraph_analyze_impact` | Deterministic dependency graph traversal (Reverse BFS). |
 | **"Explain the whole system"** | `knowgraph_batch_query` | Run 5-10 specific questions in parallel to build a comprehensive view. |
 | **"I found a bug in X"** | `knowgraph_query` (trace) | Use `with_explanation=True` to trace the data flow path. |
@@ -61,19 +62,23 @@ Do not guess parameters. Use these pre-calculated settings for optimal Performan
 
 ### 3.1 Scenario-Based Presets
 
-| Scenario | `top_k` | `max_hops` | `enable_hierarchical_lifting` | `expand_query` | `with_explanation` |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Quick Lookup** (Function sig, constants) | 5 | 1 | `False` | `False` | `False` |
-| **Standard Debugging** (Trace error) | 15 | 3 | `True` (Level 1) | `True` | `True` |
-| **Architectural Review** (System design) | 30 | 4 | `True` (Level 2) | `True` | `True` |
-| **Dependency Analysis** (Refactoring) | 50 | 6 | `False` | `False` | `False` |
-| **Broad Exploration** (Learning) | 20 | 2 | `True` (Level 2) | `True` | `False` |
+| Scenario | `top_k` | `max_hops` | `enable_hierarchical_lifting` | `expand_query` | `enable_grounding` | `with_explanation` |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Quick Lookup** (Function sig, constants) | 5 | 1 | `False` | `False` | `True` | `False` |
+| **Standard Debugging** (Trace error) | 15 | 3 | `True` (Level 1) | `True` | `True` | `True` |
+| **Architectural Review** (System design) | 30 | 4 | `True` (Level 2) | `True` | `True` | `True` |
+| **Facts Verification** (Answer grounding) | 20 | 4 | `True` (Level 2) | `False` | `True` | `False` |
+| **Dependency Analysis** (Refactoring) | 50 | 6 | `False` | `False` | `False` | `False` |
+| **Broad Exploration** (Learning) | 20 | 2 | `True` (Level 2) | `True` | `False` | `False` |
 
 ### 3.2 Key Parameter Explanations
 
 *   **`enable_hierarchical_lifting`**:
     *   **Rule**: Always set to `True` when analyzing code residing deep in directories (e.g., `src/infra/db/models/user.py`).
     *   **Effect**: Includes `README.md` or `__init__.py` from parent folders (`src/infra/db/`, `src/infra/`) to give you "Module Intent".
+*   **`enable_grounding`** (Graph Engineering):
+    *   **Rule**: Set to `True` for *fact-verification* questions where the answer must be anchored to graph evidence. The engine prefers evidence-backed nodes and annotates any answer entities not found in the retrieved graph (zero extra LLM calls).
+    *   **Effect**: Implies temporal filtering — superseded-conversation edges are dropped too. Note: grounding is an annotation, not a filter; it surfaces what to double-check, never strips a claim.
 *   **`expand_query`**:
     *   **True**: For natural language questions ("Why is login failing?").
     *   **False**: For exact symbol lookups ("QueryEngine definition").
@@ -142,7 +147,7 @@ Follow these step-by-step sequences for complex engineering tasks.
 2.  **Compare Snapshots**:
     ```python
     # Compare current state vs. last week
-    knowgraph_diff_versions(version1="v0.5.9", version2="v0.6.0")
+    knowgraph_diff_versions(version1="v1.0.0", version2="v1.0.1")
     ```
 3.  **Analyze Diffs**: Look for `[~] Modified` nodes in core logic. Use `knowgraph_version_info` to get author/message details.
 
@@ -215,7 +220,7 @@ Use these workflows only when necessary to maintain graph integrity.
 2.  **Dry Run**: Not available in MCP, proceed with caution.
 3.  **Execute**:
     ```python
-    knowgraph_rollback(version_id="v0.5.8", create_backup=True)
+    knowgraph_rollback(version_id="v1.0.0", create_backup=True)
     ```
 
 ### 5.2 Health Check & Repair
@@ -245,6 +250,8 @@ Use these workflows only when necessary to maintain graph integrity.
 *   **Pattern Matching**: Use `knowgraph_analyze_impact` in `semantic` mode to find logical concepts affected, not just files. Example: `element="User Authentication"` instead of `auth.py`.
 *   **Live Indexing**: If the USER edits a file significantly, *proactively* call `knowgraph_index(input_path=file_path)` to keep memory fresh.
 *   **Incremental Intelligence**: The system automatically uses caching and MD5 checks. You don't need to force CPG regeneration unless structure completely changes.
+*   **Anti-Hallucination Indexing (CLI)**: On docs-heavy projects, re-index with `knowgraph index ./path --enable-short-unit` to publish SC-quote + P3-verified `grounded` edges (CLI-only flag; the MCP `knowgraph_index` tool does not expose it).
+*   **Grounding for Factual Answers**: For "is X true? / who is the CEO?"-style factual queries, set `enable_grounding=True` and treat any `[grounding]` tail note as a double-check prompt rather than authoritative.
 *   **Daemon Awareness**: The `JoernDaemon` runs in the background. If queries are slow, check if the daemon is warming up (first query often takes longer).
 *   **Noise Filtering**: When indexing large repos, use exclude patterns: `knowgraph_index(..., exclude_patterns=["*.lock", "node_modules/*"])`.
 *   **Batch Efficiency**: Always use `knowgraph_batch_query` when you need to answer >2 related questions. It's ~15x faster.

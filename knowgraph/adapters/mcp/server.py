@@ -408,6 +408,8 @@ async def knowgraph_batch_query(
     max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = LLM_MAX_TOKENS,
     enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
     lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
+    enable_grounding: Annotated[bool, Field(description="Prefer graph-evidence-backed nodes in context; demote graph-isolated content (Graph Engineering, default: false).")] = False,
+    enable_temporal_filter: Annotated[bool, Field(description="Drop edges sourced from superseded conversations before traversal (default: false).")] = False,
 ) -> str:
     arguments: dict[str, Any] = {
         "queries": queries,
@@ -417,6 +419,8 @@ async def knowgraph_batch_query(
         "max_tokens": max_tokens,
         "enable_hierarchical_lifting": enable_hierarchical_lifting,
         "lift_levels": lift_levels,
+        "enable_grounding": enable_grounding,
+        "enable_temporal_filter": enable_temporal_filter,
     }
     kwargs: dict[str, Any] = {}
     if ctx is not None:
