@@ -81,7 +81,12 @@ def split_sentences(text):
         return []
     # Normalize newlines to hard sentence boundaries first.
     text = re.sub(r"\s*\n\s*", "\n", text.strip())
-    text = text.replace("\n", ". ")  # newline => sentence end
+    # A line that already ends in sentence punctuation (`.`, `!`, `?`) becomes a
+    # plain break; otherwise the newline is a sentence end (`\n` -> `. `). This
+    # avoids "graph.\n## Features" => "graph.. ## Features" (knowgraph markdown
+    # bodies frequently end lines with a period before the next heading).
+    text = re.sub(r"(?<=[.!?])\n", " ", text)
+    text = text.replace("\n", ". ")  # remaining newline => sentence end
     # Protect abbreviation periods (keep the token's period, sentinel the rest).
     protected = {}
 

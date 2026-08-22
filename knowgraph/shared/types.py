@@ -21,6 +21,7 @@ EdgeType: TypeAlias = Literal[
     "conversation_references_code",  # Conversation -> code file it references (conversation_linker — existed at runtime, was missing from this literal)
     "supersedes",     # Temporal (Graph Engineering): later claim invalidates an earlier one (same entity/attribute)
     "contradicts",    # Temporal (Graph Engineering): same entity/attribute, different value, no single truth
+    "grounded",       # Graph Engineering: SC-quote + P3 verified relation between resolved nodes
 ]
 
 

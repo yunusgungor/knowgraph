@@ -147,3 +147,21 @@ def test_validate_invalid_node_hash(mock_storage):
     result = validate_graph_consistency("path")
     assert result.valid is False
     assert len(result.invalid_node_hashes) == 1
+
+
+def test_grounded_edge_type_is_valid():
+    """Graph Engineering: the SC-quote grounded edge type must be accepted by
+    the validator (produced by _sc_relations_to_edges)."""
+    from knowgraph.domain.algorithms.graph_validator import (
+        VALID_EDGE_TYPES,
+        validate_edge_types,
+    )
+    from knowgraph.domain.models.edge import Edge
+    from uuid import uuid4
+
+    assert "grounded" in VALID_EDGE_TYPES
+    edge = Edge(
+        source=uuid4(), target=uuid4(), type="grounded",
+        score=0.9, created_at=1, metadata={"predicate": "produces"},
+    )
+    assert validate_edge_types([edge]) == []

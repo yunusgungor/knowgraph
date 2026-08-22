@@ -30,6 +30,7 @@ VALID_EDGE_TYPES = {
     "conversation_references_code",  # conversation_linker (previously produced without a literal match)
     "supersedes",                    # Graph Engineering temporal transfer
     "contradicts",                   # Graph Engineering temporal transfer
+    "grounded",                      # Graph Engineering SC-quote verified relation
 }
 
 

@@ -136,6 +136,18 @@ class TestSentenceSplitter:
     def test_empty_returns_empty(self):
         assert split_sentences("") == []
 
+    def test_newline_after_period_no_double_period(self):
+        # Markdown bodies frequently end a line with a period before the next
+        # heading; split_sentences must not turn that into a double period.
+        sentences = split_sentences("KnowGraph indexes source code.\n## Features\nThe tool is fast.")
+        assert all(".." not in s for s in sentences)
+        assert sentences[0] == "KnowGraph indexes source code. ## Features."
+        assert sentences[-1] == "The tool is fast."
+
+    def test_newline_without_period_becomes_sentence_end(self):
+        sentences = split_sentences("First line\nSecond line.")
+        assert sentences == ["First line.", "Second line."]
+
 
 class TestUnitizerNoSubjectFragment:
     def test_np_list_split_returns_none_for_non_list(self):
