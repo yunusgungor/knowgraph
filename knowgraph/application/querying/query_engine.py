@@ -291,8 +291,16 @@ class QueryEngine:
 
                 return asyncio.run(_run_code())
             except (RuntimeError, OSError):
-                # No event loop / Joern unavailable: fall back to generic search.
+                # No event loop / Joern CLI unavailable: fall back to generic search.
                 pass
+            except Exception:
+                # Joern-not-found (and similar code-analysis failures) must never
+                # crash a CLI query; degrade to generic retrieval.
+                from knowgraph.core.joern import JoernNotFoundError
+                import sys
+
+                if not isinstance(sys.exc_info()[1], JoernNotFoundError):
+                    raise
 
         # Check cache first (for identical queries)
         cache_key = _get_query_cache_key(

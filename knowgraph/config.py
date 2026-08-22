@@ -100,7 +100,7 @@ class QuerySettings(BaseSettings):
         description="Maximum graph traversal depth",
     )
     enable_query_expansion: bool = Field(
-        False,
+        True,
         description="Enable LLM-powered query expansion",
     )
     timeout_seconds: float = Field(

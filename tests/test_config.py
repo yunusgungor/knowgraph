@@ -35,7 +35,10 @@ class TestDefaultSettings:
         query = QuerySettings()
         assert query.top_k == 20
         assert query.max_hops == 4
-        assert query.enable_query_expansion is False
+        # Default is on to preserve the historical behavior (query expansion was
+        # always enabled via the legacy ENABLE_QUERY_EXPANSION constant). Users
+        # can disable it via KNOWGRAPH_QUERY_ENABLE_QUERY_EXPANSION=false.
+        assert query.enable_query_expansion is True
         assert query.timeout_seconds == 30.0
 
     def test_main_settings_defaults(self):

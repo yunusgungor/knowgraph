@@ -155,12 +155,12 @@ class JoernProvider:
         output_path = tempfile.mkdtemp(prefix="joern_cpg_")
         output_file = Path(output_path) / "cpg.bin"
 
-        # Default to a size-proportional budget if more generous than the
-        # configured per-query timeout (large repos need longer to parse).
+# Default to the export budget for generation too; parsing a repo and
+        # exporting a CPG are comparable, long-running Joern operations.
         if timeout is None:
-            from knowgraph.config import JOERN_MAX_CPG_SIZE_MB, JOERN_TIMEOUT
+            from knowgraph.config import JOERN_EXPORT_TIMEOUT
 
-            timeout = max(JOERN_TIMEOUT, JOERN_MAX_CPG_SIZE_MB // 4)
+            timeout = JOERN_EXPORT_TIMEOUT
 
         # Build joern-parse command
         # joern_path is now the joern-cli directory
@@ -195,6 +195,23 @@ class JoernProvider:
                 )
 
             logger.info(f"✅ CPG generated: {output_file}")
+
+            # Honor the configured max CPG size (JOERN_MAX_CPG_SIZE_MB): warn
+            # when the produced CPG exceeds the limit so oversized graphs are
+            # surfaced instead of silently slowing downstream queries.
+            try:
+                from knowgraph.config import JOERN_MAX_CPG_SIZE_MB
+
+                size_mb = output_file.stat().st_size / (1024 * 1024)
+                if size_mb > JOERN_MAX_CPG_SIZE_MB:
+                    logger.warning(
+                        f"CPG size {size_mb:.1f}MB exceeds configured limit "
+                        f"{JOERN_MAX_CPG_SIZE_MB}MB; consider raising "
+                        "KNOWGRAPH_JOERN_MAX_CPG_SIZE_MB or splitting the repo."
+                    )
+            except Exception:
+                pass
+
             return output_file
 
         except subprocess.TimeoutExpired:
