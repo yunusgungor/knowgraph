@@ -30,6 +30,19 @@ from knowgraph.shared.versioning import (
     negotiate_version,
 )
 
+# Cache of generated LLM answers keyed by prompt hash. The same query plus the
+# same retrieval context yields the same prompt, so a repeated question would
+# otherwise re-bill the LLM on every call. Bounded to avoid unbounded memory.
+_llm_answer_cache: dict[str, str] = {}
+_LLM_ANSWER_CACHE_MAX = 256
+
+
+def _llm_answer_key(prompt: str) -> str:
+    """Return a stable key for a generated-answer prompt."""
+    import hashlib
+
+    return hashlib.sha256(prompt.encode("utf-8", errors="replace")).hexdigest()
+
 
 async def handle_query(
     arguments: dict[str, Any],
@@ -278,9 +291,18 @@ async def _generate_llm_answer(
 
     prompt = build_llm_prompt(query, result.context, system_prompt, explanation_data)
 
+    # Skip re-billing when the exact prompt was answered before.
+    cache_key = _llm_answer_key(prompt)
+    cached = _llm_answer_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         generated_answer = await provider.generate_text(prompt)
         if generated_answer:
+            if len(_llm_answer_cache) >= _LLM_ANSWER_CACHE_MAX:
+                _llm_answer_cache.clear()  # simple bounded reset
+            _llm_answer_cache[cache_key] = generated_answer
             return generated_answer
     except Exception as e:
         return f"{result.context}\n\n[Generation Error: {e!s}]"
@@ -346,9 +368,17 @@ async def handle_batch_query(
             if provider and result.answer:  # Only if we have context
                 try:
                     prompt = build_llm_prompt(query, result.context)
-                    generated_answer = await provider.generate_text(prompt)
-                    if generated_answer:
-                        answer = generated_answer
+                    cache_key = _llm_answer_key(prompt)
+                    cached = _llm_answer_cache.get(cache_key)
+                    if cached is not None:
+                        answer = cached
+                    else:
+                        generated_answer = await provider.generate_text(prompt)
+                        if generated_answer:
+                            if len(_llm_answer_cache) >= _LLM_ANSWER_CACHE_MAX:
+                                _llm_answer_cache.clear()
+                            _llm_answer_cache[cache_key] = generated_answer
+                            answer = generated_answer
                 except Exception:
                     pass  # Use context as fallback
 

@@ -7,9 +7,50 @@ query integration system.
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 from knowgraph.application.query.code_query_handler import CodeQueryHandler
 from knowgraph.application.query.query_classifier import QueryClassifier, QueryType
+
+
+async def test_llm_answer_cached_for_repeated_question():
+    """Same query+context yields one LLM call (answer cache)."""
+    from unittest.mock import AsyncMock
+
+    import knowgraph.adapters.mcp.handlers.query as qmod
+
+    # Concrete result object (query_engine's QueryResult is a NamedTuple with context).
+    results = []
+    calls = {"n": 0}
+
+    class FakeProvider:
+        async def generate_text(self, prompt):
+            calls["n"] += 1
+            return f"ANSWER<{prompt[:20]}>"
+
+    async def make_result():
+        # Minimal object exposing .context / .explanation like the real result.
+        return SimpleNamespace(
+            context="Relevant graph context about authentication.",
+            explanation=None,
+            seed_nodes=[],
+            execution_time=0.5,
+            answer=True,
+            query="",
+        )
+
+    r = await make_result()
+    provider = FakeProvider()
+
+    qmod._llm_answer_cache.clear()
+    # First call hits the LLM and caches.
+    a1 = await qmod._generate_llm_answer("how does auth work", r, None, False, provider)
+    # Second (identical) call should use the cache.
+    a2 = await qmod._generate_llm_answer("how does auth work", r, None, False, provider)
+
+    assert calls["n"] == 1, f"expected 1 LLM call, got {calls['n']}"
+    assert a1 == a2
+    assert a1.startswith("ANSWER<")
 
 
 async def test_query_classification():
