@@ -368,6 +368,9 @@ def read_manifest(graph_store_path: Path) -> Manifest | None:
 def update_manifest_stats(manifest: Manifest, node_count: int, edge_count: int) -> Manifest:
     """Update manifest with new node and edge counts.
 
+    Pure function: returns a new instance and leaves the original untouched.
+    Preserves every non-stat field (version, filenames, hashes, version chain).
+
     Args:
     ----
         manifest: Existing manifest
@@ -389,4 +392,7 @@ def update_manifest_stats(manifest: Manifest, node_count: int, edge_count: int) 
         edges_filename=manifest.edges_filename,
         sparse_index_filename=manifest.sparse_index_filename,
         semantic_edge_count=manifest.semantic_edge_count,
+        finalized=manifest.finalized,
+        version_id=manifest.version_id,
+        previous_version_id=manifest.previous_version_id,
     )

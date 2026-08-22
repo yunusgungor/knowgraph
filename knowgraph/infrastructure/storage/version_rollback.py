@@ -124,7 +124,11 @@ class RollbackManager:
 
             # 5. Update manifest to target version
             # Note: We keep file_hashes from current manifest since we're not restoring files
-            # This is a metadata-only rollback
+            # This is a metadata-only rollback.
+            # Keep the current version_id: since file_hashes are unchanged,
+            # write_manifest's hash-equal branch would rewrite whichever id we set
+            # back to the existing one anyway. Setting `previous_version_id`
+            # explicitly here mirrors what that branch preserves.
             rollback_manifest = Manifest(
                 version=current_manifest.version,
                 node_count=target_snapshot.node_count,
@@ -136,8 +140,8 @@ class RollbackManager:
                 updated_at=int(time.time()),
                 semantic_edge_count=target_snapshot.edge_count,
                 finalized=True,
-                version_id=target_version_id,
-                previous_version_id=current_version,
+                version_id=current_version,
+                previous_version_id=current_manifest.previous_version_id,
             )
 
             # 6. Write updated manifest
@@ -189,8 +193,8 @@ class RollbackManager:
             errors.append("Already at target version")
 
         # Check if target version is newer (shouldn't rollback forward)
-        current_num = int(current_manifest.version_id.lstrip("v").split("-")[0])
-        target_num = int(target_snapshot.version_id.lstrip("v"))
+        current_num = VersionHistoryManager.parse_version_num(current_manifest.version_id)
+        target_num = VersionHistoryManager.parse_version_num(target_snapshot.version_id)
         if target_num >= current_num:
             errors.append(
                 f"Cannot rollback to newer or equal version "

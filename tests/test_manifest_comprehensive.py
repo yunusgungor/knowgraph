@@ -314,6 +314,28 @@ class TestManifestStats:
         assert manifest2.edges_filename == "edges.json"
         assert manifest2.finalized is False
 
+    def test_update_preserves_version_chain(self):
+        """Update must preserve the version chain fields.
+
+        Regression: update_manifest_stats previously dropped version_id,
+        previous_version_id and semantic_edge_count, which would reset the
+        version chain when used on a real manifest.
+        """
+        manifest1 = Manifest.create_new(
+            "edges.json", "index.json", version="1.0.1"
+        )
+        manifest1.version_id = "v4"
+        manifest1.previous_version_id = "v3"
+        manifest1.semantic_edge_count = 99
+        manifest1.finalized = True
+
+        manifest2 = update_manifest_stats(manifest1, node_count=100, edge_count=50)
+
+        assert manifest2.version_id == "v4"
+        assert manifest2.previous_version_id == "v3"
+        assert manifest2.semantic_edge_count == 99
+        assert manifest2.finalized is True
+
 
 class TestManifestIntegration:
     """Integration tests for manifest workflows."""
