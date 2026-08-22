@@ -67,6 +67,15 @@ _query_cache_max_size = 128  # Maximum cached queries
 _query_cache_ttl = 300.0  # 5 minutes TTL
 
 
+def clear_query_cache() -> None:
+    """Drop all cached query results.
+
+    Called from the global cache-invalidation path (cache_versioning) so a
+    graph change (re-index/rollback) doesn't serve stale results up to the TTL.
+    """
+    _query_result_cache.clear()
+
+
 def _get_query_cache_key(
     query_text: str,
     top_k: int,

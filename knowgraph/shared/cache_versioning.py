@@ -258,6 +258,15 @@ def invalidate_all_caches() -> None:
     clear_node_cache()
     clear_centrality_cache()
 
+    # Clear cached query results so a re-index/rollback no longer serves stale
+    # answers up to the old TTL. Lazy import avoids a module cycle.
+    try:
+        from knowgraph.application.querying.query_engine import clear_query_cache
+
+        clear_query_cache()
+    except Exception:
+        pass  # query engine not importable yet; harmless
+
     # Force version refresh
     if _cache_manager is not None:
         _cache_manager.invalidate_on_update()

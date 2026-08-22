@@ -300,3 +300,16 @@ async def test_batch_query_async_performance():
         # When all tests run together, timing can be less predictable
         assert speedup >= 1.5
         assert len(batch_results) == 5
+
+
+def test_invalidate_all_caches_clears_query_cache():
+    """A graph change (manifest commit) must drop cached query results."""
+    import knowgraph.application.querying.query_engine as qe
+    from knowgraph.shared.cache_versioning import invalidate_all_caches
+
+    qe._query_result_cache["somekey"] = object()
+    try:
+        invalidate_all_caches()
+        assert "somekey" not in qe._query_result_cache
+    finally:
+        qe._query_result_cache.clear()
