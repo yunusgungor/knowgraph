@@ -243,9 +243,11 @@ LLM_MAX_INPUT_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_INPUT_TOKENS", "32000"))
 MAX_HOPS = 4
 
 # Context Assembly Configuration
-# Single source of truth for the LLM context/output budget, shared by the CLI,
-# the engine and the MCP server so they cannot diverge.
-MAX_TOKENS = LLM_MAX_TOKENS
+# Maximum number of tokens collected into the RAG context (a large budget —
+# the graph context is broad). Distinct from LLM_MAX_TOKENS, which bounds the
+# LLM's generated output. CLI/engine/MCP default the LLM output to
+# LLM_MAX_TOKENS; this constant is only the context-collection cap.
+MAX_TOKENS = 50000
 
 # Node Activation Scoring Weights
 ALPHA = 0.6

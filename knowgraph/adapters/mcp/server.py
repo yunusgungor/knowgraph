@@ -39,7 +39,7 @@ from knowgraph.adapters.mcp.version_handlers import (
     handle_rollback,
     handle_version_info,
 )
-from knowgraph.config import DEFAULT_GRAPH_STORE_PATH, MAX_TOKENS
+from knowgraph.config import DEFAULT_GRAPH_STORE_PATH, LLM_MAX_TOKENS
 from knowgraph.shared.versioning import (
     VersionStatus,
     get_current_version,
@@ -274,7 +274,7 @@ async def knowgraph_query(
     top_k: Annotated[int, Field(description="Number of top results to return (default: 20).")] = 20,
     max_hops: Annotated[int, Field(description="Maximum number of hops for graph traversal (default: 4).")] = 4,
     expand_query: Annotated[bool, Field(description="Uses AI to expand query with synonyms and technical terms (default: false).")] = False,
-    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = MAX_TOKENS,
+    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = LLM_MAX_TOKENS,
     enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
     lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
     api_version: Annotated[str, Field(description="Requested API version to negotiate against the server registry (e.g., '1.0.1'). Omit to use the current version.")] = None,
@@ -402,7 +402,7 @@ async def knowgraph_batch_query(
     graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
     top_k: Annotated[int, Field(description="Number of top results to return per query (default: 20).")] = 20,
     max_hops: Annotated[int, Field(description="Maximum number of hops for graph traversal (default: 4).")] = 4,
-    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = MAX_TOKENS,
+    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = LLM_MAX_TOKENS,
     enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
     lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
 ) -> str:

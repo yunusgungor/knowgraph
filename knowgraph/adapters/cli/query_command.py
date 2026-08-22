@@ -8,8 +8,8 @@ from knowgraph.application.querying.impact_analyzer import analyze_impact_by_pat
 from knowgraph.application.querying.query_engine import QueryEngine
 from knowgraph.config import (
     DEFAULT_GRAPH_STORE_PATH,
+    LLM_MAX_TOKENS,
     MAX_HOPS,
-    MAX_TOKENS,
     MS_TO_SECONDS,
     TOP_K,
 )
@@ -31,7 +31,7 @@ from knowgraph.infrastructure.storage.filesystem import (
 )
 @click.option("--top-k", default=TOP_K, help="Number of seed nodes")
 @click.option("--max-hops", default=MAX_HOPS, help="Graph traversal depth")
-@click.option("--max-tokens", default=MAX_TOKENS, help="Maximum context tokens")
+@click.option("--max-tokens", default=LLM_MAX_TOKENS, help="Maximum context tokens")
 @click.option("--explain", "-e", is_flag=True, help="Show explainability report")
 @click.option("--expand-query", is_flag=True, help="Expand query with AI-generated synonyms")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
