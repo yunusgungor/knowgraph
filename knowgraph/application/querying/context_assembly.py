@@ -67,8 +67,9 @@ def score_node_importance(
                                 (Higher if reached via reference edges vs semantic)
         grounded: When not None, the claim's grounding verdict (Graph Engineering
             transfer, E-132). Grounded nodes get a +20% importance bonus;
-            ungrounded nodes a -20% penalty — evidence-backed content wins the
-            context budget, unbacked content is demoted.
+            ungrounded (graph-isolated) nodes a -50% penalty so they rank clearly
+            below evidence-backed content and lose the context budget first —
+            "evidence wins the budget".
 
     Returns:
     -------
@@ -102,7 +103,7 @@ def score_node_importance(
     if grounded is True:
         importance *= 1.2
     elif grounded is False:
-        importance *= 0.8
+        importance *= 0.5
 
     return min(importance, 1.0)
 

@@ -260,6 +260,35 @@ def verify_installation() -> bool:
         return False
 
 
+def _make_native_binaries_executable(install_dir: Path) -> None:
+    """Make Joern's native frontend binaries executable.
+
+    The upstream zip ships per-language AST generators (astgen-macos, goastgen,
+    SwiftAstGen, dotnetastgen, php-parser, ...) without the execute bit. Without
+    it, CPG generation fails on those languages with a "Permission denied".
+    ``bin/*`` scripts are already handled by ``verify_installation``'s chmod;
+    this covers the deeper ``*/bin/astgen/*`` and ``*/bin/*/*-macos|linux``
+    native binaries. Windows (``.exe``/``.dll``) and ``.bat`` files are skipped.
+    """
+    if not install_dir.exists():
+        return
+    target = install_dir / "joern-cli"
+    if not target.exists():
+        return
+    needles = ("astgen", "goastgen", "SwiftAstGen", "dotnetastgen", "php-parser")
+    for p in target.rglob("*"):
+        if not p.is_file():
+            continue
+        if p.suffix.lower() in (".exe", ".dll", ".bat", ".jar", ".json", ".toml", ".yml", ".yaml"):
+            continue
+        name = p.name
+        if any(needle in name for needle in needles) or (p.parent.name == "bin" and "astgen" not in name):
+            try:
+                p.chmod(p.stat().st_mode | 0o111)
+            except OSError:
+                continue
+
+
 def install_joern() -> bool:
     """Main installation function.
 
@@ -325,6 +354,13 @@ def install_joern() -> bool:
         print("\n❌ Failed to extract Joern")
         print("   Joern features will be disabled.")
         return False
+
+    # Step 3.5: Make native binaries executable. The upstream zip ships the
+    # per-language frontend binaries (astgen, goastgen, SwiftAstGen, ...) with
+    # no execute bit; without it, CPG generation fails with a silent
+    # "Permission denied" on every frontend. Fix it here so the setup command
+    # "just works" for users who never touch the filesystem.
+    _make_native_binaries_executable(INSTALL_DIR)
 
     # Step 4: Verify
     if not verify_installation():
