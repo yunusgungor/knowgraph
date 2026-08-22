@@ -538,8 +538,15 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
     await asyncio.get_event_loop().run_in_executor(None, index.save, graph_store_path / "index")
 
     click.echo(f"Writing {len(nodes)} nodes to storage...")
-    # Write all nodes in parallel using async
-    await asyncio.gather(*[write_node_json_async(node, graph_store_path) for node in nodes])
+    # Write all nodes in parallel using async. Bulk writes skip per-node full
+    # cache invalidation (invalidate=False); flush once after the batch so N
+    # writes don't pay N full cache clears.
+    await asyncio.gather(
+        *[write_node_json_async(node, graph_store_path, invalidate=False) for node in nodes]
+    )
+    from knowgraph.shared.cache_versioning import invalidate_all_caches
+
+    invalidate_all_caches()
 
     merged_edges = edges
     if existing_manifest:

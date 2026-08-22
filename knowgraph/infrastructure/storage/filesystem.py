@@ -39,6 +39,18 @@ def clear_node_cache() -> None:
     _cache_version += 1
 
 
+def invalidate_node_entry(node_id: UUID, graph_store_path: Path) -> None:
+    """Drop a single node's cached entry after it is rewritten.
+
+    Bulk indexing writes many nodes; clearing the entire cache per write is
+    O(nodes x cache) and defeats the LRU. Only the rewritten node's entry is
+    stale, so remove just that one. The full ``invalidate_all_caches`` still
+    runs at graph commit (manifest) time.
+    """
+    key = (Path(graph_store_path), node_id)
+    _node_cache.pop(key, None)
+
+
 def get_cache_stats() -> dict[str, int]:
     """Get cache statistics."""
     return {
@@ -91,7 +103,9 @@ def ensure_directory(directory_path: Path) -> None:
         ) from error
 
 
-async def write_node_json_async(node: Node, graph_store_path: Path) -> None:
+async def write_node_json_async(
+    node: Node, graph_store_path: Path, invalidate: bool = True
+) -> None:
     """Write node to JSON file (async).
 
     File location: {graph_store_path}/nodes/{node.id}.json
@@ -100,6 +114,10 @@ async def write_node_json_async(node: Node, graph_store_path: Path) -> None:
     ----
         node: Node to write
         graph_store_path: Root graph storage directory
+        invalidate: When True, invalidate all caches after the write (the
+            default — signals a graph update). Bulk indexers pass
+            ``invalidate=False`` and flush once after the whole batch, so they
+            don't pay O(nodes) full invalidations.
 
     Raises:
     ------
@@ -127,8 +145,12 @@ async def write_node_json_async(node: Node, graph_store_path: Path) -> None:
         # os.replace() works on all platforms (Windows Path.rename() fails if target exists)
         await asyncio.to_thread(os.replace, str(temp_file), str(node_file))
 
-        # Trigger cache invalidation after successful write
-        invalidate_all_caches()
+        if invalidate:
+            invalidate_all_caches()
+        else:
+            # Bulk path: drop only this node's cache entry; the caller flushes
+            # once after the batch.
+            invalidate_node_entry(node.id, graph_store_path)
     except Exception as error:
         # Cleanup on error
         if await asyncio.to_thread(temp_file.exists):
@@ -139,7 +161,7 @@ async def write_node_json_async(node: Node, graph_store_path: Path) -> None:
         ) from error
 
 
-def write_node_json(node: Node, graph_store_path: Path) -> None:
+def write_node_json(node: Node, graph_store_path: Path, invalidate: bool = True) -> None:
     """Write node to JSON file (sync compatibility wrapper).
 
     File location: {graph_store_path}/nodes/{node.id}.json
@@ -148,6 +170,8 @@ def write_node_json(node: Node, graph_store_path: Path) -> None:
     ----
         node: Node to write
         graph_store_path: Root graph storage directory
+        invalidate: When True, invalidate all caches (default). Bulk callers
+            pass False and flush once after the batch.
 
     Raises:
     ------
@@ -170,8 +194,10 @@ def write_node_json(node: Node, graph_store_path: Path) -> None:
             json.dump(node.to_dict(), file, indent=2, ensure_ascii=False)
         os.replace(str(temp_file), str(node_file))
 
-        # Trigger cache invalidation after successful write
-        invalidate_all_caches()
+        if invalidate:
+            invalidate_all_caches()
+        else:
+            invalidate_node_entry(node.id, graph_store_path)
     except Exception as error:
         if temp_file.exists():
             temp_file.unlink()
