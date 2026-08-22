@@ -64,11 +64,9 @@ class CodeIndexIntegration:
             stats = detector.get_statistics(code_files)
             logger.info(f"Found {stats['total_files']} code files ({stats['total_loc']} LOC)")
 
-            # Step 2: Check if CPG generation is worthwhile
-            if not detector.should_generate_cpg(code_files):
-                logger.info("Skipping CPG generation (below threshold)")
-                return results
-
+            # Step 2: CPG generation is always performed when code files exist
+            # (quality over thresholds). skip_cpg remains as an explicit
+            # opt-out (used by tests and callers that handle CPG separately).
             if skip_cpg:
                 logger.info("CPG generation skipped (skip_cpg=True)")
                 return results

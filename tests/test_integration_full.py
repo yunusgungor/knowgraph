@@ -191,8 +191,11 @@ async def test_performance_benchmarks():
         print(f"  Entities: {result['entities_extracted']}")
         print(f"  Rate: {result['entities_extracted']/duration:.1f} entities/sec")
 
-        # Validate performance (allow 35s for safety margin)
-        assert duration < 35, f"Indexing too slow: {duration:.2f}s (max 35s)"
+        # Validate performance. Joern now runs on every code file (no size
+        # threshold), so indexing is inherently slower than the old
+        # AST-fast-path. 60s is a regression guardrail, not a correctness
+        # target: quality of extraction is the priority.
+        assert duration < 60, f"Indexing too slow: {duration:.2f}s (max 60s)"
 
         print()
         print("✅ Performance benchmark test PASSED")
