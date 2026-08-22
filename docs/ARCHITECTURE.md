@@ -345,34 +345,41 @@ Typical values for a small project (~9 files); scale with project size.
 
 ### MCP Server
 
+The MCP tools are thin wrappers over handlers (`knowgraph/adapters/mcp/handlers/`)
+registered via `@app.tool` in `server.py`.
+
 ```python
-# Index endpoint
+# Index (methods.index_graph is the live implementation behind knowgraph_index)
 await methods.index_graph(
     input_path=path,
     graph_path=graph,
     provider=provider,
     resume_mode=False,
-    gc=True
+    gc=True,
 )
 
-# Query endpoint
-result = await methods.handle_query({
-    'query': query_text,
-    'graph_path': graph_path
-})
+# Query (handler behind knowgraph_query)
+from knowgraph.adapters.mcp.handlers.query import handle_query
+
+result = await handle_query(
+    {"query": query_text, "graph_path": str(graph_path)},
+    provider,
+    project_root,
+)
 ```
 
 ### Direct API
 
 ```python
 # Code analysis
-from knowgraph.infrastructure.indexing import CodeIndexIntegration
+from knowgraph.infrastructure.indexing.code_index_integration import CodeIndexIntegration
 
 integration = CodeIndexIntegration()
 result = integration.process_code_directory(source_dir, graph_dir)
 
 # Query routing
-from knowgraph.application.query import QueryClassifier, CodeQueryHandler
+from knowgraph.application.query.code_query_handler import CodeQueryHandler
+from knowgraph.application.query.query_classifier import QueryClassifier, QueryType
 
 classifier = QueryClassifier()
 query_type = classifier.classify(query)

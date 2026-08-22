@@ -735,22 +735,26 @@ Execute multiple queries efficiently with shared context loading.
 - **Sequential**: 5 queries × 2s = 10s
 - **Batch**: 5 queries = 2.5s (4x faster)
 
-**Example:**
+**Example (async):**
 ```python
+import asyncio
 from knowgraph.application.querying.query_engine import QueryEngine
 
-engine = QueryEngine("./graphstore")
-results = engine.batch_query([
-    "How does authentication work?",
-    "What are the security policies?",
-    "Explain the rate limiting logic",
-    "Show me the caching strategy",
-    "What's the database schema?"
-])
+async def main():
+    engine = QueryEngine("./graphstore")
+    queries = [
+        "How does authentication work?",
+        "What are the security policies?",
+        "Explain the rate limiting logic",
+        "Show me the caching strategy",
+        "What's the database schema?",
+    ]
+    results = await engine.batch_query_async(queries)
+    for query, result in zip(queries, results):
+        print(f"Q: {query}")
+        print(f"A: {result.answer}\n")
 
-for query, result in zip(queries, results):
-    print(f"Q: {query}")
-    print(f"A: {result.answer}\n")
+asyncio.run(main())
 ```
 
 **MCP Usage:**
@@ -1105,28 +1109,25 @@ find ~/.knowgraph/cpg_cache/ -mtime +1 -delete
 ```
 
 #### Query Result Cache
-Caches semantic search results for repeated queries.
+Caches semantic search results for repeated queries. Implemented in
+`query_engine` as an in-memory LRU (max 128 entries, 5-minute TTL). It is
+automatically invalidated when the graph changes (re-index / rollback), so
+stale results are not served. There is no per-query on/off or TTL switch via a
+`CacheManager` object — `CacheManager` (`knowgraph.infrastructure.cache`) is a
+separate SQLite cache used for **indexing** entity results, not query results.
 
-**Performance:**
-- Cold query: 2-3s
-- Warm query: 0.18s (22x faster)
-
-**Configuration:**
 ```python
-from knowgraph.infrastructure.cache.cache_manager import CacheManager
+from knowgraph.application.querying.query_engine import clear_query_cache
 
-# Disable cache for testing
-cache = CacheManager(enabled=False)
-
-# Adjust TTL
-cache = CacheManager(ttl_seconds=7200)  # 2 hours
+# Drop all cached query results (e.g. after an external graph mutation)
+clear_query_cache()
 ```
 
 #### Indexing Cache
 Tracks processed files to skip unchanged content.
 
 **How It Works:**
-1. Computes MD5 hash of each file
+1. Computes a SHA-1 hash of each file
 2. Compares with previous index
 3. Skips files with matching hashes
 
@@ -1260,7 +1261,7 @@ knowgraph index ./project  # 3s (only processes auth.py)
 ```
 
 **Change Detection:**
-- MD5 hash comparison
+- SHA-1 hash comparison
 - Detects: added, modified, deleted files
 - Skips: unchanged files
 
@@ -1282,9 +1283,10 @@ from knowgraph.application.querying.query_engine import QueryEngine
 engine = QueryEngine("./graphstore")
 result = engine.query("How does caching work?")
 
-print(f"Query time: {result.metadata['query_time_ms']}ms")
-print(f"Nodes retrieved: {result.metadata['nodes_count']}")
-print(f"Cache hit: {result.metadata['cache_hit']}")
+print(f"Query time: {result.execution_time:.3f}s")
+print(f"Active subgraph size: {result.active_subgraph_size}")
+print(f"Sparse search: {result.sparse_search_time:.3f}s, "
+      f"centrality: {result.centrality_time:.3f}s")
 ```
 
 **Indexing Performance:**
