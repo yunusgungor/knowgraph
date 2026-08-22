@@ -197,17 +197,6 @@ async def run_index(
         if progress_callback:
             await progress_callback("complete", 9, 9, "Indexing completed successfully!")
 
-        await write_graph_to_storage(all_nodes, edges, existing_manifest, graph_store_path, verbose)
-
-        # Step 7: Create and save manifest
-        await create_and_save_manifest(all_nodes, edges, file_hashes, graph_store_path, verbose)
-
-        # Step 8: Run post-index hooks
-        await run_post_index_hooks(
-            link_conversations, input_path, source_type, graph_store_path, verbose
-        )
-
-        # Step 9: Log completion
         log_completion(start_time, graph_store_path, verbose)
 
     except RepositoryIngestorError as e:
