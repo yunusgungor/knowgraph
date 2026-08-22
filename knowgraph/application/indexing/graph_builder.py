@@ -429,6 +429,9 @@ class SmartGraphBuilder:
 
             # Per-file entity cache: same file's chunks share one extraction
             file_entity_cache: dict[str, list[Any]] = {}
+            # Per-file CPG conversion result: entity nodes are generated once
+            # per file, not once per chunk (avoid duplicate UUIDs/edges).
+            file_cpg_cache: dict[str, Any] = {}
 
             with self.perf_tracker.track("cache_ast_phase"):
                 for node in initial_nodes:
@@ -477,11 +480,15 @@ class SmartGraphBuilder:
                                     # gone, so CPG edges (AST/CFG/DDG) are not
                                     # produced here — entity nodes still link
                                     # to their chunk via hierarchy edges.
-                                    cpg_result = self.cpg_converter.convert_entities_to_graph(
-                                        entities,
-                                        chunk_node_id=node.id,
-                                        file_path=node.path or file_key,
-                                    )
+                                    # Build once per file; later chunks of the
+                                    # same file reuse the same entity nodes.
+                                    if file_key not in file_cpg_cache:
+                                        file_cpg_cache[file_key] = self.cpg_converter.convert_entities_to_graph(
+                                            entities,
+                                            chunk_node_id=node.id,
+                                            file_path=node.path or file_key,
+                                        )
+                                    cpg_result = file_cpg_cache[file_key]
 
                                     # Add CPG entity nodes to graph
                                     for entity_node in cpg_result.entity_nodes:
