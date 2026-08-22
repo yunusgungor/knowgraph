@@ -141,7 +141,8 @@ class JoernDaemon:
         self._send(program)
         self._wait_for_marker(CPG_LOADED_MARKER, timeout)
         self._send("try { run.ossdataflow } catch { case _: Exception => }")
-        self._wait_settle(timeout=60)
+        # No settle: leftover ossdataflow output is discarded by the next
+        # query's marker window (start-marker precedes everything).
         self._loaded_cpgs.add(cpg_uri)
 
     def query(self, cpg_path: Path, query: str, timeout: int = 60) -> str:
@@ -161,11 +162,6 @@ class JoernDaemon:
         if not self.is_running():
             raise RuntimeError("JoernDaemon is not running")
         self.ensure_cpg_loaded(cpg_path)
-
-        # Drain any output left over from prior operations so this query's
-        # marker window is unambiguous.
-        self._drain()
-        self._wait_settle(timeout=2)
 
         # Start the marker window BEFORE evaluating the query so any
         # ``println`` side-effects inside the query body land inside the window
@@ -208,14 +204,6 @@ class JoernDaemon:
             self._lines.put(line)
         self._reader_stop.set()
 
-    def _drain(self) -> None:
-        """Drop all currently queued lines (best-effort)."""
-        while True:
-            try:
-                self._lines.get_nowait()
-            except queue.Empty:
-                return
-
     def _wait_for_marker(self, marker: str, timeout: int) -> None:
         """Consume lines until ``marker`` is seen, or raise on timeout."""
         deadline = time.time() + timeout
@@ -227,15 +215,6 @@ class JoernDaemon:
             if marker in line:
                 return
         raise RuntimeError(f"Timed out after {timeout}s waiting for marker {marker}")
-
-    def _wait_settle(self, timeout: int) -> None:
-        """Give the REPL a short quiet window (drain queued output)."""
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            try:
-                self._lines.get(timeout=max(0.5, deadline - time.time()))
-            except queue.Empty:
-                return
 
     def _collect_window(self, start_marker: str, end_marker: str, timeout: int) -> str:
         """Collect all raw lines for this query's marker window.
