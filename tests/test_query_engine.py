@@ -2,7 +2,31 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from knowgraph.application.querying.query_engine import QueryEngine, QueryResult
+from knowgraph.application.querying.query_engine import (
+    QueryEngine,
+    QueryResult,
+    _get_query_cache_key,
+)
+
+
+def test_query_cache_key_distinguishes_grounding():
+    """Graph Engineering: a query with grounding on must not reuse a cache entry
+    from an evidence-blind run of the same text."""
+    base = dict(
+        query_text="auth",
+        top_k=20,
+        max_hops=4,
+        max_tokens=3000,
+        enable_hierarchical_lifting=True,
+        lift_levels=2,
+        with_explanation=False,
+    )
+    off = _get_query_cache_key(**base, enable_grounding=False, enable_temporal_filter=False)
+    on = _get_query_cache_key(**base, enable_grounding=True, enable_temporal_filter=False)
+    temporal = _get_query_cache_key(**base, enable_grounding=False, enable_temporal_filter=True)
+    assert off != on
+    assert off != temporal
+    assert on != temporal
 
 
 def test_query_engine_run():

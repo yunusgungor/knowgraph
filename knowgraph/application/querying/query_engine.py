@@ -85,11 +85,21 @@ def _get_query_cache_key(
     enable_hierarchical_lifting: bool,
     lift_levels: int,
     with_explanation: bool,
+    enable_grounding: bool = False,
+    enable_temporal_filter: bool = False,
 ) -> str:
-    """Generate cache key for query parameters."""
+    """Generate cache key for query parameters.
+
+    ``enable_grounding`` and ``enable_temporal_filter`` are included so a query
+    with evidence-awareness on does not return a stale cache hit from an
+    evidence-blind run (Graph Engineering transfer).
+    """
     import hashlib
 
-    key_parts = f"{query_text}|{top_k}|{max_hops}|{max_tokens}|{enable_hierarchical_lifting}|{lift_levels}|{with_explanation}"
+    key_parts = (
+        f"{query_text}|{top_k}|{max_hops}|{max_tokens}|{enable_hierarchical_lifting}"
+        f"|{lift_levels}|{with_explanation}|{enable_grounding}|{enable_temporal_filter}"
+    )
     return hashlib.md5(key_parts.encode()).hexdigest()  # noqa: S324
 
 
@@ -319,6 +329,8 @@ class QueryEngine:
             enable_hierarchical_lifting,
             lift_levels,
             with_explanation,
+            enable_grounding,
+            enable_temporal_filter,
         )
 
         if cache_key in _query_result_cache:
@@ -705,6 +717,8 @@ class QueryEngine:
             enable_hierarchical_lifting,
             lift_levels,
             with_explanation,
+            enable_grounding,
+            enable_temporal_filter,
         )
 
         if cache_key in _query_result_cache:
