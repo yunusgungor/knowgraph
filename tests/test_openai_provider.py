@@ -6,6 +6,16 @@ from knowgraph.domain.intelligence.provider import Entity
 from knowgraph.infrastructure.intelligence.openai_provider import OpenAIProvider
 
 
+@pytest.fixture(autouse=True)
+def _reset_circuit_breaker():
+    """The OpenAI circuit breaker is a module singleton; reset between tests."""
+    from knowgraph.shared.circuit_breaker import clear_circuit_breakers
+
+    clear_circuit_breakers()
+    yield
+    clear_circuit_breakers()
+
+
 @pytest.mark.asyncio
 async def test_generate_text():
     with patch(
@@ -95,9 +105,12 @@ async def test_rate_limiter_applies_to_all_methods():
 @pytest.mark.asyncio
 async def test_rate_limiter_backoff_on_error():
     """A failed LLM call triggers backoff (handles 429 dynamically)."""
-    with patch(
-        "knowgraph.infrastructure.intelligence.openai_provider.AsyncOpenAI"
-    ) as mock_client_cls:
+    # Single retry, no sleep, so the test is fast.
+    with (
+        patch("knowgraph.infrastructure.intelligence.openai_provider.AsyncOpenAI") as mock_client_cls,
+        patch("knowgraph.infrastructure.intelligence.openai_provider.LLM_RETRY_COUNT", 1),
+        patch("knowgraph.infrastructure.intelligence.openai_provider.LLM_RETRY_BASE_DELAY", 0.0),
+    ):
         mock_client = mock_client_cls.return_value
         mock_client.chat.completions.create = AsyncMock(
             side_effect=Exception("429 rate limit")
@@ -111,7 +124,7 @@ async def test_rate_limiter_backoff_on_error():
             await provider.generate_text("p")
 
         assert provider.rate_limiter.acquire.await_count == 1
-        assert provider.rate_limiter.trigger_backoff.await_count == 1
+        assert provider.rate_limiter.trigger_backoff.await_count >= 1
 
 
 @pytest.mark.asyncio

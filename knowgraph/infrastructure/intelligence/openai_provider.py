@@ -1,12 +1,19 @@
 """OpenAI Intelligence Provider."""
 
+import asyncio
 import json
 import os
 from typing import Any
 
 from openai import AsyncOpenAI
 
-from knowgraph.config import KNOWGRAPH_LLM_MODEL, LLM_MAX_INPUT_TOKENS, LLM_MAX_TOKENS
+from knowgraph.config import (
+    KNOWGRAPH_LLM_MODEL,
+    LLM_MAX_INPUT_TOKENS,
+    LLM_MAX_TOKENS,
+    LLM_RETRY_BASE_DELAY,
+    LLM_RETRY_COUNT,
+)
 from knowgraph.domain.intelligence.provider import (
     Entity,
     IntelligenceProvider,
@@ -18,6 +25,7 @@ from knowgraph.infrastructure.intelligence.prompts import (
     RELATIONSHIP_EXTRACTION_PROMPT,
 )
 from knowgraph.infrastructure.intelligence.rate_limiter import RateLimiter
+from knowgraph.shared.circuit_breaker import CircuitBreakerError, get_circuit_breaker
 
 
 class OpenAIProvider(IntelligenceProvider):
@@ -36,32 +44,55 @@ class OpenAIProvider(IntelligenceProvider):
         )
         self.model = model
         self.rate_limiter = RateLimiter()
+        # Shared circuit breaker: a persistently failing API opens the circuit
+        # so callers fail fast instead of hammering a down service.
+        self.circuit_breaker = get_circuit_breaker("openai_llm")
+
+    async def _raw_completion(self, messages: list[dict], kwargs: dict) -> Any:
+        """Issue the actual OpenAI chat completion (unwrapped)."""
+        return await self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            **kwargs,
+        )
 
     async def _chat_completion(self, messages: list[dict], **kwargs: Any) -> Any:
-        """Rate-limited chat completion.
+        """Rate-limited, retried, circuit-broken chat completion.
 
         Every LLM call is throttled by the dynamic rate limiter, syncs its
-        budgets from the API's rate-limit headers, and triggers a backoff on
-        failure (429 or otherwise). Output is capped at LLM_MAX_TOKENS so a
-        completion can't blow up cost or context.
+        budgets from the API's rate-limit headers, retries transient failures
+        (429 gets faster backoff), and is protected by a circuit breaker.
+        Output is capped at LLM_MAX_TOKENS so a completion can't blow up cost
+        or context.
         """
         kwargs.setdefault("max_tokens", LLM_MAX_TOKENS)
         await self.rate_limiter.acquire()
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                **kwargs,
-            )
+
+        for attempt in range(LLM_RETRY_COUNT):
+            try:
+                response = await self.circuit_breaker.call(
+                    self._raw_completion, messages, kwargs
+                )
+            except CircuitBreakerError:
+                # Service is down; don't keep hammering. Surface the error.
+                raise
+            except Exception as e:
+                await self.rate_limiter.trigger_backoff()
+                if attempt >= LLM_RETRY_COUNT - 1:
+                    raise
+                # Rate limits back off faster (3^n); generic errors 2^n.
+                exponent = 3 if "429" in str(e).lower() or "rate limit" in str(e).lower() else 2
+                await asyncio.sleep(LLM_RETRY_BASE_DELAY * (exponent**attempt))
+                continue
+
             # Sync budgets from response headers (OpenAI/OpenRouter send
             # x-ratelimit-remaining-*); harmless if absent.
             headers = getattr(response, "headers", None)
             if headers is not None:
                 await self.rate_limiter.update(headers)
             return response
-        except Exception:
-            await self.rate_limiter.trigger_backoff()
-            raise
+
+        raise RuntimeError("LLM retry budget exhausted")
 
     async def extract_entities_batch(self, texts: list[str]) -> list[list[Entity]]:
         """Extract entities from multiple texts in a single batch request."""
