@@ -196,8 +196,18 @@ def get_optimal_workers() -> int:
 MAX_CONCURRENT_REQUESTS = int(os.getenv("KNOWGRAPH_WORKERS", get_optimal_workers()))
 
 # Batch size for LLM entity extraction (balanced for rate limits)
-# Smaller batches = more API calls but less likely to hit rate limits
-BATCH_SIZE = 10
+# Auto-tuned to available RAM (smaller on low-memory hosts), override via
+# KNOWGRAPH_BATCH_SIZE.
+def _get_optimal_batch_size() -> int:
+    try:
+        from knowgraph.shared.resource_detector import ResourceDetector
+
+        return ResourceDetector.recommend_batch_size(default=15)
+    except Exception:
+        return 10
+
+
+BATCH_SIZE = int(os.getenv("KNOWGRAPH_BATCH_SIZE", _get_optimal_batch_size()))
 
 # Async Configuration
 MAX_CONCURRENT_QUERIES = 15
