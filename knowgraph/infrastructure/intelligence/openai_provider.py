@@ -6,7 +6,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from knowgraph.config import KNOWGRAPH_LLM_MODEL
+from knowgraph.config import KNOWGRAPH_LLM_MODEL, LLM_MAX_INPUT_TOKENS, LLM_MAX_TOKENS
 from knowgraph.domain.intelligence.provider import (
     Entity,
     IntelligenceProvider,
@@ -42,8 +42,10 @@ class OpenAIProvider(IntelligenceProvider):
 
         Every LLM call is throttled by the dynamic rate limiter, syncs its
         budgets from the API's rate-limit headers, and triggers a backoff on
-        failure (429 or otherwise).
+        failure (429 or otherwise). Output is capped at LLM_MAX_TOKENS so a
+        completion can't blow up cost or context.
         """
+        kwargs.setdefault("max_tokens", LLM_MAX_TOKENS)
         await self.rate_limiter.acquire()
         try:
             response = await self.client.chat.completions.create(
@@ -63,10 +65,18 @@ class OpenAIProvider(IntelligenceProvider):
 
     async def extract_entities_batch(self, texts: list[str]) -> list[list[Entity]]:
         """Extract entities from multiple texts in a single batch request."""
-        # Prepare batched prompt
+        # Prepare batched prompt, dropping the tail segments that would blow
+        # the input-token budget (approx 4 chars/token). Keeps the prompt under
+        # the model context and avoids silently truncated JSON.
         segments = []
+        budget = max(1, LLM_MAX_INPUT_TOKENS) * 4  # chars
+        used = 0
         for i, text in enumerate(texts):
-            segments.append(f"--- SEGMENT {i} ---\n{text}\n")
+            seg = f"--- SEGMENT {i} ---\n{text}\n"
+            if used + len(seg) > budget:
+                break  # drop the rest; batch_output defaults to [] for them
+            segments.append(seg)
+            used += len(seg)
 
         combined_text = "\n".join(segments)
         prompt = ENTITY_EXTRACTION_BATCH_PROMPT.format(text=combined_text)

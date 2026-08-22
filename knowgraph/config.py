@@ -232,6 +232,12 @@ LLM_TEMPERATURE = 0.0
 MAX_EXPANSION_TERMS = 5
 LLM_RETRY_COUNT = int(os.getenv("KNOWGRAPH_LLM_RETRY_COUNT", "5"))
 LLM_RETRY_BASE_DELAY = float(os.getenv("KNOWGRAPH_LLM_RETRY_DELAY", "1.0"))
+# Max tokens the LLM may GENERATE per completion (output cap). Keeps costs
+# bounded and avoids runaway responses. Override via KNOWGRAPH_LLM_MAX_TOKENS.
+LLM_MAX_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_TOKENS", "4096"))
+# Approx. max INPUT tokens per completion (model context minus output cap).
+# gpt-4o-mini has a 128k context; a conservative default protects smaller models.
+LLM_MAX_INPUT_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_INPUT_TOKENS", "32000"))
 
 # Graph Traversal Configuration
 MAX_HOPS = 4

@@ -112,3 +112,52 @@ async def test_rate_limiter_backoff_on_error():
 
         assert provider.rate_limiter.acquire.await_count == 1
         assert provider.rate_limiter.trigger_backoff.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_chat_completion_sends_max_tokens():
+    """Completion requests carry an output token cap."""
+    with patch(
+        "knowgraph.infrastructure.intelligence.openai_provider.AsyncOpenAI"
+    ) as mock_client_cls:
+        mock_client = mock_client_cls.return_value
+        create = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "ok"
+        mock_response.headers = None
+        create.return_value = mock_response
+        mock_client.chat.completions.create = create
+
+        provider = OpenAIProvider(api_key="key")
+        await provider.generate_text("p")
+
+        _, kwargs = create.call_args
+        assert "max_tokens" in kwargs
+        assert kwargs["max_tokens"] > 0
+
+
+@pytest.mark.asyncio
+async def test_batch_respects_input_token_budget():
+    """Over-budget batch drops tail segments instead of blowing context."""
+    from knowgraph.config import LLM_MAX_INPUT_TOKENS
+
+    with patch(
+        "knowgraph.infrastructure.intelligence.openai_provider.AsyncOpenAI"
+    ) as mock_client_cls:
+        mock_client = mock_client_cls.return_value
+        create = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = '{"results": []}'
+        mock_response.headers = None
+        create.return_value = mock_response
+        mock_client.chat.completions.create = create
+
+        provider = OpenAIProvider(api_key="key")
+        # Many texts whose combined size far exceeds the input budget.
+        n = 200
+        await provider.extract_entities_batch(["x" * (LLM_MAX_INPUT_TOKENS * 4 // n) for _ in range(n)])
+
+        # The prompt sent must be under the budget.
+        sent = create.call_args.kwargs["messages"][0]["content"]
+        # Approx: under input budget * some slack for the prompt template itself.
+        assert len(sent) <= LLM_MAX_INPUT_TOKENS * 4 + 2000
