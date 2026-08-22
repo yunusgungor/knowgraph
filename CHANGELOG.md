@@ -77,15 +77,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `knowgraph_analyze_call_graph`: Call chain traceability.
 - **Architecture**: Implemented Joern Daemon for high-performance querying and caching.
 
-## [0.7.2] - 2025-12-20
+## [0.6.2] - 2025-12-20
 
 ### Beta Release
 - **Features**: Graph versioning, time-travel debugging, and conversation intelligence.
 - **Search**: FTS5-based bookmark search and indexing.
 - **Health**: Added diagnostic handlers for system health checks.
 
+## [0.5.0] - 2025-12-19
+
+### 🤖 AI-Powered Indexing
+- **Smart Graph Builder**: Moved `SmartGraphBuilder` into `graph_builder.py` for AI-assisted indexing.
+- Removed unused code-analyzer methods, exception classes, and type definitions; bumped version.
+
+## [0.2.3] - 2025-12-16
+
+### 🔧 Fixes
+- `PROJECT_ROOT` resolution now uses the current working directory.
+- Bumped version.
+
+## [0.2.2] - 2025-12-16
+
+### 🔧 Fixes
+- `retriever.py`: include the original error in the retriever error message.
+
+## [0.2.1] - 2025-12-16
+
+### 🔧 CI Fixes
+- Resolved mypy, coverage, and linting issues.
+
+## [0.2.0] - 2025-12-16
+
+### 🚀 Performance Engine & CI Fixes
+- Initial public release milestone: project scaffolding, repository ingestion, and CI setup.
+- Fixed coverage and linting issues.
+
 [1.0.1]: https://github.com/yunusgungor/knowgraph/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/yunusgungor/knowgraph/compare/v0.9.0...v1.0.0
-[0.9.0]: https://github.com/yunusgungor/knowgraph/compare/v0.8.1...v0.9.0
-[0.8.1]: https://github.com/yunusgungor/knowgraph/compare/v0.8.0...v0.8.1
-[0.8.0]: https://github.com/yunusgungor/knowgraph/compare/v0.7.2...v0.8.0
