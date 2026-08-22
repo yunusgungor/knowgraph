@@ -4,6 +4,7 @@ This module enables KnowGraph to execute native Joern queries directly on CPG bi
 leveraging Joern's full query language power.
 """
 
+import atexit
 import logging
 import platform
 import subprocess
@@ -11,8 +12,29 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from knowgraph.core.joern.process import JoernDaemon
 
 logger = logging.getLogger(__name__)
+
+# Shared persistent Joern REPL across all JoernQueryExecutor instances. All
+# analyzers/query paths route through one JVM instead of each spawning its own.
+_shared_daemon: "JoernDaemon | None" = None
+
+
+def _stop_shared_daemon() -> None:
+    global _shared_daemon
+    if _shared_daemon is not None:
+        try:
+            _shared_daemon.stop()
+        except Exception:
+            pass
+        _shared_daemon = None
+
+
+atexit.register(_stop_shared_daemon)
 
 
 @dataclass
@@ -61,20 +83,42 @@ class JoernQueryExecutor:
         print(f"Found {result.node_count} methods")
     """
 
-    def __init__(self, joern_path: Path | None = None):
+    def __init__(self, joern_path: Path | None = None, use_daemon: bool | None = None):
         """Initialize executor with Joern installation path.
 
         Args:
         ----
             joern_path: Path to Joern installation directory
                        (auto-detected if None)
+            use_daemon: When True, use a persistent Joern REPL (single JVM)
+                       for queries; falls back to one-shot ``--script`` on
+                       daemon failure. Defaults to the config flag
+                       ``KNOWGRAPH_JOERN_DAEMON``.
 
         """
         self.joern_path = joern_path or self._find_joern()
         if not self.joern_path:
             raise RuntimeError("Joern not found. Install with: knowgraph-setup-joern")
 
-        logger.info(f"JoernQueryExecutor initialized: {self.joern_path}")
+        if use_daemon is None:
+            from knowgraph.config import JOERN_DAEMON_ENABLED
+
+            use_daemon = JOERN_DAEMON_ENABLED
+        self.use_daemon = use_daemon
+        global _shared_daemon
+        self.daemon = None
+        if self.use_daemon:
+            try:
+                if _shared_daemon is None:
+                    from knowgraph.core.joern.process import JoernDaemon
+
+                    _shared_daemon = JoernDaemon(self.joern_path)
+                self.daemon = _shared_daemon
+            except Exception as e:
+                logger.warning(f"Joern daemon unavailable, using --script mode: {e}")
+                self.daemon = None
+
+        logger.info(f"JoernQueryExecutor initialized: {self.joern_path} (daemon={self.use_daemon})")
 
     def _find_joern(self) -> Path | None:
         """Auto-detect Joern installation."""
@@ -135,6 +179,14 @@ class JoernQueryExecutor:
         # Validate inputs
         if not cpg_path.exists():
             raise FileNotFoundError(f"CPG not found: {cpg_path}")
+
+        # Prefer the persistent daemon (single JVM); fall back to one-shot
+        # --script below if the daemon is unavailable or errors.
+        if self.daemon is not None:
+            try:
+                return self._execute_via_daemon(cpg_path, query, timeout, start_time)
+            except Exception as e:
+                logger.warning(f"Joern daemon query failed, falling back to --script: {e}")
 
         # Create Joern script
         script_content = self._create_joern_script(cpg_path, query)
@@ -254,6 +306,48 @@ flows.l
 """
 
         return self.execute_query(cpg_path, query)
+
+    def _execute_via_daemon(
+        self,
+        cpg_path: Path,
+        query: str,
+        timeout: int,
+        start_time: float,
+    ) -> JoernQueryResult:
+        """Run the query on the persistent Joern REPL.
+
+        The daemon returns ``RESULT_ITEM: <value>`` lines (one per result
+        item). Reuses ``_parse_joern_item`` for value parsing.
+        """
+        assert self.daemon is not None
+        if not self.daemon.is_running():
+            self.daemon.start()
+
+        raw = self.daemon.query(cpg_path, query, timeout=timeout)
+        execution_time_ms = (time.time() - start_time) * 1000
+
+        # ``raw`` is the full marker window (REPL echoes + println output +
+        # RESULT_ITEM lines). Keep it as stdout so callers that parse
+        # ``println``-based stats (e.g. CallGraphAnalyzer) still work.
+        results = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if "RESULT_ITEM:" in line:
+                item_str = line.split("RESULT_ITEM:", 1)[1].strip()
+                results.append(self._parse_joern_item(item_str))
+
+        return JoernQueryResult(
+            query=query,
+            results=results,
+            execution_time_ms=execution_time_ms,
+            node_count=len(results),
+            metadata={
+                "stdout": raw,
+                "stderr": "",
+                "returncode": 0,
+                "transport": "daemon",
+            },
+        )
 
     def _create_joern_script(self, cpg_path: Path, query: str) -> str:
         """Create Joern script content.

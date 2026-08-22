@@ -289,6 +289,13 @@ JOERN_PATH = os.getenv("KNOWGRAPH_JOERN_PATH")  # None = auto-detect
 # Joern Timeout Configuration
 JOERN_TIMEOUT = int(os.getenv("KNOWGRAPH_JOERN_TIMEOUT", "120"))  # Reduced to 2 minutes
 
+# Persistent Joern daemon (single JVM). When enabled, JoernQueryExecutor runs
+# queries on a long-lived REPL instead of starting a fresh JVM per query.
+# Disable for one-shot environments (e.g. tests) where daemon lifecycle is
+# undesirable. DAEMON_START_TIMEOUT covers the initial JVM + REPL boot.
+JOERN_DAEMON_ENABLED = os.getenv("KNOWGRAPH_JOERN_DAEMON", "true").lower() == "true"
+JOERN_DAEMON_BOOT_TIMEOUT = int(os.getenv("KNOWGRAPH_JOERN_DAEMON_BOOT_TIMEOUT", "120"))
+
 # CPG Integration Settings (v0.8.0+)
 # Enable creation of separate nodes from CPG entities. Joern runs on every
 # code file, so its CPG nodes are folded into the graph by default to
