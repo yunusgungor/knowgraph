@@ -2,6 +2,7 @@
 
 import json
 import os
+from typing import Any
 
 from openai import AsyncOpenAI
 
@@ -36,6 +37,30 @@ class OpenAIProvider(IntelligenceProvider):
         self.model = model
         self.rate_limiter = RateLimiter()
 
+    async def _chat_completion(self, messages: list[dict], **kwargs: Any) -> Any:
+        """Rate-limited chat completion.
+
+        Every LLM call is throttled by the dynamic rate limiter, syncs its
+        budgets from the API's rate-limit headers, and triggers a backoff on
+        failure (429 or otherwise).
+        """
+        await self.rate_limiter.acquire()
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                **kwargs,
+            )
+            # Sync budgets from response headers (OpenAI/OpenRouter send
+            # x-ratelimit-remaining-*); harmless if absent.
+            headers = getattr(response, "headers", None)
+            if headers is not None:
+                await self.rate_limiter.update(headers)
+            return response
+        except Exception:
+            await self.rate_limiter.trigger_backoff()
+            raise
+
     async def extract_entities_batch(self, texts: list[str]) -> list[list[Entity]]:
         """Extract entities from multiple texts in a single batch request."""
         # Prepare batched prompt
@@ -46,28 +71,11 @@ class OpenAIProvider(IntelligenceProvider):
         combined_text = "\n".join(segments)
         prompt = ENTITY_EXTRACTION_BATCH_PROMPT.format(text=combined_text)
 
-        await self.rate_limiter.acquire()
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-                # Temperature removed - some models don't support temperature=0
-            )
-            # Update limits from headers (if available, client response might hide raw headers depending on lib version,
-            # but usually response object has access if we use with_raw_response or verify lib behavior.
-            # Assuming recent openai lib, response is Pydantic model. Accessing headers is tricky without 'with_raw_response'.
-            # For strict correctness we should use .with_raw_response if available, but let's check basic usage first.
-            # Actually standard openai python lib > 1.0 triggers exceptions on 429.
-            # Reading headers is not directly on the model.
-            # We skip update() for now or need a wrapper.
-            # Let's focus on acquisition logic first as that prevents overload.
-        except Exception:
-            # Trigger backoff on error
-            await self.rate_limiter.trigger_backoff()
-            raise
+        response = await self._chat_completion(
+            [{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
 
-        content = response.choices[0].message.content
         content = response.choices[0].message.content
         if not content:
             return [[] for _ in texts]
@@ -94,21 +102,15 @@ class OpenAIProvider(IntelligenceProvider):
 
     async def generate_text(self, prompt: str) -> str:
         """Generate text from a prompt."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            # Temperature removed - some models don't support temperature=0
-        )
+        response = await self._chat_completion([{"role": "user", "content": prompt}])
         return response.choices[0].message.content or ""
 
     async def extract_entities(self, text: str) -> list[Entity]:
         """Extract entities from text."""
         prompt = ENTITY_EXTRACTION_PROMPT.format(text=text)
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
+        response = await self._chat_completion(
+            [{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            # Temperature removed - some models don't support temperature=0
         )
         content = response.choices[0].message.content
         if not content:
@@ -133,11 +135,9 @@ class OpenAIProvider(IntelligenceProvider):
         """Extract relationships from text."""
         entity_names = [e.name for e in entities]
         prompt = RELATIONSHIP_EXTRACTION_PROMPT.format(text=text, entities=json.dumps(entity_names))
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
+        response = await self._chat_completion(
+            [{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            # Temperature removed - some models don't support temperature=0
         )
         content = response.choices[0].message.content
         if not content:
