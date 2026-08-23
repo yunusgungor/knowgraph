@@ -1292,14 +1292,12 @@ print(f"Sparse search: {result.sparse_search_time:.3f}s, "
 **Indexing Performance:**
 ```bash
 knowgraph index ./project --verbose
-
-# Output:
-# Files detected: 150
-# CPG generation: 25.3s
-# Entity extraction: 8.1s
-# Graph building: 12.5s
-# Total: 45.9s
 ```
+
+`--verbose` prints progress from the indexing pipeline (e.g. `✓ Loaded N nodes
+from cache`, `✓ GC removed M orphan nodes`, and per-stage performance via
+`IndexingMetrics` / `PerformanceTracker`). The exact lines vary by run; the
+key stages are entity extraction, graph building, and edge creation.
 
 ### 14.8 Optimization Checklist
 
