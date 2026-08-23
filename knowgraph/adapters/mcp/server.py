@@ -422,11 +422,8 @@ async def knowgraph_batch_query(
         "enable_grounding": enable_grounding,
         "enable_temporal_filter": enable_temporal_filter,
     }
-    kwargs: dict[str, Any] = {}
-    if ctx is not None:
-        kwargs["server"] = ctx
     return _join(
-        await handle_batch_query(arguments, get_llm_provider(), PROJECT_ROOT, **kwargs)
+        await handle_batch_query(arguments, get_llm_provider(), PROJECT_ROOT)
     )
 
 
