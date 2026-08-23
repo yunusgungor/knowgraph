@@ -11,8 +11,15 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Load .env BEFORE any os.getenv() below reads config values. The CLI's
+# main.py loads it too, but this module is imported (transitively) before that
+# load_dotenv() runs, so config would otherwise read defaults (e.g. the model
+# falls back to gpt-4o-mini -> OpenAI provider -> 404) instead of .env values.
+load_dotenv()
 
 # =============================================================================
 # Pydantic Settings (Environment-Aware Configuration)
