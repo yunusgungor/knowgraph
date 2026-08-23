@@ -62,8 +62,6 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
-        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
       }
     }
@@ -81,8 +79,6 @@ Add to `.cursor/mcp.json` in your project:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
-        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
       }
     }
@@ -147,9 +143,7 @@ For detailed usage, configuration, and advanced features, see the **[User Guide]
 - [Performance Optimization](docs/USER_GUIDE.md#14-performance-optimization)
 - [Security Analysis](docs/USER_GUIDE.md#15-security-analysis-deep-dive)
 - [Troubleshooting](docs/USER_GUIDE.md#18-troubleshooting--faq)
-- **[📘 Example Usage Guide (New!)](docs/USAGE_GUIDE.md)**: All commands, combinations and workflows.
-- [Architecture](docs/ARCHITECTURE.md)
-- **[📘 Example Usage Guide (New!)](docs/USAGE_GUIDE.md)**: All commands, combinations and workflows.
+- **[📘 Example Usage Guide](docs/USAGE_GUIDE.md)**: All commands, combinations and workflows.
 - [Architecture](docs/ARCHITECTURE.md)
 
 ---
