@@ -120,3 +120,45 @@ class TestJoernComprehensive:
         violations = engine.validate_policies(cpg_path, severity_filter=Severity.CRITICAL)
         assert isinstance(violations, list)
 
+
+
+def test_nosql_injection_policy_no_false_positive_on_parameterized():
+    """Parameterized SQLi must not be flagged by the NoSQLInjection policy.
+
+    Regression: the policy used ``argument.reachableBy(parameter)``, which
+    flagged ANY execute() whose params tuple flows from a method parameter —
+    including safe ``execute(sql, (name,))``. The fix flags only interpolated
+    SQL strings (arguments whose code contains ``{...}``).
+    """
+    from knowgraph.application.security.policy_engine import PolicyEngine, Severity
+
+    def run(source: str) -> int:
+        with tempfile.TemporaryDirectory(prefix="kg_sqli_") as tmpdir:
+            test_dir = Path(tmpdir)
+            (test_dir / "db.py").write_text(source)
+            cpg = JoernProvider().generate_cpg(test_dir)
+            engine = PolicyEngine()
+            violations = engine.validate_policies(
+                cpg,
+                policies=[p for p in engine.policies if p.name == "NoSQLInjection"],
+                severity_filter=Severity.LOW,
+            )
+            return len(violations)
+
+    vulnerable = (
+        "import sqlite3\n"
+        "def query_user(name: str) -> list:\n"
+        "    conn = sqlite3.connect('users.db')\n"
+        "    cur = conn.execute(f\"SELECT * FROM users WHERE name = '{name}'\")\n"
+        "    return cur.fetchall()\n"
+    )
+    parameterized = (
+        "import sqlite3\n"
+        "def query_user(name: str) -> list:\n"
+        "    conn = sqlite3.connect('users.db')\n"
+        "    cur = conn.execute('SELECT * FROM users WHERE name = ?', (name,))\n"
+        "    return cur.fetchall()\n"
+    )
+
+    assert run(vulnerable) >= 1, "interpolated SQL should be flagged"
+    assert run(parameterized) == 0, "parameterized query must not be flagged"

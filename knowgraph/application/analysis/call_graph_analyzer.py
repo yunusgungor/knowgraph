@@ -256,30 +256,44 @@ cpg.method.filterNot(_.name.startsWith("<")).filter { m =>
             JoernQueryExecutor,
         )
 
-        query = f"""
-val source = cpg.method.name("{from_pattern}").head
-val target = cpg.method.name("{to_pattern}").head
-
-// Find paths using reachableBy
-val paths = target.reachableBy(source).l
-
-paths.map(_.name).l
-"""
-
+        # ponytail: reachableBy is broken on the Python frontend's call graph —
+        # it returns empty even for a direct 2-hop call edge, and repeat/until
+        # path construction is unreliable in the REPL. A bounded BFS over
+        # `.callee` (queried level by level) is the form that reliably returns
+        # chains on this Joern version.
         executor = JoernQueryExecutor()
-        result = executor.execute_query(cpg_path, query)
+        depth = max(1, int(max_depth))
+        chains: list[list[str]] = []
 
-        # Parse into chains
-        chains = []
-        current_chain = []
+        # Each BFS level: (method_fullName -> path_string). Keyed by fullName so
+        # we can re-expand from the right node while keeping the path.
+        frontier: list[tuple[str, str]] = [(from_pattern, from_pattern)]
+        visited: set[str] = set()
 
-        for item in result.results:
-            method_name = item.get("raw", item.get("name", ""))
-            if method_name:
-                current_chain.append(method_name)
-
-        if current_chain:
-            chains.append(current_chain)
+        for _ in range(depth):
+            next_frontier: list[tuple[str, str]] = []
+            for method_name, path in frontier:
+                if method_name in visited:
+                    continue
+                visited.add(method_name)
+                result = executor.execute_query(
+                    cpg_path,
+                    f'cpg.method.name("{method_name}").callee.name.l',
+                )
+                callees = [
+                    item.get("raw", "")
+                    for item in result.results
+                    if item.get("raw", "")
+                ]
+                for callee in callees:
+                    new_path = f"{path} -> {callee}"
+                    if callee == to_pattern:
+                        chains.append(new_path.split(" -> "))
+                    else:
+                        next_frontier.append((callee, new_path))
+            frontier = next_frontier
+            if not frontier:
+                break
 
         return chains
 
