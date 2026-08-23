@@ -44,7 +44,7 @@ Choose the right tool for the job to optimize strictness and token usage.
 | **"Is this answer grounded in the code/docs?"** | `knowgraph_query` + `enable_grounding=True` | **(NEW)** Evidence-backed ranking + entity-in-answer verification (anti-hallucination). |
 | **"What happens if I change X?"** | `knowgraph_analyze_impact` | Deterministic dependency graph traversal (Reverse BFS). |
 | **"Explain the whole system"** | `knowgraph_batch_query` | Run 5-10 specific questions in parallel to build a comprehensive view. |
-| **"I found a bug in X"** | `knowgraph_query` (trace) | Use `with_explanation=True` to trace the data flow path. |
+| **"I found a bug in X"** | `knowgraph_query` | Use `with_explanation=True` to get the reasoning path; add `enable_grounding=True` to surface unbacked claims. |
 | **"Custom code query"** | `knowgraph_joern_query` | **(Advanced)** Execute raw Joern/CPG queries for custom analysis. |
 | **"Save this solution"** | `knowgraph_tag_snippet` | Explicitly indexes the current context as a high-value node. |
 | **"What did we discuss about X?"** | `knowgraph_search_bookmarks` | Retrieves previously tagged insights or conversations. |
@@ -210,7 +210,7 @@ Follow these step-by-step sequences for complex engineering tasks.
 
 ---
 
-## �️ 5. Safety & Admin Protocols
+## 🛡️ 5. Safety & Admin Protocols
 
 Use these workflows only when necessary to maintain graph integrity.
 
@@ -249,9 +249,9 @@ Use these workflows only when necessary to maintain graph integrity.
 *   **Topic Modeling**: Use `knowgraph_analyze_conversations(topic="security")` to see how a specific concept has evolved in discussions over time.
 *   **Pattern Matching**: Use `knowgraph_analyze_impact` in `semantic` mode to find logical concepts affected, not just files. Example: `element="User Authentication"` instead of `auth.py`.
 *   **Live Indexing**: If the USER edits a file significantly, *proactively* call `knowgraph_index(input_path=file_path)` to keep memory fresh.
-*   **Incremental Intelligence**: The system automatically uses caching and MD5 checks. You don't need to force CPG regeneration unless structure completely changes.
+*   **Incremental Intelligence**: The system automatically uses caching and SHA-1 hash checks. You don't need to force CPG regeneration unless structure completely changes.
 *   **Anti-Hallucination Indexing (CLI)**: On docs-heavy projects, re-index with `knowgraph index ./path --enable-short-unit` to publish SC-quote + P3-verified `grounded` edges (CLI-only flag; the MCP `knowgraph_index` tool does not expose it).
 *   **Grounding for Factual Answers**: For "is X true? / who is the CEO?"-style factual queries, set `enable_grounding=True` and treat any `[grounding]` tail note as a double-check prompt rather than authoritative.
 *   **Daemon Awareness**: The `JoernDaemon` runs in the background. If queries are slow, check if the daemon is warming up (first query often takes longer).
 *   **Noise Filtering**: When indexing large repos, use exclude patterns: `knowgraph_index(..., exclude_patterns=["*.lock", "node_modules/*"])`.
-*   **Batch Efficiency**: Always use `knowgraph_batch_query` when you need to answer >2 related questions. It's ~15x faster.
+*   **Batch Efficiency**: Always use `knowgraph_batch_query` when you need to answer >2 related questions — it shares context loading across queries.

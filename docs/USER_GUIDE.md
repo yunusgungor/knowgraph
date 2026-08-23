@@ -732,8 +732,9 @@ KnowGraph stores edges of the following types (`knowgraph/shared/types.py`):
 Execute multiple queries efficiently with shared context loading.
 
 **Performance Comparison:**
-- **Sequential**: 5 queries × 2s = 10s
-- **Batch**: 5 queries = 2.5s (4x faster)
+- **Sequential**: one query at a time, each paying full setup cost.
+- **Batch**: queries run concurrently with shared context loading, so N queries
+  complete in roughly the time of a few — faster the more queries you submit.
 
 **Example (async):**
 ```python
@@ -1204,7 +1205,7 @@ from knowgraph.application.querying.query_engine import QueryEngine
 async def main():
     engine = QueryEngine("./graphstore")
     
-    # Parallel execution (4x faster)
+    # Parallel execution with shared context loading
     results = await engine.batch_query_async([
         "How does auth work?",
         "What are the API endpoints?",
