@@ -412,7 +412,9 @@ class JoernProvider:
         else:
             output_dir = cpg_path.parent / f"export_{format.value}"
 
-        output_dir.mkdir(parents=True, exist_ok=True)
+        # joern-export refuses an output directory that already exists and
+        # creates it itself, so only ensure the parent exists.
+        output_dir.parent.mkdir(parents=True, exist_ok=True)
 
         # Build joern-export command
         joern_export = self._joern_cmd("joern-export")

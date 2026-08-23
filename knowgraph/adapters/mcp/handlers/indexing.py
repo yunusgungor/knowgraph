@@ -39,7 +39,7 @@ async def handle_index(
         List of text content responses
     """
     with trace_operation(
-        "mcp_index", metadata={"input_path": arguments.get("input_path", "")[:100]}
+        "mcp_index", metadata={"input_path": (arguments.get("input_path") or "")[:100]}
     ) as trace:
         try:
             # Accept `source_path` as a backward-compatible alias so callers can

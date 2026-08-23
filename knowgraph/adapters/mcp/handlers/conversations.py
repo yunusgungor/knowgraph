@@ -35,7 +35,7 @@ async def handle_search_bookmarks(
 
     """
     with trace_operation(
-        "mcp_search_bookmarks", metadata={"query": arguments.get("query", "")[:100]}
+        "mcp_search_bookmarks", metadata={"query": (arguments.get("query") or "")[:100]}
     ) as trace:
         try:
             # Validate required arguments
@@ -109,7 +109,7 @@ async def handle_analyze_conversations(
 
     """
     with trace_operation(
-        "mcp_analyze_conversations", metadata={"topic": arguments.get("topic", "")[:100]}
+        "mcp_analyze_conversations", metadata={"topic": (arguments.get("topic") or "")[:100]}
     ) as trace:
         try:
             # Optional arguments
@@ -406,7 +406,7 @@ async def handle_tag_snippet(
 
     """
     with trace_operation(
-        "mcp_tag_snippet", metadata={"tag": arguments.get("tag", "")[:100]}
+        "mcp_tag_snippet", metadata={"tag": (arguments.get("tag") or "")[:100]}
     ) as trace:
         try:
             # Rate limiting

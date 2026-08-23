@@ -568,7 +568,7 @@ async def knowgraph_find_dead_code(
 @app.tool(description="Analyze call graph structure and relationships. Supports validation, recursive call detection, and call chain analysis.")
 async def knowgraph_analyze_call_graph(
     cpg_path: Annotated[str, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
-    analysis_type: Annotated[Literal["validate", "recursive", "call_chain"], Field(description="Type of analysis: 'validate' (health check), 'recursive' (find recursion), 'call_chain' (paths between methods).")] = None,
+    analysis_type: Annotated[Literal["validate", "recursive", "call_chain"], Field(description="Type of analysis: 'validate' (health check), 'recursive' (find recursion), 'call_chain' (paths between methods).")] = "validate",
     method_name: Annotated[str, Field(description="Source method name (required for call_chain analysis).")] = None,
     target_method: Annotated[str, Field(description="Target method name (required for call_chain analysis).")] = None,
     graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
