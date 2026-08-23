@@ -149,7 +149,7 @@ Follow these step-by-step sequences for complex engineering tasks.
     # Compare current state vs. last week
     knowgraph_diff_versions(version1="v1.0.0", version2="v1.0.1")
     ```
-3.  **Analyze Diffs**: Look for `[~] Modified` nodes in core logic. Use `knowgraph_version_info` to get author/message details.
+3.  **Analyze Diffs**: Look for `[~] Modified` nodes in core logic. Use `knowgraph_version_info` for a version's created-at timestamp, manifest hash, and node/edge/file counts.
 
 ### 🛡️ Workflow E: Security Audit (NEW)
 **Goal**: Ensure new code doesn't introduce vulnerabilities.

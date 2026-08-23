@@ -2,6 +2,11 @@
 
 Bu kılavuz, KnowGraph'ın kod analizi yeteneklerini (Joern entegrasyonu dahil) tüm yönleriyle ve kombinasyonlarıyla kullanmanız için hazırlanmıştır. Aşağıdaki sorguları doğal dilde (Türkçe veya İngilizce) sisteminize sorabilirsiniz.
 
+> **Önemli:** Sorgular bir sınıflandırıcıdan geçer. Güvenlik/zafiyet/çağrı grafiği/
+> veri akışı gibi kalıplar Joern'e yönlendirilir; genel keşif ve "listele" gibi
+> ifadeler **semantik aramaya** gider. Kesin Joern sonucu almak için AI
+> asistanından doğrudan `knowgraph_joern_query` kullanmasını isteyin.
+
 ---
 
 ## 📑 İçindekiler
@@ -95,6 +100,11 @@ Metodların içine ve ilişkilerine mercek tutun.
 ## 6. Genel Arama ve Keşif
 Proje hakkında genel bilgi edinin.
 
+> **Not:** "List all files" gibi genel keşif ifadeleri `knowgraph_query`'de
+> **semantik arama** olarak sınıflandırılır (kod sorgusu olarak Joern'e
+> gitmez). Kod yapısını (dosya/namespace/tip listesi) kesin dökmek için AI
+> asistanının `knowgraph_joern_query` aracını kullanması gerekir.
+
 *   **Metadata:**
     *   `List all files` (Tüm dosyaları listele)
     *   `Show packages` (Paketleri/Namespace'leri göster)
@@ -113,6 +123,11 @@ KnowGraph'ın standart komutlarının ötesine geçip, doğrudan Joern'in Scala 
 *   `Run query cpg.method.name(".*login.*").caller.name.l` (İsminde "login" geçen metodları çağıranların ismini listele)
 *   `Execute query cpg.call.name("exec").argument.code.l` ("exec" çağıran argümanların kodunu dök)
 *   `Joern script cpg.file.name.l`
+
+> **Önemli:** Bu ifadeler doğal dilde `knowgraph_query`'ye gönderilirse **TEXT**
+> (semantik arama) olarak sınıflandırılır — Joern'e **gitmez**. Ham sorguyu
+> çalıştırmak için AI asistanının **doğrudan `knowgraph_joern_query`** aracını
+> çağırması gerekir (`cpg_path` + `query` ya da hazır bir `query_name` ile).
 
 ## 8. Örnek İş Akışları (Kombinasyonlar)
 Bu özellikleri birleştirerek karmaşık senaryoları çözebilirsiniz.
