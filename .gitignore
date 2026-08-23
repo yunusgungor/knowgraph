@@ -97,6 +97,9 @@ docs/_templates/
 
 graphstore/
 
+# User-local Claude Code settings (knowgraph init writes this; never commit)
+.claude/settings.local.json
+
 .pypirc
 
 test_suite/

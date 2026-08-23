@@ -1,0 +1,41 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "python .claude/helpers/kg-statusline.py"
+  },
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "python .claude/helpers/kg-statusline.py"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/helpers/kg-hooks.py session-start",
+            "timeout": 15000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/helpers/kg-hooks.py post-edit",
+            "timeout": 20000
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}
