@@ -397,7 +397,7 @@ class JoernProvider:
         Args:
         ----
             cpg_path: Path to CPG binary (.bin file)
-            format: Export format (GraphML, JSON, SARIF, Neo4j, DOT)
+            format: Export format (GraphML, GraphSON, Neo4jCSV, DOT)
             output_path: Output directory (auto-generated if None)
             timeout: Export timeout in seconds
 
@@ -419,17 +419,13 @@ class JoernProvider:
         # Build joern-export command
         joern_export = self._joern_cmd("joern-export")
 
-        cmd = [
-            joern_export,
-            "--format", format.value,
-            "-o", str(output_dir),
-            str(cpg_path),
-        ]
-
-        # Add format-specific options
-        if format == ExportFormat.GRAPHML:
-            cmd.insert(2, "--repr")
-            cmd.insert(3, "all")
+        cmd = [joern_export]
+        # `--repr all` is required for graphml/graphson/neo4jcsv on joern 4.x
+        # (the default cpg14 repr isn't supported for export); DOT keeps the
+        # default repr, which emits one file per method.
+        if format != ExportFormat.DOT:
+            cmd += ["--repr", "all"]
+        cmd += ["--format", format.value, "-o", str(output_dir), str(cpg_path)]
 
         logger.info(f"Exporting CPG to {format.value}: {' '.join(cmd)}")
 
@@ -452,27 +448,26 @@ class JoernProvider:
                     result.stderr,
                 )
 
-            # Find exported file(s)
-            exported_files = []
+            # Find exported file(s) — missing files are a real failure, not a
+            # silent success.
+            exported_files: list[Path] = []
 
             if format == ExportFormat.GRAPHML:
                 exported_files = list(output_dir.glob("*.graphml")) + list(output_dir.glob("*.xml"))
-            elif format == ExportFormat.JSON:
+            elif format == ExportFormat.GRAPHSON:
                 exported_files = list(output_dir.glob("*.json"))
-            elif format == ExportFormat.SARIF:
-                exported_files = list(output_dir.glob("*.sarif"))
+            elif format == ExportFormat.NEO4JCSV:
+                exported_files = list(output_dir.glob("*.csv"))
             elif format == ExportFormat.DOT:
                 exported_files = list(output_dir.glob("*.dot"))
-            elif format == ExportFormat.NEO4J:
-                # Neo4j exports to directory structure
-                return output_dir
 
-            if exported_files:
-                logger.info(f"✅ Exported to {format.value}: {len(exported_files)} files")
-                return exported_files[0] if len(exported_files) == 1 else output_dir
+            if not exported_files:
+                raise FileNotFoundError(
+                    f"Export completed but no {format.value} files found in {output_dir}"
+                )
 
-            logger.warning(f"Export succeeded but no files found in {output_dir}")
-            return output_dir
+            logger.info(f"✅ Exported to {format.value}: {len(exported_files)} files")
+            return exported_files[0] if len(exported_files) == 1 else output_dir
 
         except subprocess.TimeoutExpired:
             logger.error(f"Export timeout after {timeout}s")

@@ -430,7 +430,7 @@ async def handle_analyze_call_graph(arguments: dict[str, Any], PROJECT_ROOT: Pat
 async def handle_export_cpg(arguments: dict[str, Any], PROJECT_ROOT: Path) -> list[types.TextContent]:
     """Export CPG to various formats for visualization and CI/CD.
 
-    Supports JSON, SARIF, Neo4j, DOT, and GraphML formats.
+    Supports GraphML, DOT, GraphSON, and Neo4jCSV formats.
     """
     try:
         from knowgraph.core.joern import ExportFormat, JoernProvider
@@ -439,7 +439,7 @@ async def handle_export_cpg(arguments: dict[str, Any], PROJECT_ROOT: Path) -> li
         # Required parameters
         cpg_path_str = arguments.get("cpg_path")
         output_path_str = arguments.get("output_path")
-        format_str = arguments.get("format", "json")
+        format_str = arguments.get("format", "graphml")
         graph_path_arg = arguments.get("graph_path")
 
         if not cpg_path_str and graph_path_arg:
@@ -482,23 +482,25 @@ async def handle_export_cpg(arguments: dict[str, Any], PROJECT_ROOT: Path) -> li
         result_path = provider.export_cpg(cpg_path, export_format, output_path)  # Fixed order
 
         # Format output
-        output = "💾 CPG Export Complete\n"  # Changed from "Successful"
+        output = "💾 CPG Export Complete\n"
         output += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         output += f"**Format**: {export_format.value.upper()}\n"
         output += f"**Source CPG**: {cpg_path}\n"
-        output += f"**Exported To**: {result_path}\n\n"
+        output += f"**Exported To**: {result_path}\n"
+
+        # Report actual exported files when the result is a directory
+        if result_path.is_dir():
+            files = sorted(p.name for p in result_path.iterdir())
+            output += f"**Files ({len(files)})**: {', '.join(files[:8])}{'...' if len(files) > 8 else ''}\n"
+
+        output += "\n"
 
         # Add format-specific info
-        if export_format == ExportFormat.JSON:
-            output += "📄 **JSON Format**:\n"
-            output += "- Structured CPG data\n"
-            output += "- Use for custom processing pipelines\n"
-        elif export_format == ExportFormat.SARIF:
-            output += "🔍 **SARIF Format**:\n"
-            output += "- Static Analysis Results Interchange Format\n"
-            output += "- Integrate with CI/CD tools\n"
-        elif export_format == ExportFormat.NEO4J:
-            output += "🗂️ **Neo4j Format**:\n"
+        if export_format == ExportFormat.GRAPHSON:
+            output += "📄 **GraphSON Format**:\n"
+            output += "- JSON-based graph format for Gremlin/TinkerPop\n"
+        elif export_format == ExportFormat.NEO4JCSV:
+            output += "🗂️ **Neo4j CSV Format**:\n"
             output += "- Import into Neo4j graph database\n"
             output += "- Run Cypher queries\n"
         elif export_format == ExportFormat.DOT:

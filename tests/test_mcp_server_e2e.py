@@ -147,15 +147,18 @@ int main() {
             {
                 "cpg_path": str(cpg_path),
                 "output_path": str(export_dir / "output"),
-                "format": "json"
+                "format": "graphml"
             },
             Path.cwd()
         )
         output = result[0].text
         assert "CPG Export" in output
-        assert "JSON" in output.upper()
+        exported = list((export_dir / "output").glob("*.graphml")) + list(
+            (export_dir / "output").glob("*.xml")
+        )
+        assert exported, f"No graphml files written to {export_dir / 'output'}"
         results["export_cpg"] = "✅ PASS"
-        print(f"     ✅ Response: {len(output)} chars")
+        print(f"     ✅ Response: {len(output)} chars, {len(exported)} files written")
     except Exception as e:
         results["export_cpg"] = f"❌ FAIL: {e}"
         print(f"     ❌ Error: {e}")

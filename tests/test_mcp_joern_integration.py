@@ -247,7 +247,7 @@ class MCPTestSuite:
             arguments = {
                 "cpg_path": str(self.cpg_path),
                 "output_path": str(export_path / "output"),
-                "format": "json"
+                "format": "graphml"
             }
 
             result = await handle_export_cpg(arguments, Path.cwd())
@@ -255,9 +255,12 @@ class MCPTestSuite:
 
             print(f"📝 Output:\n{output}\n")  # Debug print
 
-            # Relaxed validation - check for key content
+            # Validate that files were actually written to disk
             assert "CPG Export" in output  # Main header
-            assert "JSON" in output.upper()  # Format mentioned somewhere
+            exported = list((export_path / "output").glob("*.graphml")) + list(
+                (export_path / "output").glob("*.xml")
+            )
+            assert exported, f"No graphml files written to {export_path / 'output'}"
 
             print("✅ PASSED: CPG export works")
             print(f"   Output preview: {output[:200]}...")

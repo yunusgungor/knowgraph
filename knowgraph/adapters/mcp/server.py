@@ -583,11 +583,11 @@ async def knowgraph_analyze_call_graph(
     return _join(await handle_analyze_call_graph(arguments, PROJECT_ROOT))
 
 
-@app.tool(description="Export CPG to various formats for visualization and CI/CD integration. Supports JSON, SARIF, Neo4j, DOT, and GraphML.")
+@app.tool(description="Export CPG to various formats for visualization and CI/CD integration. Supports GraphML, DOT, GraphSON, and Neo4jCSV.")
 async def knowgraph_export_cpg(
     cpg_path: Annotated[str, Field(description="Path to source CPG binary file (required).")],
     output_path: Annotated[str, Field(description="Export destination path (required).")],
-    format: Annotated[Literal["json", "sarif", "neo4j", "dot", "graphml"], Field(description="Export format (default: json).")] = "json",
+    format: Annotated[Literal["graphml", "dot", "graphson", "neo4jcsv"], Field(description="Export format (default: graphml).")] = "graphml",
     graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {

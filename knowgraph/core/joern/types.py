@@ -6,11 +6,10 @@ from typing import NamedTuple
 
 
 class ExportFormat(Enum):
-    """Supported CPG export formats."""
+    """Supported CPG export formats (joern-export v4.x)."""
     GRAPHML = "graphml"
-    JSON = "json"
-    NEO4J = "neo4j"
-    SARIF = "sarif"
+    GRAPHSON = "graphson"
+    NEO4JCSV = "neo4jcsv"
     DOT = "dot"
 
 

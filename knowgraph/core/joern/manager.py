@@ -204,6 +204,26 @@ def extract_joern(zip_path: Path, install_dir: Path) -> bool:
         return False
 
 
+# Joern's wrapper scripts start the JVM with default heap/XML limits, which
+# OOMs or trips the XML entity limit on large CPGs. conf/application.ini is
+# read by every joern wrapper as extra JVM args (joern-cli/bin/* line ~375);
+# writing it here fixes large-CPG export/parse for all joern tools without
+# touching the upstream wrapper scripts.
+_JVM_OPTS = (
+    "-J-Xmx6g "
+    "-J-Djdk.xml.maxGeneralEntitySizeLimit=0 "
+    "-J-Djdk.xml.totalEntitySizeLimit=0 "
+    "-J-Djdk.xml.entityExpansionLimit=0"
+)
+
+
+def _write_jvm_config(joern_cli_dir: Path) -> None:
+    """Write conf/application.ini so joern wrappers start with adequate JVM limits."""
+    conf_dir = joern_cli_dir / "conf"
+    conf_dir.mkdir(parents=True, exist_ok=True)
+    (conf_dir / "application.ini").write_text(_JVM_OPTS + "\n")
+
+
 def verify_installation() -> bool:
     """Verify Joern installation by checking executable and directory structure.
 
@@ -311,6 +331,9 @@ def install_joern() -> bool:
     # Step 0: Check if already installed
     print("🔍 Checking for existing Joern installation...")
     if verify_installation():
+        # Ensure the JVM config exists even on an existing install, so
+        # re-running setup fixes large-CPG export/parse.
+        _write_jvm_config(INSTALL_DIR / "joern-cli")
         print("\n✅ Joern is already installed and verified!")
         print(f"   Location: {INSTALL_DIR / 'joern-cli'}")
         print("   Joern features are available.")
@@ -361,6 +384,10 @@ def install_joern() -> bool:
     # "Permission denied" on every frontend. Fix it here so the setup command
     # "just works" for users who never touch the filesystem.
     _make_native_binaries_executable(INSTALL_DIR)
+
+    # Step 3.6: Write JVM config so large CPGs export/parse without OOM or
+    # XML-entity-limit crashes.
+    _write_jvm_config(INSTALL_DIR / "joern-cli")
 
     # Step 4: Verify
     if not verify_installation():
