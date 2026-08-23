@@ -10,10 +10,10 @@ This document defines the **Rules of Engagement** for interacting with KnowGraph
 
 1.  **Graph First, Code Second**: Before writing or reading individual files, query the graph to understand the *context*, *dependencies*, and *architectural patterns*.
 2.  **Be Explicit, Not Vague**: The graph is stateless. Do not use "it", "that file", or "the previous function". Always use **fully qualified names** (e.g., `src/auth.py`, `QueryEngine.query_async`).
-3.  **Think in Graphs**: Code is not linear; it's a network. When analyzing a bug, look for *upstream callers* and *downstream dependencies* using `analyze_impact`.
+3.  **Think in Graphs**: Code is not linear; it's a network. When analyzing a bug, look for *upstream callers* and *downstream dependencies* using `knowgraph_analyze_impact`.
 4.  **Validate Your Knowledge**: If you are unsure, use `knowgraph_validate` and `knowgraph_get_stats` to check the health of your memory.
 5.  **Preserve Knowledge (RAG)**: If you generate a valuable insight, solve a hard problem, or receive critical instruction, use `knowgraph_tag_snippet` to save it via Semantic Bookmarking.
-6.  **Respect Time**: Use Version Control (`knowgraph_version_*`) features to understand evolution and regressions.
+6.  **Respect Time**: Use Version Control tools (`knowgraph_list_versions`, `knowgraph_version_info`, `knowgraph_diff_versions`) to understand evolution and regressions.
 
 ### 1.1 Strict Coding Standards (Zero Tolerance)
 *   **Type Safety**: All Python code **must** be fully typed and pass `mypy --strict`.

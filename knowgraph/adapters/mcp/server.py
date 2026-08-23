@@ -533,7 +533,7 @@ async def knowgraph_joern_query(
     return _join(await handle_joern_query(arguments, PROJECT_ROOT))
 
 
-@app.tool(description="Run security policy validation with 10 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc. Auto-detects CPG from graph_path if not explicitly provided. Set scan_type to run flow-based taint analysis instead.")
+@app.tool(description="Run security policy validation with 6 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc. Auto-detects CPG from graph_path if not explicitly provided. Set scan_type to run flow-based taint analysis instead.")
 async def knowgraph_security_scan(
     cpg_path: Annotated[str, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
     severity_filter: Annotated[Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"], Field(description="Minimum severity level for violations (default: MEDIUM).")] = "MEDIUM",
