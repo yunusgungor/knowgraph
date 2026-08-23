@@ -469,7 +469,7 @@ def test_collect_index_stats_success(mock_graphstore):
     with patch(
         "knowgraph.infrastructure.storage.filesystem.list_all_nodes"
     ) as mock_list_nodes, patch(
-        "knowgraph.infrastructure.storage.filesystem.list_all_edges"
+        "knowgraph.infrastructure.storage.filesystem.read_all_edges"
     ) as mock_list_edges, patch(
         "knowgraph.infrastructure.storage.filesystem.read_node_json"
     ) as mock_read:
@@ -548,7 +548,7 @@ def test_collect_index_stats_various_node_types(mock_graphstore):
     with patch(
         "knowgraph.infrastructure.storage.filesystem.list_all_nodes"
     ) as mock_list_nodes, patch(
-        "knowgraph.infrastructure.storage.filesystem.list_all_edges"
+        "knowgraph.infrastructure.storage.filesystem.read_all_edges"
     ) as mock_list_edges, patch(
         "knowgraph.infrastructure.storage.filesystem.read_node_json"
     ) as mock_read:
@@ -568,7 +568,7 @@ def test_collect_index_stats_empty_graph(mock_graphstore):
     with patch(
         "knowgraph.infrastructure.storage.filesystem.list_all_nodes"
     ) as mock_list_nodes, patch(
-        "knowgraph.infrastructure.storage.filesystem.list_all_edges"
+        "knowgraph.infrastructure.storage.filesystem.read_all_edges"
     ) as mock_list_edges:
         mock_list_nodes.return_value = []
         mock_list_edges.return_value = []
@@ -623,7 +623,7 @@ def test_collect_index_stats_skip_invalid_nodes(mock_graphstore):
     with patch(
         "knowgraph.infrastructure.storage.filesystem.list_all_nodes"
     ) as mock_list_nodes, patch(
-        "knowgraph.infrastructure.storage.filesystem.list_all_edges"
+        "knowgraph.infrastructure.storage.filesystem.read_all_edges"
     ) as mock_list_edges, patch(
         "knowgraph.infrastructure.storage.filesystem.read_node_json"
     ) as mock_read:

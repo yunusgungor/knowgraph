@@ -378,8 +378,8 @@ def collect_index_stats(graphstore_path: Path) -> dict:
 
     """
     from knowgraph.infrastructure.storage.filesystem import (
-        list_all_edges,
         list_all_nodes,
+        read_all_edges,
         read_node_json,
     )
 
@@ -414,9 +414,9 @@ def collect_index_stats(graphstore_path: Path) -> dict:
             else:
                 stats["other_nodes"] += 1
 
-        # Count edges
-        edge_ids = list_all_edges(graphstore_path)
-        stats["total_edges"] = len(edge_ids)
+        # Count edges (read_all_edges: list_all_edges is a stub that reads
+        # edge.id, which the Edge model doesn't have)
+        stats["total_edges"] = len(read_all_edges(graphstore_path))
 
     except Exception:
         pass
