@@ -53,6 +53,7 @@ knowgraph-setup-joern
 ### 2. MCP Server Configuration
 
 #### For Claude Desktop
+
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
@@ -62,7 +63,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
+        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
+        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       }
     }
   }
@@ -70,6 +73,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```
 
 #### For Cursor
+
 Add to `.cursor/mcp.json` in your project:
 
 ```json
@@ -79,7 +83,9 @@ Add to `.cursor/mcp.json` in your project:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
+        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
+        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       }
     }
   }
@@ -87,6 +93,7 @@ Add to `.cursor/mcp.json` in your project:
 ```
 
 #### For Antigravity
+
 Add to `~/.gemini/antigravity/mcp_config.json`:
 
 ```json
@@ -107,6 +114,7 @@ Add to `~/.gemini/antigravity/mcp_config.json`:
 ```
 
 #### Using OpenRouter (Alternative LLM Provider)
+
 ```json
 {
   "mcpServers": {
@@ -167,3 +175,4 @@ Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) 
 - **Issues**: [Report a bug](https://github.com/yunusgungor/knowgraph/issues)
 - **MCP Protocol**: [Model Context Protocol](https://modelcontextprotocol.io)
 - **Joern**: [Code Property Graph](https://joern.io)
+

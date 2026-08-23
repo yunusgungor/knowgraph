@@ -85,7 +85,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
+        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
+        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       }
     }
   }
@@ -101,7 +103,9 @@ Add to `.cursor/mcp.json` in your project:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
+        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
+        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       }
     }
   }
@@ -117,7 +121,9 @@ Add to `~/.gemini/antigravity/mcp_config.json`:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
+        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
+        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       },
       "disabled": false
     }
@@ -615,7 +621,9 @@ The MCP server exposes resources under `knowgraph://…`:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
+        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
+        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       }
     }
   }
@@ -630,7 +638,9 @@ The MCP server exposes resources under `knowgraph://…`:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
+        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
+        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       }
     }
   }
@@ -645,7 +655,9 @@ The MCP server exposes resources under `knowgraph://…`:
       "command": "knowgraph",
       "args": ["serve"],
       "env": {
-        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
+        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
+        "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       },
       "disabled": false
     }
