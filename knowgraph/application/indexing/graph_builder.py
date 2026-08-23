@@ -30,6 +30,36 @@ from knowgraph.shared.tracing import trace_operation
 logger = logging.getLogger(__name__)
 
 
+def _merge_entities(existing: list[Any], new: list[Any]) -> list[Any]:
+    """Union two entity lists, deduped by (name, type).
+
+    ``existing`` may hold ``Entity`` NamedTuples or their ``_asdict()`` dicts
+    (as stored on node metadata); ``new`` holds ``Entity`` objects from the
+    LLM. Normalizes everything to ``Entity`` so callers can ``_asdict()`` the
+    result. Preserves existing (Joern/AST) entities and adds new (LLM) ones.
+    """
+    from knowgraph.domain.intelligence.provider import Entity
+
+    def to_entity(e: Any) -> Any:
+        if isinstance(e, dict):
+            return Entity(
+                name=e.get("name", ""),
+                type=e.get("type", ""),
+                description=e.get("description", ""),
+            )
+        return e
+
+    seen: set[tuple[str, str]] = set()
+    merged: list[Any] = []
+    for e in list(existing) + list(new):
+        ent = to_entity(e)
+        k = (ent.name, ent.type)
+        if k not in seen:
+            seen.add(k)
+            merged.append(ent)
+    return merged
+
+
 def create_node_from_chunk(chunk: Chunk, source_path: str, node_type: str | None = None) -> Node:
     """Convert chunk to node with metadata.
 
@@ -530,7 +560,12 @@ class SmartGraphBuilder:
                                     logger.warning(f"CPG conversion failed for {file_key}: {cpg_err}")
                                     # Continue with metadata-only (graceful degradation)
 
-                            continue
+                            # Code chunks are fully handled by Joern/AST and
+                            # never go to the LLM. Text chunks (docstring/prose
+                            # blocks in a code file) fall through to the LLM
+                            # gate below even when the file has code entities.
+                            if node.type == "code":
+                                continue
                     except Exception as e:
                         self.metrics.record_ast_failure(str(e), f"node_{node.id}")
                         logger.debug(f"Code analysis failed for node {node.id}: {e}")
@@ -545,8 +580,10 @@ class SmartGraphBuilder:
                             f"Skipping LLM for {'code' if node.type == 'code' else 'small'} file "
                             f"{node.path} ({node.token_count} tokens)"
                         )
-                        # Add node without entities
-                        final_nodes_map[node.id] = node
+                        # Add node without entities — setdefault so a text
+                        # node that already carries Joern entities (from the
+                        # branch above) isn't clobbered.
+                        final_nodes_map.setdefault(node.id, node)
                     else:
                         nodes_needing_llm.append(node)
 
@@ -605,14 +642,27 @@ class SmartGraphBuilder:
                     batch_results = await asyncio.gather(*tasks)
                     for batch_res in batch_results:
                         for node, entities in batch_res:
-                            self.cache_manager.save_entities(node.hash, entities)
+                            # Merge LLM entities with any Joern/AST entities the
+                            # text node already carries (a docstring chunk in a
+                            # code file) instead of replacing them. Dedupe by
+                            # (name, type). An empty LLM result keeps the
+                            # existing entities rather than wiping them.
+                            existing = final_nodes_map.get(node.id)
+                            existing_entities = (
+                                existing.metadata.get("entities", [])
+                                if existing and existing.metadata
+                                else []
+                            )
+                            merged = _merge_entities(existing_entities, entities)
+                            self.cache_manager.save_entities(node.hash, merged)
                             final_nodes_map[node.id] = replace(
-                                node, metadata={"entities": [e._asdict() for e in entities]}
+                                node, metadata={"entities": [e._asdict() for e in merged]}
                             )
             elif nodes_needing_llm:
-                # If LLM skipped, still add nodes to map (without entities)
+                # If LLM skipped, still add nodes to map — setdefault so a text
+                # node with Joern entities isn't clobbered.
                 for node in nodes_needing_llm:
-                    final_nodes_map[node.id] = node
+                    final_nodes_map.setdefault(node.id, node)
 
             # Reassemble final nodes
             # Include ALL nodes from map (chunks + CPG entity nodes)

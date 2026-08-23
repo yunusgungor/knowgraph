@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from knowgraph.application.indexing.graph_builder import (
     SmartGraphBuilder,
+    _merge_entities,
     create_node_from_chunk,
     create_semantic_edges,
     validate_edges,
@@ -133,6 +134,28 @@ def test_code_chunks_skip_llm():
     assert not any("def foo" in t for t in calls), f"code chunk leaked to LLM: {calls}"
     # The markdown chunk should be (it's non-code and above the small-file skip).
     assert len(calls) == 1, f"expected 1 LLM batch call for markdown, got {len(calls)}"
+
+
+def test_merge_entities_joern_and_llm():
+    """Merging Joern/AST (dict) entities with LLM (Entity) entities dedupes."""
+    from knowgraph.domain.intelligence.provider import Entity
+
+    existing = [
+        {"name": "foo", "type": "definition", "description": "d"},
+        {"name": "bar", "type": "call", "description": "c"},
+    ]
+    new = [Entity("foo", "definition", "d"), Entity("baz", "call", "c")]
+
+    merged = _merge_entities(existing, new)
+
+    # foo deduped (present in both), bar (Joern only) and baz (LLM only) kept.
+    assert [(e.name, e.type) for e in merged] == [
+        ("foo", "definition"),
+        ("bar", "call"),
+        ("baz", "call"),
+    ]
+    # All normalized to Entity so _asdict() works downstream.
+    assert all(hasattr(e, "_asdict") for e in merged)
 
 
 def test_create_semantic_edges():
