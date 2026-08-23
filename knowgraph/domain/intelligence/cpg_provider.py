@@ -56,40 +56,42 @@ class CPGProvider:
         self._primary_cpg: Path | None = None  # single-language: the CPG
 
     def ensure_cpg(self, directory: Path) -> Path:
-        """Generate (or reuse) CPGs for ``directory``, one per language.
+        """Generate (or reuse) a CPG for ``directory``.
+
+        One multi-language CPG is generated: joern-parse without ``--language``
+        handles every frontend in a single pass. Per-language generation (the
+        old behaviour) re-parsed the whole directory once per language group
+        (e.g. 250 python files 3x), which stalled large repos and hit the
+        export timeout.
 
         Args:
             directory: Source code directory to index.
 
         Returns:
-            Path to the primary cpg.bin (the only CPG when single-language).
+            Path to the primary cpg.bin.
         """
         if self._primary_cpg is not None:
             return self._primary_cpg
 
-        files_by_lang = self._detect_language_groups(directory)
-
-        if not files_by_lang:
+        # Populate _file_lang (cheap: filename scan) so _cpg_for_file can
+        # resolve per-file entities against the single CPG.
+        self._detect_language_groups(directory)
+        if not self._file_lang:
             # No Joern-supported files detected; nothing to do.
             logger.info("No Joern-supported files detected, skipping directory CPG")
             return Path()
 
-        for lang, _files in files_by_lang.items():
-            joern_lang = JOERN_LANGUAGE_ALIASES.get(lang)
-            if not joern_lang:
-                continue
-            try:
-                cpg_path = self.provider.generate_cpg(repo_path=directory, language=joern_lang)
-                self._cpg_by_lang[lang] = cpg_path
-                self._executors[lang] = self.provider._executor()
-                if self._primary_cpg is None:
-                    self._primary_cpg = cpg_path
-                logger.info(f"✅ Directory CPG for {lang}: {cpg_path}")
-            except Exception as e:
-                logger.warning(f"CPG generation failed for {lang}: {e}")
+        try:
+            cpg_path = self.provider.generate_cpg(repo_path=directory)
+            self._primary_cpg = cpg_path
+            # Point every detected language at the single multi-language CPG.
+            self._cpg_by_lang = {lang: cpg_path for lang in set(self._file_lang.values())}
+            self._executors = {lang: self.provider._executor() for lang in set(self._file_lang.values())}
+            logger.info(f"✅ Directory CPG: {cpg_path}")
+        except Exception as e:
+            logger.warning(f"CPG generation failed: {e}")
 
-        if self._primary_cpg is not None and len(self._cpg_by_lang) == 1:
-            # Single-language directory: persist for query-layer reuse.
+        if self._primary_cpg is not None:
             self._persist(self._primary_cpg, directory)
 
         return self._primary_cpg or Path()
@@ -159,10 +161,13 @@ class CPGProvider:
         # query, so merging method/call/identifier extraction into ONE query
         # is ~3x cheaper than three separate queries. Results are prefixed:
         # DEF| (method/definition), CALL| (call), REF| (identifier/reference).
+        # filename() must match the basename as a regex against the FULL path:
+        # joern-parse stores file names like "knowgraph/config.py", so an exact
+        # basename match returns nothing (verified: 0 vs 62 results).
         query = (
-            f'cpg.method.where(_.filename("{name}")).map(m => "DEF|" + m.name).l ++ '
-            f'cpg.call.where(_.method.filename("{name}")).map(c => "CALL|" + c.name).l ++ '
-            f'cpg.identifier.where(_.method.filename("{name}")).name.dedup.map(n => "REF|" + n).l'
+            f'cpg.method.where(_.filename(".*{name}")).map(m => "DEF|" + m.name).l ++ '
+            f'cpg.call.where(_.method.filename(".*{name}")).map(c => "CALL|" + c.name).l ++ '
+            f'cpg.identifier.where(_.method.filename(".*{name}")).name.dedup.map(n => "REF|" + n).l'
         )
         try:
             r = execr.execute_query(cpg_path, query, timeout=120)

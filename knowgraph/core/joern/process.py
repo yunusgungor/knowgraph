@@ -11,6 +11,7 @@ not on the prompt.
 """
 
 import logging
+import os
 import platform
 import queue
 import subprocess
@@ -47,6 +48,13 @@ class JoernDaemon:
         self._reader_stop = threading.Event()
         self._reader: Optional[threading.Thread] = None
         self._loaded_cpgs: set[str] = set()
+        # Each REPL query binds a `val __kg` in the session scope; after many
+        # queries the accumulated scope slows type-checking (observed ~2x at
+        # 500 queries, trending to a hang). Restart periodically to reset it.
+        self._query_count = 0
+        self._query_reset_threshold = int(
+            os.getenv("KNOWGRAPH_JOERN_QUERY_RESET", "300")
+        )
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -181,6 +189,21 @@ class JoernDaemon:
         """
         if not self.is_running():
             raise RuntimeError("JoernDaemon is not running")
+
+        # Periodically restart to reset the growing REPL session scope, which
+        # otherwise slows type-checking and eventually hangs (each query binds
+        # a `val __kg` in the session). Done BEFORE ensure_cpg_loaded so the
+        # fresh REPL re-imports the CPG for this query.
+        self._query_count += 1
+        if self._query_count >= self._query_reset_threshold:
+            self._query_count = 0
+            logger.info(
+                f"Restarting Joern daemon after {self._query_reset_threshold} queries "
+                "(reset accumulated REPL scope)"
+            )
+            if not self.restart():
+                raise RuntimeError("Joern daemon restart failed")
+
         self.ensure_cpg_loaded(cpg_path)
 
         # Start the marker window BEFORE evaluating the query so any

@@ -631,10 +631,12 @@ async def create_and_save_manifest(nodes, edges, file_hashes, graph_store_path, 
         manifest.file_hashes = file_hashes
     # Count actual nodes/edges on disk — a subdir run's `nodes`/`edges` lists
     # only cover this run, not the merged graph.
-    from knowgraph.infrastructure.storage.filesystem import list_all_edges, list_all_nodes
+    from knowgraph.infrastructure.storage.filesystem import list_all_nodes, read_all_edges
 
     manifest.node_count = len(list_all_nodes(graph_store_path))
-    manifest.edge_count = len(list_all_edges(graph_store_path))
+    # len() of read_all_edges: Edge has no `id` field, so list_all_edges (which
+    # reads edge.id) would raise AttributeError on any non-empty edges file.
+    manifest.edge_count = len(read_all_edges(graph_store_path))
     manifest.semantic_edge_count = manifest.edge_count
     manifest.finalized = True
 
