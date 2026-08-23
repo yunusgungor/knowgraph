@@ -1093,9 +1093,8 @@ Stores generated Code Property Graphs to avoid re-analysis.
 **Location:** `~/.knowgraph/cpg_cache/`
 
 **Benefits:**
-- First index: ~30s
-- Re-index (cached): <1s
-- 30x speedup for unchanged code
+- First index: ~30s (small project)
+- Re-index (cached): <1s when the CPG is unchanged
 
 **Manual Cache Management:**
 ```bash
@@ -1132,7 +1131,7 @@ Tracks processed files to skip unchanged content.
 2. Compares with previous index
 3. Skips files with matching hashes
 
-**Benefit:** 4-6x faster incremental updates
+**Benefit:** re-indexing skips unchanged files, so incremental updates are much faster than a full rebuild
 
 ### 14.2 Worker Tuning
 
