@@ -186,7 +186,9 @@ async def run_index(
         if progress_callback:
             await progress_callback("manifest", 7, 9, "Creating and saving manifest...")
 
-        await create_and_save_manifest(all_nodes, edges, file_hashes, graph_store_path, verbose)
+        await create_and_save_manifest(
+            all_nodes, edges, file_hashes, graph_store_path, verbose, existing_manifest
+        )
 
         # Step 8: Run post-index hooks
         if progress_callback:

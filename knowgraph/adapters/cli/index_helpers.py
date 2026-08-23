@@ -326,10 +326,13 @@ async def prepare_files_and_hashes(files, base_path, graph_store_path, verbose, 
                 except Exception:  # noqa: S110
                     return None
 
-            try:
-                relative_path = file_path.relative_to(base_path)
-            except ValueError:
-                relative_path = Path(file_path.name)
+            # Canonical identity: an absolute resolved path gives the same
+            # file_hashes key for every run/subdirectory, so re-indexing a
+            # subdir never re-keys files already in the manifest.
+            # ponytail: node.path becomes "abs/..."; GC on subdir runs was
+            # already misresolving against the run base_path — a stable
+            # source-root in the manifest would fix it properly.
+            relative_path = file_path.resolve()
 
             lang = EXT_MAP.get(file_path.suffix, "text")
             markdown_wrapper = f"# {relative_path.as_posix()}\n\n```{lang}\n{content}\n```"
@@ -372,11 +375,14 @@ async def prepare_files_and_hashes(files, base_path, graph_store_path, verbose, 
 def load_existing_manifest(output_path, verbose):
     from knowgraph.infrastructure.storage.manifest import read_manifest
 
-    manifest_path = Path(output_path) / "metadata" / "manifest.json"
-    if not manifest_path.exists():
+    # read_manifest expects the graph store root dir, not the manifest file
+    # path; passing the file path made this always return None, which silently
+    # disabled both incremental-skip and the manifest file_hashes merge.
+    graph_store_path = Path(output_path)
+    if not (graph_store_path / "metadata" / "manifest.json").exists():
         return None
     try:
-        manifest = read_manifest(manifest_path)
+        manifest = read_manifest(graph_store_path)
         _log_verbose(verbose, f"Loaded manifest (v{manifest.version})")  # type: ignore[union-attr]
         return manifest
     except Exception:  # noqa: S110
@@ -595,8 +601,14 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
 # ============================================================================
 
 
-async def create_and_save_manifest(nodes, edges, file_hashes, graph_store_path, verbose):
-    """Create and save manifest with automatic backup."""
+async def create_and_save_manifest(nodes, edges, file_hashes, graph_store_path, verbose, existing_manifest=None):
+    """Create and save manifest with automatic backup.
+
+    ``file_hashes`` only covers the files in this index run. When an existing
+    manifest is present (subdirectory / incremental indexing), its hashes are
+    merged in so previously-indexed files are never dropped from the graph.
+    True deletions stay the job of the GC step (``perform_gc``), not this merge.
+    """
     from knowgraph.config import EDGES_FILENAME
     from knowgraph.infrastructure.storage.manifest import Manifest, write_manifest
 
@@ -613,10 +625,17 @@ async def create_and_save_manifest(nodes, edges, file_hashes, graph_store_path, 
         _log_verbose(verbose, f"Warning: Could not create manifest backup: {e}")
 
     manifest = Manifest.create_new(edges_filename=EDGES_FILENAME, sparse_index_filename="index")
-    manifest.node_count = len(nodes)
-    manifest.edge_count = len(edges)
-    manifest.file_hashes = file_hashes
-    manifest.semantic_edge_count = len(edges)
+    if existing_manifest:
+        manifest.file_hashes = {**existing_manifest.file_hashes, **file_hashes}
+    else:
+        manifest.file_hashes = file_hashes
+    # Count actual nodes/edges on disk — a subdir run's `nodes`/`edges` lists
+    # only cover this run, not the merged graph.
+    from knowgraph.infrastructure.storage.filesystem import list_all_edges, list_all_nodes
+
+    manifest.node_count = len(list_all_nodes(graph_store_path))
+    manifest.edge_count = len(list_all_edges(graph_store_path))
+    manifest.semantic_edge_count = manifest.edge_count
     manifest.finalized = True
 
     write_manifest(manifest, graph_store_path)

@@ -132,6 +132,58 @@ class TestIndexingToQueryFlow:
         assert loaded_manifest.edge_count == manifest.edge_count
         assert loaded_manifest.file_hashes == manifest.file_hashes
 
+    async def test_subdir_index_merges_file_hashes(self, temp_graph_path, sample_nodes):
+        """Indexing a subdir must not drop hashes of files not in this run."""
+        from knowgraph.adapters.cli.index_helpers import create_and_save_manifest
+
+        # Seed manifest {A, B, C} from the first 3 sample nodes (full graph)
+        seed_nodes = sample_nodes[:3]
+        seed_manifest = Manifest(
+            version="1.0",
+            node_count=len(seed_nodes),
+            edge_count=0,
+            file_hashes={n.path: n.hash for n in seed_nodes},
+            edges_filename="edges.jsonl",
+            sparse_index_filename="sparse_index.json",
+            created_at=1000000,
+            updated_at=1000000,
+        )
+        write_manifest(seed_manifest, temp_graph_path)
+
+        # Simulate indexing a subdir {C, D}: C already indexed, D is new
+        subdir_nodes = [seed_nodes[2], sample_nodes[3]]  # C, D
+        subdir_hashes = {n.path: n.hash for n in subdir_nodes}
+
+        await create_and_save_manifest(
+            subdir_nodes, [], subdir_hashes, temp_graph_path, False, existing_manifest=seed_manifest
+        )
+
+        loaded = read_manifest(temp_graph_path)
+        # A and B (not in this run) must survive the merge
+        assert loaded.file_hashes == {
+            n.path: n.hash for n in sample_nodes[:4]
+        }
+
+    async def test_file_hashes_keys_stable_across_base_paths(self, tmp_path):
+        """Same file gets the same manifest key whether indexed via root or subdir."""
+        from knowgraph.adapters.cli.index_helpers import prepare_files_and_hashes
+
+        root = tmp_path / "root"
+        sub = root / "sub"
+        sub.mkdir(parents=True)
+        (sub / "c.md").write_text("file C")
+
+        # Index the same file with base_path=root and base_path=root/sub
+        hashes_root, *_ = await prepare_files_and_hashes(
+            [sub / "c.md"], root, tmp_path, False
+        )
+        hashes_subdir, *_ = await prepare_files_and_hashes(
+            [sub / "c.md"], sub, tmp_path, False
+        )
+
+        assert set(hashes_root.keys()) == set(hashes_subdir.keys())
+        assert list(hashes_root.keys())[0] == (sub / "c.md").resolve().as_posix()
+
     def test_full_indexing_pipeline(self, temp_graph_path, sample_nodes, sample_edges):
         """Test complete indexing pipeline."""
         # Write graph data
