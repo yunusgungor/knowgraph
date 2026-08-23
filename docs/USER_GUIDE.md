@@ -701,7 +701,8 @@ result = engine.query(
 3. Combines original + expanded terms
 4. Searches with broader context
 
-**Performance Impact:** +1-2s query time, but significantly better recall.
+**Performance Impact:** adds one extra LLM call per query (an additional
+round-trip), in exchange for significantly better recall.
 
 ### 9.2 Edge Types in the Graph
 
