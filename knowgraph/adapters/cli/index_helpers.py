@@ -803,6 +803,25 @@ async def perform_gc(
     active_abs = set(file_hash_map.keys())
 
     removed = 0
+    # One-time dedup sweep: drop duplicate node files whose content hash is
+    # already claimed by an earlier (canonical) node. Pre-reindex duplicates
+    # (before the write_graph_to_storage dedup) accumulate here; keep the file
+    # with the lowest id string as canonical for deterministic re-runs.
+    canonical: dict[str, object] = {}
+    for node_id in sorted(list_all_nodes(graph_store_path), key=str):
+        try:
+            node = read_node_json(node_id, graph_store_path)
+            if not node or not node.hash:
+                continue
+            if node.hash in canonical:
+                if delete_node_json(node_id, graph_store_path):
+                    removed += 1
+                    _log_verbose(verbose, f"GC: removed duplicate node {node_id} (hash {node.hash[:8]})")
+            else:
+                canonical[node.hash] = node_id
+        except Exception as e:  # noqa: BLE001 - best-effort GC
+            _log_verbose(verbose, f"GC: skipped node {node_id}: {e}")
+
     for node_id in list_all_nodes(graph_store_path):
         try:
             node = read_node_json(node_id, graph_store_path)
