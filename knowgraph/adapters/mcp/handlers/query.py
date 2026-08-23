@@ -67,7 +67,7 @@ async def handle_query(
     """
     # Tracing context for observability
     with trace_operation(
-        "mcp_query", metadata={"query": arguments.get("query", "")[:100]}
+        "mcp_query", metadata={"query": (arguments.get("query") or "")[:100]}
     ) as trace:
         # Create progress notifier for real-time updates
         progress = ProgressNotifier(server, "Query Search") if server else None

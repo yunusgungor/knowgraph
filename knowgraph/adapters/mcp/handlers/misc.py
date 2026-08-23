@@ -41,7 +41,7 @@ async def handle_analyze_impact(
         List of text content responses
     """
     with trace_operation(
-        "mcp_analyze_impact", metadata={"element": arguments.get("element", "")[:100]}
+        "mcp_analyze_impact", metadata={"element": (arguments.get("element") or "")[:100]}
     ) as trace:
         # Apply circuit breaker protection
         async def execute_analysis():
