@@ -33,6 +33,35 @@ async def test_generate_text():
 
 
 @pytest.mark.asyncio
+async def test_circuit_breaker_counts_one_failure_per_batch():
+    """A fully-failing batch (all retries exhausted) is ONE breaker failure.
+
+    Regression: retries used to live OUTSIDE the breaker, so one bad batch
+    recorded LLM_RETRY_COUNT failures and tripped the breaker (threshold ==
+    retry count), rejecting every subsequent batch.
+    """
+    from knowgraph.shared.circuit_breaker import get_circuit_breaker
+
+    with (
+        patch("knowgraph.infrastructure.intelligence.openai_provider.AsyncOpenAI") as mock_client_cls,
+        patch("knowgraph.infrastructure.intelligence.openai_provider.LLM_RETRY_COUNT", 3),
+        patch("knowgraph.infrastructure.intelligence.openai_provider.LLM_RETRY_BASE_DELAY", 0.0),
+    ):
+        mock_client = mock_client_cls.return_value
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("boom"))
+        provider = OpenAIProvider(api_key="key")
+        breaker = get_circuit_breaker("openai_llm")
+
+        with pytest.raises(Exception):
+            await provider.generate_text("prompt")
+
+        # 3 internal retries exhausted => exactly 1 breaker failure, not 3.
+        stats = breaker.get_stats()
+        assert stats.total_failures == 1, f"expected 1 failure, got {stats.total_failures}"
+        assert breaker.is_closed, "breaker must stay closed after one failing batch"
+
+
+@pytest.mark.asyncio
 async def test_extract_entities():
     with patch(
         "knowgraph.infrastructure.intelligence.openai_provider.AsyncOpenAI"

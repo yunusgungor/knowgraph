@@ -337,10 +337,11 @@ def read_node_metadata_only(node_id: UUID, graph_store_path: Path) -> dict | Non
         with open(node_file, encoding="utf-8") as file:
             data = json.load(file)
 
-        # Extract only what's needed for reference linking
+        # Extract only what's needed for reference linking / dedup
         return {
             "id": UUID(data["id"]) if isinstance(data.get("id"), str) else data.get("id"),
             "path": data.get("path", ""),
+            "hash": data.get("hash", ""),
             "entities": data.get("metadata", {}).get("entities", []),
         }
     except Exception:

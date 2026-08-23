@@ -9,7 +9,9 @@ import shutil
 import subprocess
 import tempfile
 import time
+from dataclasses import replace
 from pathlib import Path
+from uuid import UUID
 
 import click
 
@@ -523,7 +525,9 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
     from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
     from knowgraph.infrastructure.search.sparse_index import SparseIndex
     from knowgraph.infrastructure.storage.filesystem import (
+        list_all_nodes,
         read_all_edges_async,
+        read_node_metadata_only,
         write_all_edges_async,
         write_node_json_async,
     )
@@ -532,6 +536,23 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
     if not nodes:
         click.echo("✓ No new nodes to write (all cached)")
         return {}
+
+    # Dedup by content hash: a full (non-incremental) reindex gives every chunk
+    # a fresh uuid4(), so re-indexing the same file would append duplicate
+    # nodes. Reuse the existing node UUID for identical content (update in
+    # place) instead of creating a new file. Node is frozen, so use replace().
+    # ponytail: O(existing nodes) metadata read per full re-index; fine at this
+    # scale, swap for a hash->uuid index file if a repo indexes >100k chunks.
+    existing_by_hash: dict[str, UUID] = {}
+    for nid in list_all_nodes(graph_store_path):
+        meta = read_node_metadata_only(nid, graph_store_path)
+        if meta and meta.get("hash"):
+            existing_by_hash.setdefault(meta["hash"], nid)
+    for i, node in enumerate(nodes):
+        if node.hash in existing_by_hash:
+            nodes[i] = replace(node, id=existing_by_hash[node.hash])
+        else:
+            existing_by_hash[node.hash] = node.id
 
     click.echo("Building sparse index...")
     sparse_embedder = SparseEmbedder()
