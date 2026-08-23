@@ -94,10 +94,14 @@ async def handle_diagnostic(
     # 2. LLM Provider Status
     report_lines.append("## 🤖 LLM Provider")
 
+    # KnowGraph uses its own provider env vars (OpenRouter/OpenAI-compatible
+    # via KNOWGRAPH_API_KEY / KNOWGRAPH_API_BASE_URL / KNOWGRAPH_LLM_MODEL),
+    # falling back to the legacy OPENAI/ANTHROPIC keys.
     api_keys = {
-        "OpenAI": os.getenv("OPENAI_API_KEY"),
+        "OpenAI": os.getenv("KNOWGRAPH_API_KEY") or os.getenv("OPENAI_API_KEY"),
         "Anthropic": os.getenv("ANTHROPIC_API_KEY"),
     }
+    model = os.getenv("KNOWGRAPH_LLM_MODEL", "")
 
     configured_providers = []
     for provider, key in api_keys.items():
@@ -105,6 +109,8 @@ async def handle_diagnostic(
             # Show first 8 chars of key for verification
             masked_key = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "***"
             report_lines.append(f"✅ {provider}: Configured ({masked_key})")
+            if model:
+                report_lines.append(f"   Model: {model}")
             configured_providers.append(provider)
         else:
             report_lines.append(f"❌ {provider}: Not configured")
@@ -112,7 +118,7 @@ async def handle_diagnostic(
     if not configured_providers:
         report_lines.append("")
         report_lines.append("⚠️  **No LLM providers configured!**")
-        report_lines.append("   Set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` for AI-generated answers.")
+        report_lines.append("   Set `KNOWGRAPH_API_KEY` (or `OPENAI_API_KEY`) for AI-generated answers.")
         report_lines.append("   Without a provider, queries will return raw context only.")
 
     report_lines.append("")

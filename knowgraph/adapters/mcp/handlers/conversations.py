@@ -7,8 +7,8 @@ from typing import Any
 import mcp.types as types
 
 from knowgraph.adapters.mcp.handlers._resilience import _global_rate_limiter
-from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.shared.refactoring import (
     build_error_response,
     validate_required_argument,
@@ -126,20 +126,24 @@ async def handle_analyze_conversations(
 
                 result = get_knowledge_timeline(topic, graph_path, time_window_days)
 
-                trace.add_event(
-                    "timeline_analyzed", {"topic": topic, "mentions": result["total_mentions"]}
-                )
+                # Defensive: analytics can return None / drop keys on a partial
+                # store; degrade to "no data" instead of throwing a TypeError.
+                result = result or {}
+                mentions = result.get("total_mentions", 0)
+                timeline = result.get("timeline") or {}
+
+                trace.add_event("timeline_analyzed", {"topic": topic, "mentions": mentions})
 
                 response_lines = [
                     f"📊 **Knowledge Timeline: {topic}**\n",
                     f"Time window: {time_window_days} days",
-                    f"Total mentions: {result['total_mentions']}",
-                    f"Days with activity: {result['days_with_activity']}",
+                    f"Total mentions: {mentions}",
+                    f"Days with activity: {result.get('days_with_activity', 0)}",
                 ]
 
-                if result["timeline"]:
+                if timeline:
                     response_lines.append("\n**Daily Activity:**")
-                    for date, items in sorted(result["timeline"].items())[:10]:
+                    for date, items in sorted(timeline.items())[:10]:
                         response_lines.append(f"  {date}: {len(items)} conversation(s)")
 
             else:
@@ -148,23 +152,29 @@ async def handle_analyze_conversations(
 
                 result = analyze_trending_topics(graph_path, time_window_days)
 
+                # Defensive: same as above — never crash on None/partial data.
+                result = result or {}
+                conversations_analyzed = result.get("conversations_analyzed", 0)
+                trending_entities = result.get("trending_entities") or {}
+                trending_topics = result.get("trending_topics") or {}
+
                 trace.add_event(
-                    "trends_analyzed", {"conversations": result["conversations_analyzed"]}
+                    "trends_analyzed", {"conversations": conversations_analyzed}
                 )
 
                 response_lines = [
                     f"📈 **Trending Topics (Last {time_window_days} days)**\n",
-                    f"Conversations analyzed: {result['conversations_analyzed']}",
+                    f"Conversations analyzed: {conversations_analyzed}",
                 ]
 
-                if result["trending_entities"]:
+                if trending_entities:
                     response_lines.append("\n**Top Entities:**")
-                    for entity, count in list(result["trending_entities"].items())[:10]:
+                    for entity, count in list(trending_entities.items())[:10]:
                         response_lines.append(f"  • {entity}: {count} mentions")
 
-                if result["trending_topics"]:
+                if trending_topics:
                     response_lines.append("\n**Top Topics:**")
-                    for topic, count in list(result["trending_topics"].items())[:10]:
+                    for topic, count in list(trending_topics.items())[:10]:
                         response_lines.append(f"  • {topic}: {count} conversations")
 
             return [types.TextContent(type="text", text="\n".join(response_lines))]

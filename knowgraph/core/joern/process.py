@@ -64,7 +64,7 @@ class JoernDaemon:
             joern_bat = self.joern_path / "joern.bat" if platform.system() == "Windows" else self.joern_path / "joern"
             cmd = [str(joern_bat)]
             if platform.system() == "Windows":
-                cmd = ["cmd.exe", "/c"] + cmd
+                cmd = ["cmd.exe", "/c", *cmd]
             self.process = subprocess.Popen(
                 cmd,
                 stdin=subprocess.PIPE,
@@ -120,6 +120,20 @@ class JoernDaemon:
     # ------------------------------------------------------------------
     # Query execution
     # ------------------------------------------------------------------
+    def _cpg_fingerprint(self, cpg_path: Path) -> str:
+        """Fingerprint of a CPG file: path + size + mtime.
+
+        Re-indexing overwrites ``metadata/cpg.bin`` in place, so a path-only key
+        (the old ``_loaded_cpgs`` set) would keep serving the stale in-memory
+        CPG after a re-index. Including size+mtime makes an in-place overwrite
+        trigger a reload.
+        """
+        try:
+            stat = cpg_path.stat()
+            return f"{cpg_path}:{stat.st_size}:{int(stat.st_mtime)}"
+        except OSError:
+            return str(cpg_path)
+
     def ensure_cpg_loaded(self, cpg_path: Path, timeout: int | None = None) -> None:
         """Send ``importCpg`` + ``run.ossdataflow`` once per distinct CPG.
 
@@ -135,9 +149,10 @@ class JoernDaemon:
 
             timeout = JOERN_DAEMON_BOOT_TIMEOUT
 
-        cpg_uri = str(cpg_path).replace("\\", "/")
-        if cpg_uri in self._loaded_cpgs:
+        key = self._cpg_fingerprint(cpg_path)
+        if key in self._loaded_cpgs:
             return
+        cpg_uri = str(cpg_path).replace("\\", "/")
         program = (
             f'importCpg("{cpg_uri}")'
             "\n"
@@ -148,7 +163,7 @@ class JoernDaemon:
         self._send("try { run.ossdataflow } catch { case _: Exception => }")
         # No settle: leftover ossdataflow output is discarded by the next
         # query's marker window (start-marker precedes everything).
-        self._loaded_cpgs.add(cpg_uri)
+        self._loaded_cpgs.add(key)
 
     def query(self, cpg_path: Path, query: str, timeout: int = 60) -> str:
         """Run a Joern DSL query on the persistent REPL and return raw output.
@@ -178,8 +193,8 @@ class JoernDaemon:
             f'println("{START_MARKER}")\n'
             f"val __kg: Any = {{ {query} }}\n"
             "__kg match {\n"
-            "  case l: List[_] => l.foreach(x => println(\"RESULT_ITEM: \" + x))\n"
-            "  case other => println(\"RESULT_ITEM: \" + other)\n"
+            '  case l: List[_] => l.foreach(x => println("RESULT_ITEM: " + x))\n'
+            '  case other => println("RESULT_ITEM: " + other)\n'
             "}\n"
             f'println("{END_MARKER}")'
         )

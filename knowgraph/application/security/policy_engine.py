@@ -121,7 +121,7 @@ cpg.call.name("(system|exec|popen)").argument
             description="No user input to SQL queries",
             query="""
 cpg.call.name("(execute|executemany|query|raw)").argument
-   .reachableBy(cpg.method.parameter).l
+   .filter(a => a.code.matches(".*\\\\{.*\\\\}.*")).l
 """,
             severity=Severity.CRITICAL,
             remediation="Use parameterized queries or prepared statements",
