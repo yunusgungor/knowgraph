@@ -567,6 +567,21 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
     # Run index save in executor (it's sync I/O)
     await asyncio.get_event_loop().run_in_executor(None, index.save, graph_store_path / "index")
 
+    # Build the companion dense (semantic) index. Silent no-op when
+    # sentence-transformers isn't installed or the model can't load; dense
+    # retrieval is an optional enhancement that must never break indexing.
+    try:
+        from knowgraph.infrastructure.search.dense_index import build_dense_index
+
+        click.echo("Building dense (semantic) index...")
+        dense_ok = await asyncio.get_event_loop().run_in_executor(
+            None, build_dense_index, nodes, graph_store_path / "index"
+        )
+        if not dense_ok:
+            _log_verbose(verbose, "Dense index skipped (embedding failed)")
+    except Exception as e:
+        _log_verbose(verbose, f"Dense index skipped: {e}")
+
     click.echo(f"Writing {len(nodes)} nodes to storage...")
     # Write all nodes in parallel using async. Bulk writes skip per-node full
     # cache invalidation (invalidate=False); flush once after the batch so N

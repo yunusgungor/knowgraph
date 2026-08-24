@@ -110,6 +110,16 @@ class QuerySettings(BaseSettings):
         True,
         description="Enable LLM-powered query expansion",
     )
+    enable_dense_retrieval: bool = Field(
+        True,
+        description="Enable hybrid dense (semantic) retrieval when a dense index exists",
+    )
+    dense_search_weight: float = Field(
+        0.3,
+        ge=0.0,
+        le=1.0,
+        description="Weight of dense scores in hybrid fusion (remainder is sparse BM25)",
+    )
     timeout_seconds: float = Field(
         30.0,
         ge=1.0,
@@ -239,6 +249,11 @@ LLM_TEMPERATURE = 0.0
 MAX_EXPANSION_TERMS = 5
 LLM_RETRY_COUNT = int(os.getenv("KNOWGRAPH_LLM_RETRY_COUNT", "5"))
 LLM_RETRY_BASE_DELAY = float(os.getenv("KNOWGRAPH_LLM_RETRY_DELAY", "1.0"))
+# Per-attempt cap on a single LLM HTTP call. A hung/slow endpoint (e.g. a free
+# OpenRouter model) can otherwise hold one attempt for the OpenAI client's
+# default 600s, and 5 retries blow past any caller deadline. 30s then up to
+# LLM_RETRY_COUNT-1 backoffs keeps the whole logical attempt inside ~1min.
+LLM_REQUEST_TIMEOUT = int(os.getenv("KNOWGRAPH_LLM_REQUEST_TIMEOUT", "30"))
 # Max tokens the LLM may GENERATE per completion (output cap). Keeps costs
 # bounded and avoids runaway responses. Override via KNOWGRAPH_LLM_MAX_TOKENS.
 LLM_MAX_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_TOKENS", "4096"))
@@ -309,6 +324,11 @@ DEFAULT_ROLE_WEIGHT = 0.5
 
 # Joern Enabled/Disabled (DEFAULT: ENABLED)
 JOERN_ENABLED = os.getenv("KNOWGRAPH_JOERN_ENABLED", "true").lower() == "true"
+
+# Dense (semantic) retrieval — hybrid with sparse BM25. The effective flag is
+# read from QuerySettings at runtime; this legacy constant mirrors the
+# JOERN_ENABLED pattern for parity. Default on; inert when no dense index exists.
+DENSE_RETRIEVAL_ENABLED = os.getenv("KNOWGRAPH_DENSE_RETRIEVAL_ENABLED", "true").lower() == "true"
 
 # Joern Path (auto-detected if None)
 JOERN_PATH = os.getenv("KNOWGRAPH_JOERN_PATH")  # None = auto-detect

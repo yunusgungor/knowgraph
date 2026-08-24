@@ -29,6 +29,48 @@ def test_query_cache_key_distinguishes_grounding():
     assert on != temporal
 
 
+def test_query_cache_key_distinguishes_dense():
+    """Hybrid dense retrieval is a behavioral lever: a dense-fused result must
+    not serve (or be served by) a sparse-only cache entry for the same text."""
+    base = dict(
+        query_text="how does vat work",
+        top_k=20,
+        max_hops=4,
+        max_tokens=3000,
+        enable_hierarchical_lifting=True,
+        lift_levels=2,
+        with_explanation=False,
+        enable_grounding=False,
+        enable_temporal_filter=False,
+    )
+    sparse = _get_query_cache_key(**base, enable_dense_retrieval=False)
+    dense = _get_query_cache_key(**base, enable_dense_retrieval=True)
+    assert sparse != dense
+    # Default (omitted) preserves the pre-dense behavior.
+    default = _get_query_cache_key(**base)
+    assert default == sparse
+
+
+def test_query_cache_key_distinguishes_dense_weight():
+    """The fusion weight is a behavioral lever too: changing it must not serve
+    a stale cached result from the old weight."""
+    base = dict(
+        query_text="how does vat work",
+        top_k=20,
+        max_hops=4,
+        max_tokens=3000,
+        enable_hierarchical_lifting=True,
+        lift_levels=2,
+        with_explanation=False,
+        enable_grounding=False,
+        enable_temporal_filter=False,
+        enable_dense_retrieval=True,
+    )
+    light = _get_query_cache_key(**base, dense_search_weight=0.3)
+    heavy = _get_query_cache_key(**base, dense_search_weight=0.8)
+    assert light != heavy
+
+
 def test_serialize_grounding_facts():
     """Graph Engineering: enable_grounding serializes active-subgraph facts for
     answer-level grounding (grounded_edges + entity_names)."""

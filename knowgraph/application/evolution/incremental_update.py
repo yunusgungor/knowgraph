@@ -239,6 +239,16 @@ def apply_incremental_update(
         index.build()
         index.save(graph_store_path / "index")
 
+        # Rebuild the dense (semantic) index alongside sparse. Best-effort:
+        # silent no-op when sentence-transformers isn't installed or the model
+        # can't load — dense retrieval must never break an incremental update.
+        try:
+            from knowgraph.infrastructure.search.dense_index import build_dense_index
+
+            build_dense_index(all_nodes, graph_store_path / "index")
+        except Exception:
+            pass
+
         # Step 6: Update manifest
         updated_manifest = Manifest(
             version=old_manifest.version,

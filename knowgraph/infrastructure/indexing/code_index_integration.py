@@ -478,6 +478,46 @@ class CodeIndexIntegration:
                                 logger.error(f"Failed to update sparse index: {e}")
                                 results["entities_indexed"] = 0
 
+                            # Dense (semantic) index for the added code entities —
+                            # APPEND to any existing dense index (a full-index run
+                            # already built one over the whole graph; overwriting
+                            # it here would drop every non-CPG node from dense
+                            # search). Best-effort: silent no-op when the backend
+                            # is unavailable.
+                            try:
+                                from knowgraph.infrastructure.embedding.dense_embedder import (
+                                    select_dense_embedder,
+                                )
+                                from knowgraph.infrastructure.search.dense_index import (
+                                    DenseIndex,
+                                    compose_embedding_text,
+                                )
+
+                                dense_index = DenseIndex()
+                                has_existing = dense_index.load(graph_path / "index")
+                                # Use the SAME backend the existing index was
+                                # built with (or a fresh best-available choice if
+                                # none exists) so appended vectors stay in the
+                                # same vector space — never mix nöral + local-hash.
+                                embedder = select_dense_embedder(
+                                    for_backend=dense_index.backend if has_existing else None
+                                )
+                                texts = [compose_embedding_text(n) for n in created_nodes]
+                                vectors = embedder.encode_batch(texts) if texts else []
+                                # Append with L2-normalization to match built rows.
+                                import numpy as np
+
+                                for node, vec in zip(created_nodes, vectors):
+                                    v = np.asarray(vec, dtype=np.float32)
+                                    n = float(np.linalg.norm(v))
+                                    dense_index.add(node.id, v / n if n > 0 else v)
+                                dense_index.save(graph_path / "index")
+                                logger.info(
+                                    f"✅ Dense index appended with {len(created_nodes)} code entities"
+                                )
+                            except Exception as e:
+                                logger.warning(f"Failed to update dense index: {e}")
+
                         # Step 8.6: Generate Semantic and Reference Edges (NEW - MISSING FEATURE)
                         if created_nodes:
                             logger.info("Generating semantic and reference edges for code entities...")

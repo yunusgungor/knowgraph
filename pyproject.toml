@@ -52,6 +52,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Hybrid dense (semantic) retrieval — NOT a core dependency so a plain install
+# stays offline-friendly. `pip install knowgraph[hybrid]` (or installing
+# sentence-transformers) enables dense embedding; without it, retrieval stays
+# sparse-only and degrades gracefully.
+hybrid = [
+    "sentence-transformers>=2.2.0",
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
@@ -73,7 +80,9 @@ dev = [
 
 [project.scripts]
 knowgraph = "knowgraph.adapters.cli.main:cli"
-knowgraph-setup-joern = "knowgraph.core.joern.manager:cli_main"
+knowgraph-setup = "knowgraph.core.setup:cli_main"
+# Compat alias: the old joern-only setup command still works unchanged.
+knowgraph-setup-joern = "knowgraph.core.setup:cli_main_joern_only"
 
 [project.urls]
 Homepage = "https://github.com/yunusgungor/knowgraph"

@@ -88,18 +88,23 @@ def _get_query_cache_key(
     with_explanation: bool,
     enable_grounding: bool = False,
     enable_temporal_filter: bool = False,
+    enable_dense_retrieval: bool = False,
+    dense_search_weight: float = 0.3,
 ) -> str:
     """Generate cache key for query parameters.
 
     ``enable_grounding`` and ``enable_temporal_filter`` are included so a query
     with evidence-awareness on does not return a stale cache hit from an
-    evidence-blind run (Graph Engineering transfer).
+    evidence-blind run (Graph Engineering transfer). ``enable_dense_retrieval``
+    and ``dense_search_weight`` are the same class of lever: a dense-fused
+    result (or a different fusion weight) must not serve a stale cache entry.
     """
     import hashlib
 
     key_parts = (
         f"{query_text}|{top_k}|{max_hops}|{max_tokens}|{enable_hierarchical_lifting}"
         f"|{lift_levels}|{with_explanation}|{enable_grounding}|{enable_temporal_filter}"
+        f"|{enable_dense_retrieval}|{dense_search_weight}"
     )
     return hashlib.md5(key_parts.encode()).hexdigest()  # noqa: S324
 
@@ -373,6 +378,8 @@ class QueryEngine:
             with_explanation,
             enable_grounding,
             enable_temporal_filter,
+            getattr(self.retriever, "dense_available", False),
+            getattr(self.retriever, "dense_search_weight", 0.3),
         )
 
         if cache_key in _query_result_cache:
@@ -493,6 +500,9 @@ class QueryEngine:
                     # Step 4: Assemble context (REFERENCE-AWARE IMPORTANCE!)
                     # Graph Engineering transfer (opt-in): nodes with graph evidence
                     # (appear in an edge) are grounded; isolated nodes are ungrounded.
+                    # entity_names is ALWAYS serialized: it is the real-symbol
+                    # allowlist the MCP handler feeds the LLM to stop it inventing
+                    # identifier names (anti-hallucination), independent of grounding.
                     grounded_verdicts: dict[UUID, bool] | None = None
                     grounded_edges: list[list[str]] = []
                     entity_names: list[str] = []
@@ -501,9 +511,9 @@ class QueryEngine:
                             edge.source for edge in active_edges
                         } | {edge.target for edge in active_edges}
                         grounded_verdicts = {node.id: node.id in grounded_ids for node in nodes}
-                        # Graph Engineering: serialize graph facts for answer-level
-                        # grounding in the MCP handler (zero LLM calls).
-                        grounded_edges, entity_names = _serialize_grounding_facts(nodes, active_edges)
+                    # Graph Engineering: serialize graph facts for answer-level
+                    # grounding in the MCP handler (zero LLM calls).
+                    grounded_edges, entity_names = _serialize_grounding_facts(nodes, active_edges)
 
                     context, _context_blocks = assemble_context(
                         nodes,
@@ -768,6 +778,8 @@ class QueryEngine:
             with_explanation,
             enable_grounding,
             enable_temporal_filter,
+            getattr(self.retriever, "dense_available", False),
+            getattr(self.retriever, "dense_search_weight", 0.3),
         )
 
         if cache_key in _query_result_cache:
@@ -1008,6 +1020,9 @@ class QueryEngine:
                     # Step 4: Assemble context with hierarchical lifting
                     # Graph Engineering transfer (opt-in): nodes with graph evidence
                     # (appear in an edge) are grounded; isolated nodes are ungrounded.
+                    # entity_names is ALWAYS serialized: it is the real-symbol
+                    # allowlist the MCP handler feeds the LLM to stop it inventing
+                    # identifier names (anti-hallucination), independent of grounding.
                     grounded_verdicts: dict[UUID, bool] | None = None
                     grounded_edges: list[list[str]] = []
                     entity_names: list[str] = []
@@ -1016,9 +1031,9 @@ class QueryEngine:
                             edge.source for edge in active_edges
                         } | {edge.target for edge in active_edges}
                         grounded_verdicts = {node.id: node.id in grounded_ids for node in nodes}
-                        # Graph Engineering: serialize graph facts for answer-level
-                        # grounding in the MCP handler (zero LLM calls).
-                        grounded_edges, entity_names = _serialize_grounding_facts(nodes, active_edges)
+                    # Graph Engineering: serialize graph facts for answer-level
+                    # grounding in the MCP handler (zero LLM calls).
+                    grounded_edges, entity_names = _serialize_grounding_facts(nodes, active_edges)
 
                     context, _context_blocks = assemble_context(
                         nodes,

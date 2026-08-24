@@ -70,8 +70,9 @@ KnowGraph is primarily designed as an **MCP (Model Context Protocol) server** th
 ```bash
 pip install knowgraph
 
-# Setup Joern for advanced code analysis (recommended)
-knowgraph-setup-joern
+# Install optional components (recommended): Joern code analysis + the
+# all-MiniLM-L6-v2 embedding model for dense retrieval. Both go under ~/.knowgraph.
+knowgraph-setup
 ```
 
 **Step 2: Configure Your AI Editor**
@@ -197,18 +198,24 @@ knowgraph --version
 
 **Configure MCP server** (see [Getting Started](#2-getting-started) above)
 
-### 3.2 Setup Joern (Recommended for Code Analysis)
+### 3.2 Setup Optional Components (Recommended)
 
-To enable advanced code analysis features (security scanning, dead code detection, call graph analysis), install Joern:
+`knowgraph-setup` installs both optional heavy components under `~/.knowgraph`:
+Joern (code analysis) and the `all-MiniLM-L6-v2` embedding model (dense
+retrieval). Pre-installing the model avoids an unexpected ~80MB download on
+your first semantic query.
 
 ```bash
-knowgraph-setup-joern
+knowgraph-setup                # Joern + embedding model
+knowgraph-setup --joern-only   # Joern only (old knowgraph-setup-joern behavior)
+knowgraph-setup --model-only   # embedding model only
 ```
 
 This will:
-1. Check for JDK 11+ (required)
+1. Check for JDK 11+ (required for Joern)
 2. Download and install Joern to `~/.knowgraph/joern`
-3. Verify the installation
+3. Download the embedding model to `~/.knowgraph/models/all-MiniLM-L6-v2`
+4. Verify both installations
 
 **If you don't have JDK:**
 ```bash
@@ -248,7 +255,7 @@ For contributing or local development:
 git clone https://github.com/yunusgungor/knowgraph.git
 cd knowgraph
 pip install -e ".[dev]"
-knowgraph-setup-joern
+knowgraph-setup --joern-only   # Joern for CI-style development (skip the model)
 
 # Run tests
 pytest
@@ -1510,7 +1517,7 @@ knowgraph_diagnostic()
 
 | Issue | Solution |
 |-------|----------|
-| **Joern Installation Failed** | Run `knowgraph-setup-joern` manually. Ensure JDK 11+ is installed (`java -version`). |
+| **Joern Installation Failed** | Run `knowgraph-setup` manually. Ensure JDK 11+ is installed (`java -version`). |
 | **Permission Denied (Joern binaries)** | Run `chmod +x ~/.knowgraph/joern/joern-cli/bin/*` |
 | **Module Not Found** | Ensure you're using the correct Python environment. Run `pip install -e .` in dev mode. |
 | **API Key Not Found** | Set `export KNOWGRAPH_API_KEY="sk-..."` or add to `.env` file. |

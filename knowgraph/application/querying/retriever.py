@@ -23,12 +23,29 @@ from knowgraph.config import (
 from knowgraph.domain.algorithms.traversal import traverse_graph_reference_aware
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
+from knowgraph.infrastructure.embedding.dense_embedder import select_dense_embedder
 from knowgraph.infrastructure.embedding.sparse_embedder import SparseEmbedder
+from knowgraph.infrastructure.search.dense_index import DenseIndex
 from knowgraph.infrastructure.search.sparse_index import SparseIndex
 from knowgraph.infrastructure.storage.filesystem import read_node_json
 from knowgraph.shared.exceptions import QueryError
 from knowgraph.shared.memory_profiler import memory_guard
 from knowgraph.shared.tracing import trace_operation
+
+# Default dense weight in hybrid fusion (remainder is sparse BM25). Overridable
+# via QuerySettings.dense_search_weight (KNOWGRAPH_QUERY_DENSE_SEARCH_WEIGHT).
+DEFAULT_DENSE_WEIGHT = 0.3
+
+
+def _minmax(results: list[tuple[str, float]]) -> dict[str, float]:
+    """Min-max normalize a list of (doc_id, score) to [0, 1]."""
+    if not results:
+        return {}
+    scores = [s for _, s in results]
+    mn, mx = min(scores), max(scores)
+    if mx == mn:
+        return {doc_id: 1.0 for doc_id, _ in results}
+    return {doc_id: (s - mn) / (mx - mn) for doc_id, s in results}
 
 
 class QueryRetriever:
@@ -67,15 +84,40 @@ class QueryRetriever:
             QueryError: If graph store cannot be loaded
 
         """
-        self.graph_store_path = graph_store_path
+        # graph_store_path may arrive as a str (CLI/MCP/engine pass strings or
+        # Paths); coerce once so every downstream file op (index load, node
+        # read) gets a real Path instead of failing on ``str / "nodes"``.
+        from pathlib import Path as _Path
+
+        self.graph_store_path = _Path(graph_store_path)
 
         self.sparse_embedder = SparseEmbedder()
         self.sparse_index = SparseIndex()
         try:
-            self.sparse_index.load(graph_store_path / "index")
+            self.sparse_index.load(self.graph_store_path / "index")
         except Exception:
             # Often index might not exist yet if fresh, but log/raise if critical
             pass
+
+        # Hybrid dense retrieval. The embedding backend that BUILT the index is
+        # read back here and pinned: an index built by nöral is only ever queried
+        # by nöral, and one built by local-hash only by local-hash (they are
+        # different vector spaces). We check the index file exists first so a
+        # plain query on a graph with no dense index never triggers a nöral
+        # model download.
+        self.dense_index = DenseIndex()
+        self.dense_embedder: Any = None
+        self.dense_available = False
+        # Exposed for the query cache key: changing the fusion weight must
+        # invalidate cached results (the same lever class as dense_available).
+        self.dense_search_weight = self._dense_weight()
+        try:
+            index_dir = self.graph_store_path / "index"
+            if self._dense_retrieval_enabled() and self.dense_index.load(index_dir):
+                self.dense_embedder = select_dense_embedder(for_backend=self.dense_index.backend)
+                self.dense_available = self.dense_embedder.available()
+        except Exception:
+            self.dense_available = False
 
         # Query expansion is wired end-to-end: the caller (MCP/CLI) expands the
         # raw query with the LLM provider before calling retrieve(). Only install
@@ -97,6 +139,53 @@ class QueryRetriever:
         except Exception:
             # Fall back to the historical default when settings are unavailable.
             return True
+
+    @staticmethod
+    def _dense_retrieval_enabled() -> bool:
+        """Return whether hybrid dense retrieval is enabled via settings."""
+        try:
+            return get_settings().query.enable_dense_retrieval
+        except Exception:
+            return True
+
+    @staticmethod
+    def _dense_weight() -> float:
+        """Return the dense-score weight used in hybrid fusion."""
+        try:
+            return float(get_settings().query.dense_search_weight)
+        except Exception:
+            return DEFAULT_DENSE_WEIGHT
+
+    def _fuse_sparse_dense(
+        self,
+        sparse_results: list[tuple[str, float]],
+        query_text: str,
+        top_k: int,
+    ) -> list[tuple[str, float]]:
+        """Fuse BM25 sparse results with dense cosine via min-max + weighted sum.
+
+        Falls back to sparse-only when no dense index is usable. ``self.dense_embedder``
+        is the backend PERSISTED with the index (chosen at build, read in
+        __init__) — we do NOT re-probe availability here, because re-probing
+        could switch vector spaces mid-flight (a nöral-built index queried by
+        local-hash, or vice versa, yields garbage cosine). Dense overfetches to
+        ``top_k * 3`` so pure-dense semantic hits can enter the union.
+        ``query_text`` is the search text (post-expansion).
+        """
+        if not self.dense_available:
+            return sparse_results[:top_k]
+        query_vec = self.dense_embedder.encode(query_text)  # lazy model load here
+        dense_results = self.dense_index.search(query_vec, top_k=max(top_k * 3, top_k))
+
+        s_norm = _minmax(sparse_results)
+        d_norm = _minmax(dense_results)
+        w = self.dense_search_weight
+        fused: dict[str, float] = {}
+        for doc_id, s in s_norm.items():
+            fused[doc_id] = (1.0 - w) * s
+        for doc_id, d in d_norm.items():
+            fused[doc_id] = fused.get(doc_id, 0.0) + w * d
+        return sorted(fused.items(), key=lambda x: x[1], reverse=True)[:top_k]
 
     def retrieve(
         self: "QueryRetriever",
@@ -157,6 +246,7 @@ class QueryRetriever:
                         query_tokens = self.sparse_embedder.embed_text(search_text)
 
                     results = self.sparse_index.search(query_tokens, top_k)
+                    results = self._fuse_sparse_dense(results, search_text, top_k)
                     # results is list of (doc_id, score) where doc_id is str
                     seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
@@ -233,6 +323,7 @@ class QueryRetriever:
             query_tokens = self.sparse_embedder.embed_text(query_text)
 
         results = self.sparse_index.search(query_tokens, top_k)
+        results = self._fuse_sparse_dense(results, query_text, top_k)
         # results: list[(str_id, score)]
 
         nodes_with_scores = []
@@ -322,6 +413,12 @@ class QueryRetriever:
 
                     # Search ASYNC for better performance with parallel term processing
                     results = await self.sparse_index.search_async(query_tokens, top_k)
+                    # Dense fusion (nöral model load/encode + cosine) is sync and
+                    # CPU-bound; offload so it never blocks the asyncio loop and
+                    # stalls concurrent queries in the same process.
+                    results = await asyncio.to_thread(
+                        self._fuse_sparse_dense, results, search_text, top_k
+                    )
                     seed_node_ids = [UUID(node_id) for node_id, _ in results]
 
                     # Step 2: Expand via REFERENCE-AWARE graph traversal (CODE DEPENDENCIES FIRST!)
@@ -412,6 +509,8 @@ class QueryRetriever:
 
         # Search ASYNC for better performance with parallel term processing
         results = await self.sparse_index.search_async(query_tokens, top_k)
+        # Dense fusion off the event loop (see retrieve_async).
+        results = await asyncio.to_thread(self._fuse_sparse_dense, results, query_text, top_k)
 
         # Load nodes concurrently
         async def load_node_with_score(node_id_str: str, score: float) -> tuple[Node, float] | None:

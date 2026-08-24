@@ -11,6 +11,7 @@ from knowgraph.config import (
     KNOWGRAPH_LLM_MODEL,
     LLM_MAX_INPUT_TOKENS,
     LLM_MAX_TOKENS,
+    LLM_REQUEST_TIMEOUT,
     LLM_RETRY_BASE_DELAY,
     LLM_RETRY_COUNT,
 )
@@ -49,12 +50,21 @@ class OpenAIProvider(IntelligenceProvider):
         self.circuit_breaker = get_circuit_breaker("openai_llm")
 
     async def _raw_completion(self, messages: list[dict], kwargs: dict) -> Any:
-        """Issue the actual OpenAI chat completion (unwrapped)."""
-        return await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            **kwargs,
-        )
+        """Issue the actual OpenAI chat completion (unwrapped).
+
+        Bounded by ``asyncio.timeout`` (LLM_REQUEST_TIMEOUT) so a hung/hostile
+        endpoint fails fast instead of hanging the whole query. The OpenAI
+        client's own timeout defaults to 600s — a slow/free provider can make a
+        single attempt take 10 minutes, and with retries the query blows well
+        past any caller deadline. This keeps one logical attempt failure-fast
+        and composable with the retry loop.
+        """
+        async with asyncio.timeout(LLM_REQUEST_TIMEOUT):
+            return await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                **kwargs,
+            )
 
     async def _chat_completion(self, messages: list[dict], **kwargs: Any) -> Any:
         """Rate-limited, retried, circuit-broken chat completion.
@@ -76,6 +86,10 @@ class OpenAIProvider(IntelligenceProvider):
             for attempt in range(LLM_RETRY_COUNT):
                 try:
                     return await self._raw_completion(messages, kwargs)
+                except TimeoutError:
+                    # A hung endpoint won't recover by retrying — fail fast
+                    # instead of making the user wait through N more attempts.
+                    raise
                 except Exception as e:
                     await self.rate_limiter.trigger_backoff()
                     if attempt >= LLM_RETRY_COUNT - 1:

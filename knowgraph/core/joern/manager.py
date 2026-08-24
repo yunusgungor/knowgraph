@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 # Joern configuration
 JOERN_VERSION = "4.0.457"
 JOERN_REPO = "joernio/joern"
-INSTALL_DIR = Path.home() / ".knowgraph" / "joern"
+# Central .knowgraph home under the user's home dir. Model manager and others
+# derive from this too (single source of truth for the install root).
+KNOWGRAPH_HOME = Path.home() / ".knowgraph"
+INSTALL_DIR = KNOWGRAPH_HOME / "joern"
 
 
 def check_jdk() -> bool:
@@ -118,7 +121,7 @@ def download_joern(version: str = JOERN_VERSION) -> Path:
     url = f"https://github.com/{JOERN_REPO}/releases/download/v{version}/{filename}"
 
     # Create temp directory
-    temp_dir = Path.home() / ".knowgraph" / "temp"
+    temp_dir = KNOWGRAPH_HOME / "temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     zip_path = temp_dir / filename
@@ -430,7 +433,22 @@ class PostInstallCommand(install):
             logger.warning(f"Joern installation failed: {e}")
             print("\n⚠️  Joern installation encountered issues.")
             print("   KnowGraph will work without Joern, but advanced features will be limited.")
-            print("   You can retry with: knowgraph-setup-joern")
+            print("   You can retry with: knowgraph-setup")
+
+        # Embedding model is likewise opt-in at install time: a plain pip
+        # install stays fast/offline. KNOWGRAPH_INSTALL_MODEL=1 pre-downloads
+        # the all-MiniLM-L6-v2 model so dense retrieval never stalls at first
+        # use (or run `knowgraph-setup` later).
+        if os.getenv("KNOWGRAPH_INSTALL_MODEL") == "1":
+            try:
+                from knowgraph.core.models.manager import install_model
+
+                install_model()
+            except Exception as e:
+                logger.warning(f"Embedding model installation failed: {e}")
+                print("\n⚠️  Embedding model installation encountered issues.")
+                print("   Dense retrieval will use the built-in local fallback until then.")
+                print("   You can retry with: knowgraph-setup")
 
 
 def cli_main() -> None:

@@ -160,17 +160,22 @@ async def handle_query(
 
             # Route based on query type
             if query_type == QueryType.CODE:
-                # CODE-only query → Use Joern tools
+                # CODE-only query → Try Joern tools, but degrade to semantic
+                # search when code analysis produced nothing usable. A Joern
+                # error or empty result must never be the final answer (it reads
+                # as "an unrelated Joern error"), so we only return here on real
+                # results and let TEXT/HYBRID semantic search take over otherwise.
                 if progress:
                     await progress.update(1, f'🔧 Code Analysis: "{query[:50]}..."')
 
-                code_handler = CodeQueryHandler(graph_path)
-                code_results = await code_handler.handle(query)
+                try:
+                    code_handler = CodeQueryHandler(graph_path)
+                    code_results = await code_handler.handle(query)
+                except Exception:
+                    code_results = {"success": False, "results": []}
 
-                # Format and return code analysis results
-                output = code_handler.format_results(code_results)
-
-                return [types.TextContent(type="text", text=output)]
+                if code_results.get("success") and code_results.get("results"):
+                    return [types.TextContent(type="text", text=code_handler.format_results(code_results))]
 
             elif query_type == QueryType.HYBRID:
                 # HYBRID query → Run both text and code search
@@ -265,13 +270,23 @@ async def handle_query(
 
 
 async def _expand_query_if_available(query: str, provider: Any) -> str:
-    """Expand query using available provider."""
+    """Expand query using available provider.
+
+    Expanded terms are only appended when they are generic (non-identifier)
+    keywords. A weak model may still fabricate a symbol name despite the prompt;
+    invented identifiers must never reach the retriever (they would pollute the
+    search and echo back into the answer). ``_sanitize_expansion_terms`` drops
+    terms that look like code identifiers (camelCase, snake_case, dots,
+    parentheses, currency codes) and keeps only plain language keywords.
+    """
     try:
         if provider:
             expander = QueryExpander(intelligence_provider=provider)
             expansion_terms = await expander.expand_query_async(query)
             if expansion_terms:
-                return f"{query} {' '.join(expansion_terms)}"
+                safe = _sanitize_expansion_terms(expansion_terms)
+                if safe:
+                    return f"{query} {' '.join(safe)}"
         else:
             # Fall back to OpenAI env vars
             import os
@@ -281,11 +296,44 @@ async def _expand_query_if_available(query: str, provider: Any) -> str:
                 expander = QueryExpander(provider="openai", model=llm_model)
                 expansion_terms = expander.expand_query(query)
                 if expansion_terms:
-                    return f"{query} {' '.join(expansion_terms)}"
+                    safe = _sanitize_expansion_terms(expansion_terms)
+                    if safe:
+                        return f"{query} {' '.join(safe)}"
     except Exception:
         pass
 
     return query
+
+
+def _sanitize_expansion_terms(terms: list[str]) -> list[str]:
+    """Drop terms that look like code identifiers; keep plain language keywords.
+
+    An expansion term is a *likely fabricated identifier* (and dropped) when it
+    contains:
+      - camelCase or snake_case (``calculate_kdv_base``, ``get_kdv_orani``)
+      - a dot, slash, parentheses, or leading '@' (``foo.bar``, ``find()``)
+      - two or more space-separated words with an identifier-looking first token
+    Plain terms (``vat``, ``tax``, ``currency``, ``exchange rate``) pass.
+    """
+    import re
+
+    safe = []
+    for term in terms:
+        t = str(term).strip()
+        if not t:
+            continue
+        lower = t.lower()
+        # A single identifier token (no spaces) in camelCase/snake_case, or
+        # containing punctuation typical of a symbol reference.
+        if (
+            re.search(r"[a-z0-9][A-Z]", t)  # camelCase
+            or "_" in t
+            or re.search(r"[./()@]", t)
+            or (lower.startswith(("get_", "set_", "is_", "find_", "calc_", "hesapla", "bul")))
+        ):
+            continue
+        safe.append(t)
+    return safe
 
 
 async def _generate_llm_answer(
@@ -302,12 +350,18 @@ async def _generate_llm_answer(
     is annotated with entities that appear in the answer but are not backed by
     the retrieved subgraph (zero extra LLM calls). Annotation is applied AFTER
     the cache read so the raw prompt response stays cacheable.
+
+    ``result.entity_names`` (real graph symbols) is passed as the
+    ``known_identifiers`` allowlist so the model is told to only reference
+    symbols that actually exist in the graph — the anti-hallucination guard.
     """
     explanation_data = None
     if with_explanation and result.explanation:
         explanation_data = json.dumps(result.explanation.to_dict(), indent=2, default=str)
 
-    prompt = build_llm_prompt(query, result.context, system_prompt, explanation_data)
+    known_identifiers = getattr(result, "entity_names", None) or None
+    prompt = build_llm_prompt(query, result.context, system_prompt, explanation_data,
+                              known_identifiers=known_identifiers)
 
     # Skip re-billing when the exact prompt was answered before.
     cache_key = _llm_answer_key(prompt)
@@ -420,7 +474,9 @@ async def handle_batch_query(
             answer = result.context
             if provider and result.answer:  # Only if we have context
                 try:
-                    prompt = build_llm_prompt(query, result.context)
+                    known_identifiers = getattr(result, "entity_names", None) or None
+                    prompt = build_llm_prompt(query, result.context,
+                                              known_identifiers=known_identifiers)
                     cache_key = _llm_answer_key(prompt)
                     cached = _llm_answer_cache.get(cache_key)
                     if cached is not None:

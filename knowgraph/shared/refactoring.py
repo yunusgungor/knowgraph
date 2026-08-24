@@ -149,6 +149,7 @@ def build_llm_prompt(
     context: str,
     system_prompt: str | None = None,
     explanation_data: str | None = None,
+    known_identifiers: list[str] | None = None,
 ) -> str:
     """Build LLM prompt from query and context.
 
@@ -158,6 +159,10 @@ def build_llm_prompt(
         context: Retrieved context
         system_prompt: Optional system prompt override
         explanation_data: Optional explanation JSON
+        known_identifiers: Real graph entity surface forms (node titles/paths/
+            metadata). When provided, the prompt instructs the model to only
+            mention identifiers from this allowlist — the anti-hallucination
+            guard against invented function/class names.
 
     Returns:
     -------
@@ -166,10 +171,20 @@ def build_llm_prompt(
     base_system = (
         system_prompt
         if system_prompt
-        else "You are a helpful assistant. Use the following context to answer the user's question."
+        else (
+            "You are a helpful assistant. Use the following context to answer the user's "
+            "question. Answer in the same language as the question. "
+            "STRICT RULE: never mention a function, class, or file name that is not "
+            "listed in KNOWN_IDENTIFIERS below and present in the context — do not "
+            "invent symbol names. If the context does not answer the question, say so."
+        )
     )
 
     prompt = f"{base_system}\n\nContext:\n{context}\n\nQuestion: {query}\n\nAnswer:"
+
+    if known_identifiers:
+        allowlist = ", ".join(sorted(set(str(i) for i in known_identifiers if i)))
+        prompt += f"\n\nKNOWN_IDENTIFIERS (you may only reference these):\n{allowlist}"
 
     if explanation_data:
         prompt += f"\n\nExplanation Data:\n{explanation_data}"

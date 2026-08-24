@@ -104,11 +104,20 @@ class QueryExpander:
             return []
 
     async def _expand_with_provider(self, query: str) -> list[str]:
-        """Use IntelligenceProvider to expand query."""
+        """Use IntelligenceProvider to expand query.
+
+        The prompt forbids inventing identifiers. A weak/free model given "class
+        names... relevant to this query" happily fabricates symbols that exist
+        nowhere in the codebase, and those fabricated names then leak into the
+        query string and the final answer. Expansion must only surface general
+        synonyms/domains — never identifiers it has not seen.
+        """
         prompt = (
             f"You are a senior software engineer. The user is querying a codebase. "
-            f"Generate {MAX_EXPANSION_TERMS} specific technical keywords, class names, "
-            f"file patterns, or synonyms that are semantically relevant to this query. "
+            f"Generate at most {MAX_EXPANSION_TERMS} general search keywords or "
+            f"synonyms for the query below. STRICT RULES: never invent a class, "
+            f"function, or file name — only broad descriptive terms (e.g. 'vat', "
+            f"'tax', 'currency'). If in doubt, return fewer terms or an empty list. "
             f"Return ONLY a comma-separated list of terms. Do not add numbering or explanations.\n\n"
             f"Query: {query}\n"
             f"Terms:"
@@ -123,8 +132,10 @@ class QueryExpander:
         """Use OpenAI to expand query."""
         prompt = (
             f"You are a senior software engineer. The user is querying a codebase. "
-            f"Generate {MAX_EXPANSION_TERMS} specific technical keywords, class names, "
-            f"file patterns, or synonyms that are semantically relevant to this query. "
+            f"Generate at most {MAX_EXPANSION_TERMS} general search keywords or "
+            f"synonyms for the query below. STRICT RULES: never invent a class, "
+            f"function, or file name — only broad descriptive terms (e.g. 'vat', "
+            f"'tax', 'currency'). If in doubt, return fewer terms or an empty list. "
             f"Return ONLY a comma-separated list of terms. Do not add numbering or explanations.\n\n"
             f"Query: {query}\n"
             f"Terms:"

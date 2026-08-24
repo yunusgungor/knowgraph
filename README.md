@@ -46,8 +46,9 @@ KnowGraph is an **MCP (Model Context Protocol) server** that enhances AI coding 
 ```bash
 pip install knowgraph
 
-# Setup Joern for advanced code analysis (recommended)
-knowgraph-setup-joern
+# Install optional components (recommended): Joern code analysis + the
+# all-MiniLM-L6-v2 embedding model for dense retrieval. Both go under ~/.knowgraph.
+knowgraph-setup
 ```
 
 ### 2. MCP Server Configuration
