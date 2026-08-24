@@ -121,6 +121,30 @@ async def handle_diagnostic(
         report_lines.append("   Set `KNOWGRAPH_API_KEY` (or `OPENAI_API_KEY`) for AI-generated answers.")
         report_lines.append("   Without a provider, queries will return raw context only.")
 
+    # Effective timeout/retrieval settings — the knobs that determine whether a
+    # slow provider stalls queries or thin context produces "no info" answers.
+    try:
+        from knowgraph.config import (
+            LLM_REQUEST_TIMEOUT,
+            LLM_RETRY_COUNT,
+            QUERY_TIMEOUT_SECONDS,
+            get_settings,
+        )
+
+        qs = get_settings().query
+        report_lines.append(f"   LLM request timeout: {LLM_REQUEST_TIMEOUT}s "
+                            f"(env: KNOWGRAPH_LLM_REQUEST_TIMEOUT)")
+        report_lines.append(f"   LLM retries: {LLM_RETRY_COUNT} "
+                            f"(env: KNOWGRAPH_LLM_RETRY_COUNT)")
+        report_lines.append(f"   Query timeout: {QUERY_TIMEOUT_SECONDS}s "
+                            f"(env: KNOWGRAPH_QUERY_TIMEOUT_SECONDS)")
+        report_lines.append(f"   top_k: {qs.top_k} (env: KNOWGRAPH_QUERY_TOP_K)")
+        report_lines.append(f"   max_hops: {qs.max_hops} (env: KNOWGRAPH_QUERY_MAX_HOPS)")
+        report_lines.append(f"   dense retrieval: "
+                            f"{'on' if qs.enable_dense_retrieval else 'off'}")
+    except Exception:
+        pass
+
     report_lines.append("")
 
     # 3. MCP Tools Status
@@ -166,6 +190,36 @@ async def handle_diagnostic(
 
     if not configured_providers:
         recommendations.append("🔴 Configure an LLM provider (OPENAI_API_KEY or ANTHROPIC_API_KEY) for AI features")
+    else:
+        # Slow/free endpoints (e.g. a `*:free` OpenRouter model) routinely take
+        # >30s to synthesize an answer; a 30s LLM_REQUEST_TIMEOUT then cuts them
+        # off, surfacing as flaky query timeouts. Surface the knob when it looks
+        # tight relative to a configured provider.
+        try:
+            from knowgraph.config import LLM_REQUEST_TIMEOUT
+
+            if LLM_REQUEST_TIMEOUT <= 30:
+                recommendations.append(
+                    "🟡 LLM request timeout is 30s; with a slow/free provider, raise "
+                    "KNOWGRAPH_LLM_REQUEST_TIMEOUT (e.g. 60) to avoid flaky query timeouts"
+                )
+        except Exception:
+            pass
+
+    # Thin context ("bağlamda bilgi yok") is usually retrieval being too shallow,
+    # not the LLM: a low top_k leaves few seed nodes for the answer. Grounding
+    # does NOT deepen retrieval — top_k / max_hops do.
+    try:
+        from knowgraph.config import get_settings
+
+        if get_settings().query.top_k < 15:
+            recommendations.append(
+                "🟡 top_k is low (<15); raise it (e.g. 25-50) to deepen retrieval "
+                "and reduce 'no info in context' answers. Note: enable_grounding "
+                "re-weights context but does NOT fetch more nodes."
+            )
+    except Exception:
+        pass
 
     if not recommendations:
         recommendations.append("✅ All systems operational!")
