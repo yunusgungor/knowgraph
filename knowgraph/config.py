@@ -268,6 +268,13 @@ LLM_MAX_INPUT_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_INPUT_TOKENS", "32000"))
 # to raw context. Retrying the whole synthesis a bounded number of times turns
 # that transient first-call failure into a success.
 LLM_SYNTHESIS_RETRIES = int(os.getenv("KNOWGRAPH_LLM_SYNTHESIS_RETRIES", "2"))
+# Whole-synthesis budget at the handler level (retries INCLUDED), sized to fit a
+# ~30s MCP client window with headroom for retrieval. Without an outer bound, a
+# cold provider's retry chain (2 x LLM_REQUEST_TIMEOUT) can span ~180s server-side
+# and guarantee the client's cut. This cap turns worst-case ~180s into a bounded
+# ≤~25s response (full answer if the provider warms up, honest raw-context
+# degradation otherwise). Tune per client/provider via KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT.
+LLM_SYNTHESIS_TIMEOUT = int(os.getenv("KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT", "25"))
 
 # Graph Traversal Configuration
 MAX_HOPS = 4

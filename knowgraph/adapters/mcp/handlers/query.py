@@ -16,7 +16,11 @@ from knowgraph.adapters.mcp.handlers._resilience import (
 from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.application.querying.query_engine import QueryEngine
 from knowgraph.application.querying.query_expansion import QueryExpander
-from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+from knowgraph.config import (
+    DEFAULT_GRAPH_STORE_PATH,
+    LLM_SYNTHESIS_RETRIES,
+    LLM_SYNTHESIS_TIMEOUT,
+)
 from knowgraph.shared.progress import ProgressNotifier
 from knowgraph.shared.refactoring import (
     build_error_response,
@@ -389,23 +393,30 @@ async def _generate_llm_answer(
         # degrade the answer to raw context. Retrying here turns that transient
         # first-call failure into a success — the "first weak, second strong"
         # inconsistency without the user having to re-ask.
-        from knowgraph.config import LLM_SYNTHESIS_RETRIES
-
+# Bound the WHOLE synthesis (retries included) so a cold provider's retry
+        # chain can't span past the client's window (~30s). Without this outer
+        # cap, 2 x LLM_REQUEST_TIMEOUT would let synthesis burn ~180s server-side
+        # and guarantee the client's cut. Now it degrades (or succeeds) promptly.
         last_error: Exception | None = None
-        for attempt in range(LLM_SYNTHESIS_RETRIES):
-            try:
-                generated_answer = await provider.generate_text(prompt)
-                if generated_answer:
-                    raw_answer = generated_answer
-                    if len(_llm_answer_cache) >= _LLM_ANSWER_CACHE_MAX:
-                        _llm_answer_cache.clear()  # simple bounded reset
-                    _llm_answer_cache[cache_key] = generated_answer
-                    break
-            except Exception as e:
-                last_error = e
-                # Small backoff so a cold provider gets a moment before retry.
-                if attempt < LLM_SYNTHESIS_RETRIES - 1:
-                    await asyncio.sleep(0.5 * (attempt + 1))
+        try:
+            async with asyncio.timeout(LLM_SYNTHESIS_TIMEOUT):
+                for attempt in range(LLM_SYNTHESIS_RETRIES):
+                    try:
+                        generated_answer = await provider.generate_text(prompt)
+                        if generated_answer:
+                            raw_answer = generated_answer
+                            if len(_llm_answer_cache) >= _LLM_ANSWER_CACHE_MAX:
+                                _llm_answer_cache.clear()  # simple bounded reset
+                            _llm_answer_cache[cache_key] = generated_answer
+                            break
+                    except Exception as e:
+                        last_error = e
+                        # Small backoff so a cold provider gets a moment before retry.
+                        if attempt < LLM_SYNTHESIS_RETRIES - 1:
+                            await asyncio.sleep(0.5 * (attempt + 1))
+        except TimeoutError as e:
+            # Whole-synthesis budget exhausted — degrade honestly, promptly.
+            last_error = e
 
         if raw_answer is None:
             if last_error is not None:
@@ -520,18 +531,22 @@ async def handle_batch_query(
                         answer = cached
                     else:
                         # Bounded retry on a transient first-call failure (the
-                        # provider fail-fast times out; make it succeed on retry).
-                        from knowgraph.config import LLM_SYNTHESIS_RETRIES
-
+                        # provider fail-fast times out; make it succeed on retry),
+                        # ALSO bounded by a whole-synthesis cap so a cold provider
+                        # can't span past the client window.
                         generated_answer = ""
-                        for attempt in range(LLM_SYNTHESIS_RETRIES):
-                            try:
-                                generated_answer = await provider.generate_text(prompt)
-                                if generated_answer:
-                                    break
-                            except Exception:
-                                if attempt < LLM_SYNTHESIS_RETRIES - 1:
-                                    await asyncio.sleep(0.5 * (attempt + 1))
+                        try:
+                            async with asyncio.timeout(LLM_SYNTHESIS_TIMEOUT):
+                                for attempt in range(LLM_SYNTHESIS_RETRIES):
+                                    try:
+                                        generated_answer = await provider.generate_text(prompt)
+                                        if generated_answer:
+                                            break
+                                    except Exception:
+                                        if attempt < LLM_SYNTHESIS_RETRIES - 1:
+                                            await asyncio.sleep(0.5 * (attempt + 1))
+                        except TimeoutError:
+                            generated_answer = ""
                         if generated_answer:
                             if len(_llm_answer_cache) >= _LLM_ANSWER_CACHE_MAX:
                                 _llm_answer_cache.clear()

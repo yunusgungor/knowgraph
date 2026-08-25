@@ -80,3 +80,35 @@ async def test_empty_answer_retried():
 
     assert answer == "RETRIED"
     assert provider.generate_text.await_count == 2
+
+@pytest.mark.asyncio
+async def test_whole_synthesis_bounded_by_timeout():
+    """A slow generate_text past the whole-synthesis budget returns promptly.
+
+    Regression: the retry loop had no outer cap, so a cold provider's retry
+    chain (2 x LLM_REQUEST_TIMEOUT) could burn ~180s server-side and guarantee
+    the client's ~30s cut. The whole synthesis is now bounded by
+    LLM_SYNTHESIS_TIMEOUT; a slow provider degrades to raw context promptly.
+    """
+    import time
+
+    import knowgraph.adapters.mcp.handlers.query as qh
+
+    async def slow(provider, **kw):
+        await asyncio.sleep(5)  # far past the tiny patched budget
+        return "LATE"
+
+    provider = MagicMock()
+    provider.generate_text = AsyncMock(side_effect=slow)
+
+    # Patch the constants to a 0.1s budget so the test is fast.
+    with (
+        patch.object(qh, "LLM_SYNTHESIS_TIMEOUT", 0),  # 0 -> outer timeout fires immediately
+    ):
+        start = time.monotonic()
+        answer = await _generate_llm_answer("q", _result("CTX"), None, False, provider)
+        elapsed = time.monotonic() - start
+
+    assert "CTX" in answer
+    assert "Generation Error" in answer  # degraded, not a hang
+    assert elapsed < 2.0  # returned promptly, did NOT wait for the 5s slow call
