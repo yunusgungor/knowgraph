@@ -136,23 +136,23 @@ def test_query_engine_run():
         assert mock_assemble.called
 
 
-def test_query_context_budget_defaults_to_max_tokens():
-    """query()/query_async() default max_tokens to MAX_TOKENS (50000), the
-    context-collection cap — NOT LLM_MAX_TOKENS (4096, the model output cap).
+def test_query_context_budget_defaults_to_llm_max_input_tokens():
+    """query()/query_async() default max_tokens to LLM_MAX_INPUT_TOKENS (32000),
+    the safe model-context cap — NOT LLM_MAX_TOKENS (4096, the model output cap),
+    and NOT MAX_TOKENS (50000, which may exceed some models' context window).
 
-    Regression: the small 4096 budget excluded large-file chunks (a single
-    20000-char chunk ~4500 tokens), so formula-bearing content never reached
-    the LLM context.
+    Regression: MAX_TOKENS (50000) exceeded a model's 262K context window when
+    tiktoken token-counts diverged from the model's tokenizer.
     """
     import inspect
 
     from knowgraph.application.querying.query_engine import QueryEngine
-    from knowgraph.config import MAX_TOKENS
+    from knowgraph.config import LLM_MAX_INPUT_TOKENS
 
     sig = inspect.signature(QueryEngine.query)
-    assert sig.parameters["max_tokens"].default == MAX_TOKENS
+    assert sig.parameters["max_tokens"].default == LLM_MAX_INPUT_TOKENS
     sig_async = inspect.signature(QueryEngine.query_async)
-    assert sig_async.parameters["max_tokens"].default == MAX_TOKENS
+    assert sig_async.parameters["max_tokens"].default == LLM_MAX_INPUT_TOKENS
 
 
 def test_async_assemble_context_receives_edges():
