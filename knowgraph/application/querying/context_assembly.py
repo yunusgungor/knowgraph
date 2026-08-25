@@ -50,28 +50,31 @@ def _file_type_multiplier(node: Node) -> float:
 
 
 def _query_match_boost(node: Node, query_text: str) -> float:
-    """Boost nodes whose path or content directly match the query term.
+    """Boost nodes whose path directly matches the query term.
 
-    When a user queries "ReverseVatModule", the ReverseVatModule.tsx file
-    should rank higher than QuickVatCalculator.tsx even if both are related.
+    Only boosts on exact or near-exact path matches to avoid false positives.
+    Partial single-word matches (e.g. "vat" matching "VatCalculator") are
+    NOT boosted because they create noise for unrelated queries.
     """
     query_lower = query_text.lower().strip()
     path_lower = (node.path or "").lower()
-    content_lower = (node.content or "").lower()
 
-    # Exact component name match in path (e.g. ReverseVatModule.tsx)
+    # Exact full query in path (e.g. "reversevatmodule" in "ReverseVatModule.tsx")
     if query_lower in path_lower:
         return 0.30
 
-    # Partial match in path (e.g. "vat" in "VatCalculator.tsx")
-    query_words = query_lower.split()
-    path_words = path_lower.replace("/", " ").replace("\\", " ").replace(".", " ").split()
-    if any(w in path_words for w in query_words if len(w) > 3):
-        return 0.15
+    # Multi-word: ALL query words must appear as path words (not just one)
+    query_words = [w for w in query_lower.split() if len(w) > 3]
+    if len(query_words) >= 2:
+        path_words = set(path_lower.replace("/", " ").replace("\\", " ").replace(".", " ").replace("-", " ").split())
+        if all(w in path_words for w in query_words):
+            return 0.20
 
-    # Match in content header (first 200 chars)
-    if query_lower in content_lower[:200]:
-        return 0.10
+    # Single exact word match (e.g. query="QuickVatCalculator", path contains "quickvatcalculator")
+    if len(query_words) == 1:
+        path_compact = path_lower.replace("/", "").replace("\\", "").replace(".", "").replace("-", "").replace("_", "")
+        if query_words[0] in path_compact:
+            return 0.25
 
     return 0.0
 
