@@ -188,6 +188,13 @@ def build_llm_prompt(
         prompt += f"\n\nKNOWN_IDENTIFIERS (you may only reference these):\n{allowlist}"
 
     if explanation_data:
+        # Truncate explanation_data if it's enormous (extreme params like
+        # top_k=40+hops=6+explanation=true can produce 100K+ chars of JSON).
+        # The model's context limit would be exceeded by the explanation alone.
+        # Keep the first ~10K chars — enough for useful reasoning paths.
+        _MAX_EXPLANATION_CHARS = 10000
+        if len(explanation_data) > _MAX_EXPLANATION_CHARS:
+            explanation_data = explanation_data[:_MAX_EXPLANATION_CHARS] + "\n[truncated]"
         prompt += f"\n\nExplanation Data:\n{explanation_data}"
 
     return prompt
