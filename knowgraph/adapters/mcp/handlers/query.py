@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -335,6 +336,60 @@ def _timeout_hint(error: Exception) -> str:
     return ""
 
 
+def _ensure_code_context_visible(answer: str, query: str, context: str) -> str:
+    """Append a bounded code excerpt when the LLM omits code from a code context."""
+    if not answer or "```" not in context:
+        return answer
+
+    query_lower = query.lower().strip()
+    query_is_identifier = bool(re.fullmatch(r"[A-Za-z_$][\w$]*", query.strip()))
+    has_relevant_code = "```" in answer and (
+        not query_is_identifier or query_lower in answer.lower()
+    )
+    if has_relevant_code:
+        return answer
+
+    excerpt = _extract_relevant_code_excerpt(context, query)
+    if not excerpt:
+        return answer
+
+    return f"{answer}\n\n## Retrieved Code Context\n\n{excerpt}"
+
+
+def _extract_relevant_code_excerpt(context: str, query: str, max_chars: int = 6000) -> str:
+    """Return the most query-relevant context blocks without flooding MCP clients."""
+    blocks = [b.strip() for b in re.split(r"(?=\n## )", context) if b.strip()]
+    if not blocks:
+        return ""
+
+    query_lower = query.lower().strip()
+    query_words = [w for w in re.split(r"\W+", query_lower) if len(w) > 3]
+
+    def block_score(block: str) -> tuple[int, int]:
+        lower = block.lower()
+        exact = 2 if query_lower and query_lower in lower else 0
+        word_hits = sum(1 for word in query_words if word in lower)
+        has_code = 1 if "```" in block else 0
+        return (exact + word_hits + has_code, len(block))
+
+    selected = []
+    total = 0
+    for block in sorted(blocks, key=block_score, reverse=True):
+        if "```" not in block:
+            continue
+        if total + len(block) > max_chars:
+            remaining = max_chars - total
+            if remaining > 1000:
+                selected.append(block[:remaining].rstrip() + "\n[truncated]")
+            break
+        selected.append(block)
+        total += len(block)
+        if total >= max_chars:
+            break
+
+    return "\n\n".join(selected)
+
+
 def _sanitize_expansion_terms(terms: list[str]) -> list[str]:
     """Drop terms that look like code identifiers; keep plain language keywords.
 
@@ -437,6 +492,8 @@ async def _generate_llm_answer(
 
     if enable_grounding:
         raw_answer = _annotate_grounding(raw_answer, result)
+
+    raw_answer = _ensure_code_context_visible(raw_answer, query, result.context)
 
     return raw_answer
 
@@ -561,6 +618,8 @@ async def handle_batch_query(
                 except Exception as e:
                     hint = _timeout_hint(e)
                     answer = f"{answer}{hint}"  # context fallback + (maybe) hint
+
+            answer = _ensure_code_context_visible(answer, query, result.context)
 
             if enable_grounding:
                 answer = _annotate_grounding(answer, result)
