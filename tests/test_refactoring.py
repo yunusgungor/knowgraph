@@ -280,6 +280,32 @@ class TestBuildLLMPrompt:
         assert "Explanation Data:" in result
         assert explanation_data in result
 
+    def test_prompt_encourages_synthesis_not_verbatim_echo(self):
+        """The default prompt must demand prose, not a verbatim context dump.
+
+        Regression: the previous STRICT RULE ("_and present in the context_")
+        made a weak model reproduce the context verbatim instead of explaining.
+        """
+        result = build_llm_prompt("How does vat work", "some context")
+        assert "in your own words" in result
+        assert "do not paste the context verbatim" in result
+
+    def test_prompt_keeps_anti_hallucination_allowlist(self):
+        """The known_identifiers guard must still be present in the prompt."""
+        result = build_llm_prompt(
+            "How does vat work?", "ctx",
+            known_identifiers=["QuickVatCalculator", "VatCalculatorView"],
+        )
+        assert "never invent a name" in result
+        assert "KNOWN_IDENTIFIERS" in result
+        assert "QuickVatCalculator" in result
+        assert "VatCalculatorView" in result
+
+    def test_prompt_drops_buggy_context_coupling(self):
+        """The old buggy '_and present in the context' wording must be gone."""
+        result = build_llm_prompt("q", "ctx", known_identifiers=["X"])
+        assert "and present in the context" not in result
+
 
 class TestIntegration:
     """Integration tests for refactoring utilities."""

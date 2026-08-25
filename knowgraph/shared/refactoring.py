@@ -173,10 +173,11 @@ def build_llm_prompt(
         if system_prompt
         else (
             "You are a helpful assistant. Use the following context to answer the user's "
-            "question. Answer in the same language as the question. "
-            "STRICT RULE: never mention a function, class, or file name that is not "
-            "listed in KNOWN_IDENTIFIERS below and present in the context — do not "
-            "invent symbol names. If the context does not answer the question, say so."
+            "question. Answer in the same language as the question, in your own words — "
+            "do not paste the context verbatim. When reference to a function, class, or "
+            "file is needed, you may only use identifiers from KNOWN_IDENTIFIERS below "
+            "(never invent a name). If the context does not contain the answer, say so "
+            "instead of guessing."
         )
     )
 
