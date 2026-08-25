@@ -192,16 +192,19 @@ async def handle_diagnostic(
         recommendations.append("🔴 Configure an LLM provider (OPENAI_API_KEY or ANTHROPIC_API_KEY) for AI features")
     else:
         # Slow/free endpoints (e.g. a `*:free` OpenRouter model) routinely take
-        # >30s to synthesize an answer; a 30s LLM_REQUEST_TIMEOUT then cuts them
-        # off, surfacing as flaky query timeouts. Surface the knob when it looks
-        # tight relative to a configured provider.
+        # >30s to synthesize an answer; a tight LLM_REQUEST_TIMEOUT then cuts
+        # them off, surfacing as flaky query timeouts. Surface the knob when it
+        # looks tight relative to a configured provider. NOTE the MCP client
+        # usually has its OWN timeout too — raising only the server-side knob
+        # isn't enough if the client cuts first.
         try:
             from knowgraph.config import LLM_REQUEST_TIMEOUT
 
-            if LLM_REQUEST_TIMEOUT <= 30:
+            if LLM_REQUEST_TIMEOUT <= 60:
                 recommendations.append(
-                    "🟡 LLM request timeout is 30s; with a slow/free provider, raise "
-                    "KNOWGRAPH_LLM_REQUEST_TIMEOUT (e.g. 60) to avoid flaky query timeouts"
+                    "🟡 LLM request timeout is 60s or less; with a slow/free provider, "
+                    "raise KNOWGRAPH_LLM_REQUEST_TIMEOUT (e.g. 90-120) AND the MCP "
+                    "client's tool timeout — the client cuts first if its limit is lower"
                 )
         except Exception:
             pass

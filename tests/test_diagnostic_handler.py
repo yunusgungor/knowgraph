@@ -15,7 +15,7 @@ class TestDiagnosticConfigReport:
     def test_reports_timeout_and_retrieval_settings(self):
         """The LLM Provider section surfaces the effective timeout/retrieval knobs."""
         text = _run({"graph_path": "C:/tmp/definitely_missing_graph"})
-        assert "LLM request timeout: 30s" in text
+        assert "LLM request timeout: 60s" in text
         assert "LLM retries: 5" in text
         assert "Query timeout: 30.0s" in text
         assert "top_k: 20" in text
@@ -35,26 +35,27 @@ class TestDiagnosticConfigReport:
         # The hint corrects the misconception that grounding deepens retrieval.
         assert "enable_grounding re-weights context but does NOT fetch more nodes" in text
 
-    def test_recommendation_for_30s_timeout(self, monkeypatch):
-        """A 30s LLM timeout with a configured provider fires the slow-provider hint."""
+    def test_recommendation_for_60s_timeout(self, monkeypatch):
+        """A default/60s LLM timeout with a configured provider fires the hint."""
         import knowgraph.config as config
 
         monkeypatch.setenv("KNOWGRAPH_API_KEY", "sk-test-key-1234567890")
-        # Default is 30s; the handler reads the module constant freshly each call,
-        # so patch the module attr (not env — module constants are import-time).
-        monkeypatch.setattr(config, "LLM_REQUEST_TIMEOUT", 30)
+        # Handler reads the module constant freshly each call; patch the attr.
+        monkeypatch.setattr(config, "LLM_REQUEST_TIMEOUT", 60)
         text = _run({"graph_path": "C:/tmp/definitely_missing_graph"})
-        assert "LLM request timeout is 30s" in text
+        assert "LLM request timeout is 60s or less" in text
         assert "KNOWGRAPH_LLM_REQUEST_TIMEOUT" in text
+        # The hint must also tell the user to raise the MCP client timeout.
+        assert "MCP client's tool timeout" in text
 
     def test_no_timeout_hint_when_generous(self, monkeypatch):
-        """A generous timeout suppresses the slow-provider hint."""
+        """A generous timeout (>60) suppresses the slow-provider hint."""
         import knowgraph.config as config
 
         monkeypatch.setenv("KNOWGRAPH_API_KEY", "sk-test-key-1234567890")
         monkeypatch.setattr(config, "LLM_REQUEST_TIMEOUT", 120)
         text = _run({"graph_path": "C:/tmp/definitely_missing_graph"})
-        assert "LLM request timeout is 30s" not in text
+        assert "LLM request timeout is 60s or less" not in text
 
     def test_no_provider_suppresses_timeout_hint(self, monkeypatch):
         """With no provider, the LLM timeout hint doesn't fire (no LLM to time out).

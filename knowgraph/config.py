@@ -249,11 +249,13 @@ LLM_TEMPERATURE = 0.0
 MAX_EXPANSION_TERMS = 5
 LLM_RETRY_COUNT = int(os.getenv("KNOWGRAPH_LLM_RETRY_COUNT", "5"))
 LLM_RETRY_BASE_DELAY = float(os.getenv("KNOWGRAPH_LLM_RETRY_DELAY", "1.0"))
-# Per-attempt cap on a single LLM HTTP call. A hung/slow endpoint (e.g. a free
-# OpenRouter model) can otherwise hold one attempt for the OpenAI client's
-# default 600s, and 5 retries blow past any caller deadline. 30s then up to
-# LLM_RETRY_COUNT-1 backoffs keeps the whole logical attempt inside ~1min.
-LLM_REQUEST_TIMEOUT = int(os.getenv("KNOWGRAPH_LLM_REQUEST_TIMEOUT", "30"))
+# Budget for a WHOLE logical LLM call (rate-limiter wait + HTTP attempts +
+# retries), not just one attempt. 60s gives a slow/free provider (e.g. a `*:free`
+# OpenRouter model) room to synthesize a large answer, while a truly hung
+# endpoint still fails fast (vs the OpenAI client's 600s default). Tune per
+# provider via KNOWGRAPH_LLM_REQUEST_TIMEOUT; pair with a matching MCP client
+# timeout so the client doesn't cut the query first.
+LLM_REQUEST_TIMEOUT = int(os.getenv("KNOWGRAPH_LLM_REQUEST_TIMEOUT", "60"))
 # Max tokens the LLM may GENERATE per completion (output cap). Keeps costs
 # bounded and avoids runaway responses. Override via KNOWGRAPH_LLM_MAX_TOKENS.
 LLM_MAX_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_TOKENS", "4096"))
