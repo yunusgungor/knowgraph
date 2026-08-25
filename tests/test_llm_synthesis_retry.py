@@ -6,6 +6,7 @@ Retrying the whole synthesis a bounded number of times turns that into a
 success.
 """
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -112,3 +113,45 @@ async def test_whole_synthesis_bounded_by_timeout():
     assert "CTX" in answer
     assert "Generation Error" in answer  # degraded, not a hang
     assert elapsed < 2.0  # returned promptly, did NOT wait for the 5s slow call
+
+
+@pytest.mark.asyncio
+async def test_handle_query_whole_path_bounded():
+    """The entire handle_query compute (retrieval + synthesis) is bounded.
+
+    Regression: two nested caps (retrieval 30s, synthesis 25s) summed to ~55s,
+    far past a 30s client window. The outer QUERY_TOTAL_TIMEOUT now guarantees
+    a clean bounded response regardless of where the delay is.
+    """
+    import asyncio as _asyncio
+    import time
+    import tempfile as _tf
+
+    import knowgraph.adapters.mcp.handlers.query as qh
+
+    # Patch the timeout to a tiny budget so the test is fast.
+    # Must patch the name in query.py (module-level import), not in config.
+    with patch.object(qh, "QUERY_TOTAL_TIMEOUT", 0):  # fires immediately
+
+        async def slow_execute(_fn=None):
+            await _asyncio.sleep(5)
+            r = MagicMock()
+            r.active_subgraph_size = 0
+            r.execution_time = 5.0
+            return r, {}
+
+        with _tf.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "nodes").mkdir()
+
+            with patch.object(qh, "_global_circuit_breaker") as mock_cb:
+                mock_cb.call = AsyncMock(side_effect=slow_execute)
+                start = time.monotonic()
+                result = await qh.handle_query(
+                    {"query": "test", "graph_path": tmpdir},
+                    provider=None,
+                    project_root=Path(tmpdir),
+                )
+                elapsed = time.monotonic() - start
+
+        assert elapsed < 2.0
+        assert any("Generation Error" in c.text or "timed out" in c.text.lower() for c in result)

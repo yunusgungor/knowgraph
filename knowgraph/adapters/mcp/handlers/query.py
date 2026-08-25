@@ -20,6 +20,7 @@ from knowgraph.config import (
     DEFAULT_GRAPH_STORE_PATH,
     LLM_SYNTHESIS_RETRIES,
     LLM_SYNTHESIS_TIMEOUT,
+    QUERY_TOTAL_TIMEOUT,
 )
 from knowgraph.shared.progress import ProgressNotifier
 from knowgraph.shared.refactoring import (
@@ -235,26 +236,35 @@ async def handle_query(
                 return result, params
 
             # Execute with circuit breaker protection
-            result, params = await _global_circuit_breaker.call(execute_query)
-            trace.add_event(
-                "query_executed",
-                {
-                    "nodes_retrieved": result.active_subgraph_size,
-                    "execution_time": result.execution_time,
-                },
-            )
+            try:
+                async with asyncio.timeout(QUERY_TOTAL_TIMEOUT):
+                    result, params = await _global_circuit_breaker.call(execute_query)
+                    trace.add_event(
+                        "query_executed",
+                        {
+                            "nodes_retrieved": result.active_subgraph_size,
+                            "execution_time": result.execution_time,
+                        },
+                    )
 
-            # Generate Answer using LLM Delegation
-            answer = result.context
+                    # Generate Answer using LLM Delegation
+                    answer = result.context
 
-            if provider:
+                    if provider:
+                        if progress:
+                            await progress.update(4, "🤖 Generating AI answer from context...")
+                        answer = await _generate_llm_answer(
+                            query, result, params["system_prompt"], params["with_explanation"], provider,
+                            enable_grounding=params.get("enable_grounding", False),
+                        )
+                        trace.add_event("llm_answer_generated", {"length": len(answer)})
+            except TimeoutError:
                 if progress:
-                    await progress.update(4, "🤖 Generating AI answer from context...")
-                answer = await _generate_llm_answer(
-                    query, result, params["system_prompt"], params["with_explanation"], provider,
-                    enable_grounding=params.get("enable_grounding", False),
+                    await progress.error(f"Query timed out after {QUERY_TOTAL_TIMEOUT}s")
+                answer = (
+                    f"[Generation Error: query exceeded {QUERY_TOTAL_TIMEOUT}s budget] "
+                    f"[raise KNOWGRAPH_QUERY_TOTAL_TIMEOUT or use a faster provider]"
                 )
-                trace.add_event("llm_answer_generated", {"length": len(answer)})
 
             if progress:
                 await progress.complete("✅ Search completed successfully!")

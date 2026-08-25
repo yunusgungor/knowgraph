@@ -275,6 +275,12 @@ LLM_SYNTHESIS_RETRIES = int(os.getenv("KNOWGRAPH_LLM_SYNTHESIS_RETRIES", "2"))
 # ≤~25s response (full answer if the provider warms up, honest raw-context
 # degradation otherwise). Tune per client/provider via KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT.
 LLM_SYNTHESIS_TIMEOUT = int(os.getenv("KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT", "25"))
+# Whole QUERY-path budget (query expansion + retrieval + assemble_context + LLM
+# synthesis) at the MCP-handler level. The inner caps (retrieval 30s, synthesis
+# 25s) can sum to ~55s worst case and blow past a ~30s client window. This single
+# outer timeout guarantees a response within the window. Tune per client/provider
+# via KNOWGRAPH_QUERY_TOTAL_TIMEOUT (e.g. lower it below a tighter client limit).
+QUERY_TOTAL_TIMEOUT = int(os.getenv("KNOWGRAPH_QUERY_TOTAL_TIMEOUT", "28"))
 
 # Graph Traversal Configuration
 MAX_HOPS = 4
