@@ -461,11 +461,12 @@ class QueryEngine:
                 timings = {}
 
                 try:
-                    # Step 1: Sparse search + graph expansion
+                    # Step 1: Sparse search + graph expansion + similarity scores (SINGLE PASS)
                     retrieval_start = time.time()
-                    nodes, seed_node_ids = self.retriever.retrieve(
+                    nodes, seed_node_ids, similarity_scores = self.retriever.retrieve_with_scores(
                         query_text, self._get_edges(), top_k, max_hops,
                         enable_temporal_filter=enable_temporal_filter,
+                        node_cap=300,
                     )
                     timings["sparse_search"] = time.time() - retrieval_start
                     timings["graph_expansion"] = 0.0  # Included in retrieval
@@ -495,9 +496,7 @@ class QueryEngine:
                     centrality_scores = compute_centrality_metrics(nodes, active_edges)
                     timings["centrality"] = time.time() - centrality_start
 
-                    # Step 3: Get similarity scores from retriever results
-                    retrieval_results = self.retriever.retrieve_by_similarity(query_text, top_k)
-                    similarity_scores = {node.id: score for node, score in retrieval_results}
+                    # Step 3: Similarity scores already from retrieve_with_scores
 
                     # Step 4: Assemble context (REFERENCE-AWARE IMPORTANCE!)
                     # Graph Engineering transfer (opt-in): nodes with graph evidence
@@ -973,11 +972,12 @@ class QueryEngine:
                                 explanation=None,
                             )
 
-                    # Step 1: Sparse search + graph expansion (async)
+                    # Step 1: Sparse search + graph expansion + similarity scores (SINGLE PASS)
                     retrieval_start = time.time()
-                    nodes, seed_node_ids = await self.retriever.retrieve_async(
+                    nodes, seed_node_ids, similarity_scores = await self.retriever.retrieve_async_with_scores(
                         query_text, self._get_edges(), top_k, max_hops,
                         enable_temporal_filter=enable_temporal_filter,
+                        node_cap=300,
                     )
                     timings["sparse_search"] = time.time() - retrieval_start
                     timings["graph_expansion"] = 0.0  # Included in retrieval
@@ -1015,9 +1015,8 @@ class QueryEngine:
                     # Allow cancellation
                     await asyncio.sleep(0)
 
-                    # Step 3: Get similarity scores from retriever results
-                    retrieval_results = await self.retriever.retrieve_by_similarity_async(query_text, top_k)
-                    similarity_scores = {node.id: score for node, score in retrieval_results}
+                    # Step 3: Similarity scores already from retrieve_async_with_scores
+                    # (no second search needed — saved from Step 1)
 
                     # Step 4: Assemble context with hierarchical lifting
                     # Graph Engineering transfer (opt-in): nodes with graph evidence

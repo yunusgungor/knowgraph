@@ -301,6 +301,92 @@ class QueryRetriever:
                 {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
             ) from error
 
+    def retrieve_with_scores(
+        self: "QueryRetriever",
+        query_text: str,
+        edges: list[Edge],
+        top_k: int = TOP_K,
+        max_hops: int = MAX_HOPS,
+        use_code_search: bool = False,
+        enable_temporal_filter: bool = False,
+        node_cap: int = 300,
+    ) -> tuple[list[Node], list[UUID], dict[UUID, float]]:
+        """Retrieve nodes with similarity scores in a single pass (sync).
+
+        Args:
+        ----
+            query_text: Query text
+            edges: All graph edges
+            top_k: Number of seed nodes
+            max_hops: Graph traversal depth
+            use_code_search: Use code embeddings
+            enable_temporal_filter: Drop superseded-conversation edges
+            node_cap: Hard cap on expanded nodes
+
+        Returns:
+        -------
+            (nodes, seed_node_ids, similarity_scores)
+
+        """
+        search_text = query_text
+
+        if hasattr(self, "expander") and self.expander:
+            expansion_terms = self.expander.expand_query(query_text)
+            if expansion_terms:
+                search_text = f"{query_text} {' '.join(expansion_terms)}"
+
+        if use_code_search:
+            query_tokens = self.sparse_embedder.embed_code(search_text)
+        else:
+            query_tokens = self.sparse_embedder.embed_text(search_text)
+
+        results = self.sparse_index.search(query_tokens, top_k)
+        results = self._fuse_sparse_dense(results, search_text, top_k)
+
+        seed_node_ids = [UUID(node_id) for node_id, _ in results]
+        similarity_map = {UUID(node_id): score for node_id, score in results}
+
+        traversal_edges = edges
+        if enable_temporal_filter:
+            from knowgraph.domain.claims.temporal_filter import filter_edges_by_temporal
+            traversal_edges = filter_edges_by_temporal(edges, "")
+
+        expanded_node_ids = traverse_graph_reference_aware(
+            seed_node_ids, traversal_edges, max_hops
+        )
+
+        if len(expanded_node_ids) > node_cap:
+            expanded_node_ids = expanded_node_ids[:node_cap]
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        nodes = []
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_id = {
+                node_id: executor.submit(read_node_json, node_id, self.graph_store_path)
+                for node_id in expanded_node_ids
+            }
+            for node_id in expanded_node_ids:
+                node = future_to_id[node_id].result()
+                if node:
+                    nodes.append(node)
+
+        try:
+            from knowgraph.application.querying.conversation_search import (
+                enrich_with_conversations,
+            )
+            nodes, _ = enrich_with_conversations(nodes, self.graph_store_path, edges=edges)
+        except Exception:
+            pass
+
+        all_scores: dict[UUID, float] = {}
+        loaded_ids = {n.id for n in nodes}
+        for nid, score in similarity_map.items():
+            if nid in loaded_ids:
+                all_scores[nid] = score
+
+        return nodes, seed_node_ids, all_scores
+
     def retrieve_by_similarity(
         self: "QueryRetriever", query_text: str, top_k: int = TOP_K, use_code_search: bool = False
     ) -> list[tuple[Node, float]]:
@@ -447,6 +533,111 @@ class QueryRetriever:
                         pass
 
                     return nodes, seed_node_ids
+
+                except QueryError:
+                    raise
+                except Exception as error:
+                    raise QueryError(
+                        f"Failed to retrieve nodes: {error!s}",
+                        {"error": str(error), "query": query_text[:MAX_QUERY_PREVIEW_LENGTH]},
+                    ) from error
+
+    async def retrieve_async_with_scores(
+        self: "QueryRetriever",
+        query_text: str,
+        edges: list[Edge],
+        top_k: int = TOP_K,
+        max_hops: int = MAX_HOPS,
+        use_code_search: bool = False,
+        enable_temporal_filter: bool = False,
+        node_cap: int = 300,
+    ) -> tuple[list[Node], list[UUID], dict[UUID, float]]:
+        """Retrieve nodes with similarity scores in a single pass.
+
+        Combines retrieve_async and retrieve_by_similarity_async to avoid
+        running sparse+dense search twice. Returns nodes, seed IDs, and
+        per-node similarity scores.
+
+        Args:
+        ----
+            query_text: Natural language query
+            edges: All graph edges
+            top_k: Number of seed nodes
+            max_hops: Graph traversal depth
+            use_code_search: Use code embeddings instead of text
+            enable_temporal_filter: Drop superseded-conversation edges
+            node_cap: Hard cap on total expanded nodes (prevents explosion)
+
+        Returns:
+        -------
+            (nodes, seed_node_ids, similarity_scores)
+
+        """
+        with memory_guard(
+            operation_name=f"retrieve_with_scores[{query_text[:30]}]",
+            warning_threshold_mb=80,
+            critical_threshold_mb=200,
+        ):
+            with trace_operation(
+                "query_retriever.retrieve_async_with_scores",
+                query_length=len(query_text),
+                top_k=top_k,
+                max_hops=max_hops,
+            ):
+                try:
+                    search_text = query_text
+
+                    if hasattr(self, "expander") and self.expander:
+                        expansion_terms = await self.expander.expand_query_async(query_text)
+                        if expansion_terms:
+                            search_text = f"{query_text} {' '.join(expansion_terms)}"
+
+                    if use_code_search:
+                        query_tokens = self.sparse_embedder.embed_code(search_text)
+                    else:
+                        query_tokens = self.sparse_embedder.embed_text(search_text)
+
+                    results = await self.sparse_index.search_async(query_tokens, top_k)
+                    results = await asyncio.to_thread(
+                        self._fuse_sparse_dense, results, search_text, top_k
+                    )
+
+                    seed_node_ids = [UUID(node_id) for node_id, _ in results]
+                    similarity_map = {UUID(node_id): score for node_id, score in results}
+
+                    traversal_edges = edges
+                    if enable_temporal_filter:
+                        from knowgraph.domain.claims.temporal_filter import filter_edges_by_temporal
+                        traversal_edges = filter_edges_by_temporal(edges, "")
+
+                    expanded_node_ids = traverse_graph_reference_aware(
+                        seed_node_ids, traversal_edges, max_hops
+                    )
+
+                    # Cap expanded nodes to prevent combinatorial explosion
+                    if len(expanded_node_ids) > node_cap:
+                        # Keep seeds + closest by traversal order (BFS order = relevance)
+                        expanded_node_ids = expanded_node_ids[:node_cap]
+
+                    nodes = await self._load_nodes_async(expanded_node_ids)
+
+                    try:
+                        from knowgraph.application.querying.conversation_search import (
+                            enrich_with_conversations,
+                        )
+                        nodes, _ = enrich_with_conversations(nodes, self.graph_store_path, edges=edges)
+                    except Exception:
+                        pass
+
+                    # Build similarity scores for all loaded nodes
+                    # Seeds get their search score; expanded nodes get 0.0
+                    all_scores: dict[UUID, float] = {}
+                    loaded_ids = {n.id for n in nodes}
+                    for nid, score in similarity_map.items():
+                        if nid in loaded_ids:
+                            all_scores[nid] = score
+
+                    return nodes, seed_node_ids, all_scores
 
                 except QueryError:
                     raise

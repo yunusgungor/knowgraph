@@ -218,14 +218,28 @@ def assemble_context(
 
     # Score and sort nodes
     blocks = []
+    # Cap reference path quality computation to avoid O(N*E) explosion
+    # on large subgraphs. Only compute for top-scored nodes.
+    _MAX_PATH_QUALITY_NODES = 100
+    _seed_set = set(seed_node_ids)
+    # Pre-sort by approximate importance to pick top candidates
+    _pre_scored = []
+    for node in nodes:
+        _sim = similarity_scores.get(node.id, DEFAULT_SIMILARITY_SCORE)
+        _cen = centrality_scores.get(node.id, {}).get("composite", DEFAULT_CENTRALITY_SCORE)
+        _pre_scored.append((_sim + _cen + (SEED_NODE_BONUS if node.id in _seed_set else 0.0), node))
+    _pre_scored.sort(key=lambda x: x[0], reverse=True)
+    _path_quality_candidates = {n.id for _, n in _pre_scored[:_MAX_PATH_QUALITY_NODES]}
+
     for node in nodes:
         is_seed = node.id in seed_node_ids
         similarity = similarity_scores.get(node.id, DEFAULT_SIMILARITY_SCORE)
         centrality = centrality_scores.get(node.id, {}).get("composite", DEFAULT_CENTRALITY_SCORE)
 
         # NEW: Compute reference path quality if edges provided
+        # Skip for nodes outside the top-scored candidate set (cap at 100)
         ref_path_quality = 0.0
-        if edges:
+        if edges and node.id in _path_quality_candidates:
             ref_path_quality = compute_reference_path_quality(node.id, seed_node_ids, edges)
 
         # Graph Engineering: pass the node's grounding verdict if provided.

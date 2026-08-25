@@ -27,6 +27,8 @@ def lift_hierarchical_context(
     For each retrieved code node, walks up the directory tree to find
     README files, package documentation, or other architectural docs.
 
+    Uses an O(N) pre-built path→node_id index instead of O(N²) scanning.
+
     Args:
     ----
         retrieved_nodes: Initially retrieved nodes from query
@@ -57,44 +59,49 @@ def lift_hierarchical_context(
                 parent_dirs.add(current)
                 current = current.parent
 
-    # Load all nodes to find documentation in parent dirs
-    additional_nodes: list[Node] = []
+    # Build O(1) path→node_id index (single pass, no per-node disk reads)
+    path_index: dict[Path, str] = {}  # path → node_id
     node_ids = list_all_nodes(graph_store_path)
+    for node_id in node_ids:
+        node = read_node_json(node_id, graph_store_path)
+        if node and node.path:
+            path_index[Path(node.path)] = str(node_id)
 
     # Documentation file patterns (prioritized)
     doc_patterns = [
         "readme.md",
         "readme.txt",
-        "__init__.py",  # Python package docs
-        "package.json",  # JS/TS package info
+        "__init__.py",
+        "package.json",
         "index.md",
         "overview.md",
         "architecture.md",
     ]
 
-    for node_id in node_ids:
-        # Skip if already in retrieved nodes
-        if any(n.id == node_id for n in retrieved_nodes):
-            continue
+    additional_nodes: list[Node] = []
+    retrieved_id_set = {n.id for n in retrieved_nodes}
 
-        node = read_node_json(node_id, graph_store_path)
-        if not node or not node.path:
-            continue
+    # O(P * D) where P = parent_dirs, D = doc_patterns (small constants)
+    for parent_dir in parent_dirs:
+        for pattern in doc_patterns:
+            # Try common filenames in this directory
+            candidate_path = parent_dir / pattern
+            if candidate_path in path_index:
+                nid = path_index[candidate_path]
+                from uuid import UUID
+                node_id = UUID(nid) if isinstance(nid, str) else nid
+                if node_id not in retrieved_id_set:
+                    node = read_node_json(node_id, graph_store_path)
+                    if node:
+                        additional_nodes.append(node)
+                        retrieved_id_set.add(node_id)
+                        if len(additional_nodes) >= max_additional_nodes:
+                            break
+        if len(additional_nodes) >= max_additional_nodes:
+            break
 
-        node_path = Path(node.path)
-        node_dir = node_path.parent
-        node_filename = node_path.name.lower()
-
-        # Check if this node is in a parent directory and is documentation
-        if node_dir in parent_dirs and any(pattern in node_filename for pattern in doc_patterns):
-            additional_nodes.append(node)
-
-            if len(additional_nodes) >= max_additional_nodes:
-                break
-
-    # Sort additional nodes by priority (README first, then __init__.py, etc.)
+    # Sort additional nodes by priority (README first)
     def doc_priority(node: Node) -> int:
-        """Assign priority to documentation nodes."""
         filename = Path(node.path).name.lower()
         if "readme" in filename:
             return 0
@@ -107,8 +114,4 @@ def lift_hierarchical_context(
 
     additional_nodes.sort(key=doc_priority)
 
-    # Combine: original nodes first, then hierarchical context
     return retrieved_nodes + additional_nodes[:max_additional_nodes]
-
-
-# End of file

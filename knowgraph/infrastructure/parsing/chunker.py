@@ -175,7 +175,7 @@ def chunk_markdown(
 def _split_large_section(
     section: MarkdownSection,
     max_chars: int,
-    overlap_tokens: int,  # noqa: ARG001
+    overlap_tokens: int,
     tokenizer: Any,
     source_path: str = "",
 ) -> list[Chunk]:
@@ -185,7 +185,7 @@ def _split_large_section(
     ----
         section: Section to split
         max_chars: Maximum characters per chunk
-        overlap_tokens: Overlap size
+        overlap_tokens: Overlap size (approx chars = tokens * 4)
         tokenizer: Tokenizer for token counting
 
     Returns:
@@ -200,11 +200,15 @@ def _split_large_section(
     current_chunk_parts = []
     current_size = 0
     chunk_index = 0
+    overlap_chars = overlap_tokens * 4  # Approximate char-to-token ratio
 
     # Add header to first chunk
     header_text = f"{'#' * section.level} {section.header}\n\n"
     current_chunk_parts.append(header_text)
     current_size = len(header_text)
+
+    # Track tail of previous chunk for overlap
+    previous_tail = ""
 
     for para in paragraphs:
         para_size = len(para) + 2  # +2 for \n\n
@@ -289,7 +293,6 @@ def _split_large_section(
             if tokenizer:
                 tokens = len(tokenizer.encode(chunk_content))
             else:
-                # Fallback: estimate tokens (approx 3.5 chars per token for code)
                 tokens = int(len(chunk_content) / 3.5)
 
             chunks.append(
@@ -307,9 +310,15 @@ def _split_large_section(
                 )
             )
 
-            # Start new chunk with header context
+            # Save tail for overlap (last N chars of this chunk)
+            previous_tail = chunk_content[-overlap_chars:] if overlap_chars > 0 else ""
+
+            # Start new chunk with header context + overlap from previous chunk
+            overlap_prefix = f"{previous_tail}\n\n..." if previous_tail else ""
             current_chunk_parts = [header_text]
-            current_size = len(header_text)
+            if overlap_prefix:
+                current_chunk_parts.append(overlap_prefix)
+            current_size = len(header_text) + len(overlap_prefix)
             chunk_index += 1
 
         current_chunk_parts.append(para + "\n\n")
