@@ -290,6 +290,12 @@ def _split_large_section(
         if current_size + para_size > max_chars and current_chunk_parts:
             # Save current chunk
             chunk_content = "".join(current_chunk_parts).strip()
+
+            # Add overlap prefix to current chunk (bidirectional overlap)
+            previous_tail = chunk_content[-overlap_chars:] if overlap_chars > 0 else ""
+            if previous_tail:
+                chunk_content = f"{previous_tail}\n\n...\n\n{chunk_content}"
+
             if tokenizer:
                 tokens = len(tokenizer.encode(chunk_content))
             else:
@@ -310,11 +316,8 @@ def _split_large_section(
                 )
             )
 
-            # Save tail for overlap (last N chars of this chunk)
-            previous_tail = chunk_content[-overlap_chars:] if overlap_chars > 0 else ""
-
             # Start new chunk with header context + overlap from previous chunk
-            overlap_prefix = f"{previous_tail}\n\n..." if previous_tail else ""
+            overlap_prefix = f"{previous_tail}\n\n...\n\n" if previous_tail else ""
             current_chunk_parts = [header_text]
             if overlap_prefix:
                 current_chunk_parts.append(overlap_prefix)

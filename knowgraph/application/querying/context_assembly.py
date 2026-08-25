@@ -23,6 +23,31 @@ from knowgraph.config import (
 )
 from knowgraph.domain.models.node import Node
 
+# File-type multiplier: boost code files, penalize metadata/config
+_CODE_EXTS = {".tsx", ".ts", ".js", ".jsx", ".py", ".java", ".go", ".rs", ".rb", ".php", ".cs", ".cpp", ".c", ".h"}
+_META_NAMES = {"manifest.json", "package.json", "metadata.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml"}
+_CONFIG_EXTS = {".env", ".env.example", ".env.local", ".env.development"}
+_CONFIG_NAMES = {"tsconfig.json", "jsconfig.json", "vite.config.ts", "vite.config.js", "next.config.js", ".eslintrc.json", ".prettierrc.json"}
+
+
+def _file_type_multiplier(node: Node) -> float:
+    """Boost code files, penalize metadata/config for retrieval precision."""
+    path = (node.path or "").lower()
+    name = path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if path else ""
+    ext = "." + name.rsplit(".", 1)[-1] if "." in name else ""
+
+    # Penalize metadata files (manifest.json, package.json, etc.)
+    if name in _META_NAMES:
+        return 0.3
+    # Penalize config files
+    if ext in _CONFIG_EXTS or name in _CONFIG_NAMES:
+        return 0.4
+    # Boost code files
+    if ext in _CODE_EXTS:
+        return 1.3
+    # Default: neutral
+    return 1.0
+
 
 @dataclass
 class ContextBlock:
@@ -94,6 +119,9 @@ def score_node_importance(
 
     # Apply role weight
     importance *= node.role_weight
+
+    # File-type multiplier: boost code, penalize metadata/config
+    importance *= _file_type_multiplier(node)
 
     # Token penalty (favor shorter content)
     penalty_ratio = min(node.token_count, MAX_TOKEN_COUNT_FOR_PENALTY) / MAX_TOKEN_COUNT_FOR_PENALTY
