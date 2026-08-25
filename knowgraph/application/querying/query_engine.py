@@ -524,6 +524,7 @@ class QueryEngine:
                         max_tokens,
                         edges=active_edges,
                         grounded_verdicts=grounded_verdicts,
+                        query_text=query_text,
                     )
 
                     # Step 5: Return context
@@ -1046,6 +1047,7 @@ class QueryEngine:
                         lift_levels=lift_levels,
                         edges=active_edges,
                         grounded_verdicts=grounded_verdicts,
+                        query_text=query_text,
                     )
 
                     # Step 5: Return context

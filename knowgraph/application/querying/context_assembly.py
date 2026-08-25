@@ -49,6 +49,33 @@ def _file_type_multiplier(node: Node) -> float:
     return 1.0
 
 
+def _query_match_boost(node: Node, query_text: str) -> float:
+    """Boost nodes whose path or content directly match the query term.
+
+    When a user queries "ReverseVatModule", the ReverseVatModule.tsx file
+    should rank higher than QuickVatCalculator.tsx even if both are related.
+    """
+    query_lower = query_text.lower().strip()
+    path_lower = (node.path or "").lower()
+    content_lower = (node.content or "").lower()
+
+    # Exact component name match in path (e.g. ReverseVatModule.tsx)
+    if query_lower in path_lower:
+        return 0.30
+
+    # Partial match in path (e.g. "vat" in "VatCalculator.tsx")
+    query_words = query_lower.split()
+    path_words = path_lower.replace("/", " ").replace("\\", " ").replace(".", " ").split()
+    if any(w in path_words for w in query_words if len(w) > 3):
+        return 0.15
+
+    # Match in content header (first 200 chars)
+    if query_lower in content_lower[:200]:
+        return 0.10
+
+    return 0.0
+
+
 @dataclass
 class ContextBlock:
     """A formatted block of context for LLM.
@@ -78,6 +105,7 @@ def score_node_importance(
     centrality_score: float,
     reference_path_quality: float = 0.0,
     grounded: bool | None = None,
+    query_text: str = "",
 ) -> float:
     """Calculate node importance for context inclusion (REFERENCE-AWARE).
 
@@ -122,6 +150,11 @@ def score_node_importance(
 
     # File-type multiplier: boost code, penalize metadata/config
     importance *= _file_type_multiplier(node)
+
+    # Query-match boost: nodes whose path/content directly match the query term
+    # get a significant importance boost so they're not crowded out by related files
+    if query_text:
+        importance += _query_match_boost(node, query_text)
 
     # Token penalty (favor shorter content)
     penalty_ratio = min(node.token_count, MAX_TOKEN_COUNT_FOR_PENALTY) / MAX_TOKEN_COUNT_FOR_PENALTY
@@ -222,6 +255,7 @@ def assemble_context(
     enable_hierarchical_lifting: bool = True,  # NEW: Enable hierarchical context lifting
     lift_levels: int = 2,  # NEW: Number of directory levels to lift from
     grounded_verdicts: dict[UUID, bool] | None = None,  # Graph Engineering: grounding verdict per node id
+    query_text: str = "",  # NEW: Original query for match boosting
 ) -> tuple[str, list[ContextBlock]]:
     """Assemble context from nodes with greedy token-aware packing (REFERENCE-AWARE).
 
@@ -274,7 +308,8 @@ def assemble_context(
         grounded = grounded_verdicts.get(node.id) if grounded_verdicts is not None else None
 
         importance = score_node_importance(
-            node, is_seed, similarity, centrality, ref_path_quality, grounded=grounded
+            node, is_seed, similarity, centrality, ref_path_quality, grounded=grounded,
+            query_text=query_text,
         )
 
         # Format content
