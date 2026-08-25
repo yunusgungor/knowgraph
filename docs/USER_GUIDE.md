@@ -77,6 +77,20 @@ knowgraph-setup
 
 **Step 2: Configure Your AI Editor**
 
+#### Global Timeout (all MCP servers at once)
+
+Set a single timeout for every MCP tool call — ideal for slow/free providers where synthesis may take 60–120s:
+
+```json
+{
+  "mcpServers": {
+    "__global__": {
+      "timeout": 300000
+    }
+  }
+}
+```
+
 #### For Claude Desktop
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json

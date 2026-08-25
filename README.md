@@ -53,6 +53,22 @@ knowgraph-setup
 
 ### 2. MCP Server Configuration
 
+#### Global Timeout (all MCP servers at once)
+
+If you want a single timeout setting for all MCP servers, set it globally:
+
+```json
+{
+  "mcpServers": {
+    "__global__": {
+      "timeout": 300000
+    }
+  }
+}
+```
+
+This sets a 300-second (5 minute) default timeout for every MCP tool call — ideal for slow/free providers where synthesis may take 60–120s.
+
 #### For Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
