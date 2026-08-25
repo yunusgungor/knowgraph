@@ -74,32 +74,40 @@ class OpenAIProvider(IntelligenceProvider):
         (429 gets faster backoff), and is protected by a circuit breaker.
         Output is capped at LLM_MAX_TOKENS so a completion can't blow up cost
         or context.
+
+        The WHOLE logical call — rate-limiter wait, HTTP attempts, and retries —
+        is bounded by ``asyncio.timeout(LLM_REQUEST_TIMEOUT)``. Without this, a
+        slow/rate-limited provider (which 429s on rapid requests) runs the
+        unbounded retry/backoff chain (up to ~190s) and blows past any caller
+        deadline. One outer budget makes it fail fast and cleanly while still
+        allowing quick 429 retries inside the window.
         """
         kwargs.setdefault("max_tokens", LLM_MAX_TOKENS)
-        await self.rate_limiter.acquire()
+        async with asyncio.timeout(LLM_REQUEST_TIMEOUT):
+            await self.rate_limiter.acquire()
 
-        # Retries live INSIDE the circuit-breaker call so a single logical
-        # attempt (with its internal retries) counts as ONE failure — otherwise
-        # failure_threshold (5) == LLM_RETRY_COUNT (5) means one bad batch
-        # opens the breaker and rejects every subsequent batch.
-        async def _completion_with_retry() -> Any:
-            for attempt in range(LLM_RETRY_COUNT):
-                try:
-                    return await self._raw_completion(messages, kwargs)
-                except TimeoutError:
-                    # A hung endpoint won't recover by retrying — fail fast
-                    # instead of making the user wait through N more attempts.
-                    raise
-                except Exception as e:
-                    await self.rate_limiter.trigger_backoff()
-                    if attempt >= LLM_RETRY_COUNT - 1:
+            # Retries live INSIDE the circuit-breaker call so a single logical
+            # attempt (with its internal retries) counts as ONE failure — otherwise
+            # failure_threshold (5) == LLM_RETRY_COUNT (5) means one bad batch
+            # opens the breaker and rejects every subsequent batch.
+            async def _completion_with_retry() -> Any:
+                for attempt in range(LLM_RETRY_COUNT):
+                    try:
+                        return await self._raw_completion(messages, kwargs)
+                    except TimeoutError:
+                        # A hung endpoint won't recover by retrying — fail fast
+                        # instead of making the user wait through N more attempts.
                         raise
-                    # Rate limits back off faster (3^n); generic errors 2^n.
-                    exponent = 3 if "429" in str(e).lower() or "rate limit" in str(e).lower() else 2
-                    await asyncio.sleep(LLM_RETRY_BASE_DELAY * (exponent**attempt))
-            raise RuntimeError("LLM retry budget exhausted")
+                    except Exception as e:
+                        await self.rate_limiter.trigger_backoff()
+                        if attempt >= LLM_RETRY_COUNT - 1:
+                            raise
+                        # Rate limits back off faster (3^n); generic errors 2^n.
+                        exponent = 3 if "429" in str(e).lower() or "rate limit" in str(e).lower() else 2
+                        await asyncio.sleep(LLM_RETRY_BASE_DELAY * (exponent**attempt))
+                raise RuntimeError("LLM retry budget exhausted")
 
-        response = await self.circuit_breaker.call(_completion_with_retry)
+            response = await self.circuit_breaker.call(_completion_with_retry)
 
         # Sync budgets from response headers (OpenAI/OpenRouter send
         # x-ratelimit-remaining-*); harmless if absent.

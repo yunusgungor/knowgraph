@@ -305,6 +305,21 @@ async def _expand_query_if_available(query: str, provider: Any) -> str:
     return query
 
 
+def _timeout_hint(error: Exception) -> str:
+    """Return a short actionable hint when the LLM call failed on a timeout.
+
+    A slow/free provider hitting the whole-call budget (LLM_REQUEST_TIMEOUT)
+    degrades to a raw-context answer; tell the user how to fix it rather than
+    leaving them with a bare "[Generation Error: ...]".
+    """
+    if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
+        return (
+            "\n[provider timed out — raise KNOWGRAPH_LLM_REQUEST_TIMEOUT "
+            "(env) or use a faster endpoint]"
+        )
+    return ""
+
+
 def _sanitize_expansion_terms(terms: list[str]) -> list[str]:
     """Drop terms that look like code identifiers; keep plain language keywords.
 
@@ -376,7 +391,8 @@ async def _generate_llm_answer(
                     _llm_answer_cache.clear()  # simple bounded reset
                 _llm_answer_cache[cache_key] = generated_answer
         except Exception as e:
-            return f"{result.context}\n\n[Generation Error: {e!s}]"
+            hint = _timeout_hint(e)
+            return f"{result.context}\n\n[Generation Error: {e!s}]{hint}"
 
     if raw_answer is None:
         return result.context
@@ -488,8 +504,9 @@ async def handle_batch_query(
                                 _llm_answer_cache.clear()
                             _llm_answer_cache[cache_key] = generated_answer
                             answer = generated_answer
-                except Exception:
-                    pass  # Use context as fallback
+                except Exception as e:
+                    hint = _timeout_hint(e)
+                    answer = f"{answer}{hint}"  # context fallback + (maybe) hint
 
             if enable_grounding:
                 answer = _annotate_grounding(answer, result)

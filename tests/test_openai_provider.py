@@ -203,3 +203,59 @@ async def test_batch_respects_input_token_budget():
         sent = create.call_args.kwargs["messages"][0]["content"]
         # Approx: under input budget * some slack for the prompt template itself.
         assert len(sent) <= LLM_MAX_INPUT_TOKENS * 4 + 2000
+
+
+@pytest.mark.asyncio
+async def test_whole_call_bounded_when_rate_limiter_hangs():
+    """The WHOLE logical LLM call is bounded by LLM_REQUEST_TIMEOUT.
+
+    A rate-limiter acquire() that would sleep past the budget must not hang the
+    query: the outer asyncio.timeout fires instead. (Regression: acquire() was
+    unbounded, so a slow/rate-limited provider stalled queries past any caller
+    deadline.)
+    """
+    import asyncio as _asyncio
+
+    with (
+        patch("knowgraph.infrastructure.intelligence.openai_provider.AsyncOpenAI") as mock_client_cls,
+        patch("knowgraph.infrastructure.intelligence.openai_provider.LLM_REQUEST_TIMEOUT", 0.2),
+    ):
+        mock_client = mock_client_cls.return_value
+        mock_client.chat.completions.create = AsyncMock()  # never reached
+        provider = OpenAIProvider(api_key="key")
+
+        async def hanging_acquire():
+            await _asyncio.sleep(10.0)
+
+        provider.rate_limiter.acquire = hanging_acquire
+
+        with pytest.raises(_asyncio.TimeoutError):
+            await provider.generate_text("p")
+
+
+@pytest.mark.asyncio
+async def test_whole_call_bounded_on_429_retry_chain():
+    """A 429 retry chain whose backoff would exceed the budget is cut short.
+
+    The provider fails each attempt quickly with 429; the cumulative retry
+    backoff (1+3+9+27s) would blow the window, but the outer timeout fires at
+    LLM_REQUEST_TIMEOUT. (Regression: the retry chain ran unbounded, ~40s+ of
+    sleep, past any 30s client window.)
+    """
+    import asyncio as _asyncio
+
+    with (
+        patch("knowgraph.infrastructure.intelligence.openai_provider.AsyncOpenAI") as mock_client_cls,
+        patch("knowgraph.infrastructure.intelligence.openai_provider.LLM_REQUEST_TIMEOUT", 0.3),
+        patch("knowgraph.infrastructure.intelligence.openai_provider.LLM_RETRY_COUNT", 5),
+        patch("knowgraph.infrastructure.intelligence.openai_provider.LLM_RETRY_BASE_DELAY", 0.5),
+    ):
+        mock_client = mock_client_cls.return_value
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("429 rate limit")
+        )
+        provider = OpenAIProvider(api_key="key")
+        provider.rate_limiter.trigger_backoff = AsyncMock()
+
+        with pytest.raises(_asyncio.TimeoutError):
+            await provider.generate_text("p")
