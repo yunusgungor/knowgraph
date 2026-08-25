@@ -638,10 +638,11 @@ def list_all_nodes(graph_store_path: Path) -> list[UUID]:
         ) from error
 
 
-def list_all_edges(graph_store_path: Path) -> list[UUID]:
-    """List all edge IDs.
+def list_all_edges(graph_store_path: Path) -> list[Edge]:
+    """List all edges stored in the graph.
 
-    Edges are stored in a single JSONL file (``edges/edges.jsonl``), so this
-    reads them back and returns their IDs.
+    Edges are stored in a single JSONL file (``edges/edges.jsonl``) and the
+    ``Edge`` model has no standalone ID field, so this compatibility helper
+    returns the parsed edge objects.
     """
-    return [edge.id for edge in read_all_edges(graph_store_path)]
+    return read_all_edges(graph_store_path)

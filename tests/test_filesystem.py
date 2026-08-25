@@ -8,6 +8,7 @@ from knowgraph.infrastructure.storage.filesystem import (
     append_edge_jsonl,
     delete_node_json,
     ensure_directory,
+    list_all_edges,
     list_all_nodes,
     read_all_edges,
     read_node_json,
@@ -116,6 +117,23 @@ def test_edge_io(store_path):
     edges = read_all_edges(store_path)
     assert len(edges) == 1
     assert edges[0].metadata["desc"] == "A to B"
+
+
+def test_list_all_edges_returns_edge_objects(store_path):
+    """Regression: Edge has no id attribute, so listing must not read edge.id."""
+    edge = Edge(
+        source=uuid4(),
+        target=uuid4(),
+        type="semantic",
+        score=1.0,
+        created_at=1234567890,
+        metadata={"desc": "A to B"},
+    )
+
+    append_edge_jsonl(edge, store_path)
+
+    edges = list_all_edges(store_path)
+    assert edges == [edge]
 
 
 def test_missing_files(store_path):
