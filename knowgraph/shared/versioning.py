@@ -387,6 +387,6 @@ def negotiate_version(
     return _registry.negotiate_version(requested, minimum)
 
 
-def get_version_info(version: Version | str) -> "VersionInfo | None":
+def get_version_info(version: Version | str) -> VersionInfo | None:
     """Get info (incl. features) for a registered API version."""
     return _registry.get_version_info(version)

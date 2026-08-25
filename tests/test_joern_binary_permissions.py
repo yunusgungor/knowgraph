@@ -8,7 +8,6 @@ required.
 """
 
 import stat
-import tempfile
 from pathlib import Path
 
 from knowgraph.core.joern.manager import _make_native_binaries_executable

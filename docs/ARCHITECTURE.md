@@ -1,6 +1,6 @@
 # KnowGraph Architecture & Joern Integration
 
-**Version**: 1.0.1  
+**Version**: 1.1.0  
 **Status**: Production Ready  
 **Last Updated**: August 22, 2026
 
@@ -41,7 +41,7 @@ KnowGraph combines **Graph RAG** with **Joern Code Property Graph** analysis for
 
 ---
 
-## Graph Engineering / Claims Layer (v1.0.1)
+## Graph Engineering / Claims Layer (v1.1.0)
 
 KnowGraph ports the **Graph Engineering verification layer** —
 `knowgraph.domain.claims` — to ground answers in real graph evidence with

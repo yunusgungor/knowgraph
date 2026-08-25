@@ -1,6 +1,6 @@
 # KnowGraph User Guide
 
-**Version:** 1.0.1  
+**Version:** 1.1.0  
 **Last Updated:** August 22, 2026
 
 Welcome to the comprehensive KnowGraph User Guide. This document covers everything you need to know to effectively use KnowGraph as a Graph RAG system with **integrated Joern code analysis** and MCP server for your AI coding assistants.
@@ -220,7 +220,7 @@ pip install knowgraph
 **Verify installation:**
 ```bash
 knowgraph --version
-# Output: KnowGraph 1.0.1
+# Output: KnowGraph 1.1.0
 ```
 
 **Configure MCP server** (see [Getting Started](#2-getting-started) above)
@@ -297,7 +297,7 @@ mypy .
 **Test the CLI:**
 ```bash
 knowgraph --version
-# Output: KnowGraph 1.0.1
+# Output: KnowGraph 1.1.0
 
 # Index a small folder and run a query
 knowgraph index ./tests/fixtures
@@ -567,7 +567,7 @@ Fine-tune your query logic with the query parameters:
 - **`enable_hierarchical_lifting` / `lift_levels`**: include parent-directory context (READMEs, package docs) for nodes deep in a directory tree.
 - **`enable_grounding`**: prefer graph-evidence-backed nodes and annotate unbacked answer entities (see [§10](#10-graph-engineering-grounding--anti-hallucination)).
 - **`expand_query`**: AI synonym/term expansion.
-- `max_tokens` is the LLM **output** cap (`LLM_MAX_TOKENS`, default 4096).
+- `max_tokens` is the retrieved **context** cap (`LLM_MAX_INPUT_TOKENS`, default 32000).
 
 > There is no `edge_type_weights` / `prioritize_reference_edges` parameter in
 > the query engine or MCP tools — see [§9.2](#92-edge-types-in-the-graph).
@@ -606,12 +606,12 @@ KnowGraph exposes a comprehensive suite of tools to your AI assistant. Here is t
 > (`/manifest`, `/nodes`, `/stats`) and reusable **prompt templates**
 > (`graph_summary`, `security_scan`, `impact_analysis`).
 
-#### Key `knowgraph_query` parameters (v1.0.1)
+#### Key `knowgraph_query` parameters (v1.1.0)
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `enable_grounding` | bool | `false` | Prefer graph-evidence-backed nodes in context; demote graph-isolated content. Implies temporal filtering. |
-| `api_version` | string | current | Requested API version to negotiate against the server registry (e.g. `"1.0.1"`). |
+| `api_version` | string | current | Requested API version to negotiate against the server registry (e.g. `"1.1.0"`). |
 | `min_api_version` | string | - | Minimum acceptable API version. Rejected if `api_version` is below this. |
 | `expand_query` | bool | `false` | Uses AI to expand the query with synonyms and technical terms. |
 
@@ -862,7 +862,7 @@ result = engine.query(
 | `query` | string | **required** | Natural language query |
 | `top_k` | int | 20 | Number of results to return |
 | `max_hops` | int | 4 | Graph traversal depth |
-| `max_tokens` | int | `LLM_MAX_TOKENS` (4096) | LLM output token cap |
+| `max_tokens` | int | `LLM_MAX_INPUT_TOKENS` (32000) | Retrieved context token cap |
 | `expand_query` | bool | false | Enable AI query expansion |
 | `enable_hierarchical_lifting` | bool | true | Include parent context |
 | `lift_levels` | int | 2 | Parent directory levels |
@@ -874,7 +874,7 @@ result = engine.query(
 
 ## 10. Graph Engineering: Grounding & Anti-Hallucination
 
-KnowGraph v1.0.1 ships a **Graph Engineering verification layer** that anchors
+KnowGraph v1.1.0 ships a **Graph Engineering verification layer** that anchors
 generated answers to the graph's actual evidence. This is an opt-in set of
 features that run with **zero extra LLM calls** — they reuse graph facts
 already retrieved during query execution.
@@ -975,7 +975,7 @@ unsupported versions up front:
   "tool": "knowgraph_query",
   "arguments": {
     "query": "…",
-    "api_version": "1.0.1",
+    "api_version": "1.1.0",
     "min_api_version": "1.0.0"
   }
 }

@@ -4,10 +4,11 @@ Resolves contradictions and temporal updates across entity claims,
 generating SUPERSEDES and CONTRADICTS edges.
 """
 
-from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime, timedelta
+from typing import Any, Optional
 
-def _date_sort_key(claim: Dict[str, Any]):
+
+def _date_sort_key(claim: dict[str, Any]):
     """Chronological sort key: parse ISO-8601, falling back to a min sentinel.
 
     # ponytail: string sort was locale-order wrong for denormalized dates; datetime
@@ -23,7 +24,7 @@ def _date_sort_key(claim: Dict[str, Any]):
         return ""  # unparseable -> sentinel, sorts first (never "supersedes")
 
 
-def tag_temporal_claim(claim: Dict[str, Any], published_at: Optional[str] = None) -> Dict[str, Any]:
+def tag_temporal_claim(claim: dict[str, Any], published_at: Optional[str] = None) -> dict[str, Any]:
     """Resolves relative temporal indicators into absolute ISO-8601 timestamps."""
     tagged = dict(claim)
     if published_at:
@@ -53,7 +54,7 @@ class TemporalResolver:
     def __init__(self, f1_threshold: float = 0.85):
         self.f1_threshold = f1_threshold
 
-    def resolve_claims(self, claims: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def resolve_claims(self, claims: list[dict[str, Any]]) -> dict[str, Any]:
         """Processes a list of claim dicts and resolves temporal contradictions.
 
         A later-dated claim always SUPERSEDES an earlier one for the same
@@ -72,7 +73,7 @@ class TemporalResolver:
           }
         """
         tagged_claims = [tag_temporal_claim(c) for c in claims]
-        groups: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+        groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
         for c in tagged_claims:
             key = (c["entity"].lower(), c["attribute"].lower())
             groups.setdefault(key, []).append(c)

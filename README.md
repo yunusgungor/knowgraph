@@ -1,4 +1,4 @@
-# 🧠 KnowGraph: Graph RAG & MCP Server for Code (v1.0.1 🚀)
+# 🧠 KnowGraph: Graph RAG & MCP Server for Code (v1.1.0 🚀)
 
 [![CI](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/yunusgungor/knowgraph/actions/workflows/ci.yml)
 [![Joern](https://img.shields.io/badge/Powered_by-Joern_CPG-orange?style=flat-square)](https://joern.io)
@@ -13,7 +13,7 @@
 > **"Your code is not just text, it's a living graph."**  
 > Shift from vector similarity to the deterministic clarity of **Graph Theory** and **Joern Code Property Graph**.
 
-> **v1.0.1 — Answer Grounding & Anti-Hallucination.** Evidence-backed answers
+> **v1.1.0 — Hybrid Retrieval, Answer Grounding & Anti-Hallucination.** Evidence-backed answers
 > with entity-level verification, temporal filtering, SC-quoted (P3-verified)
 > relation extraction, and API version negotiation.
 

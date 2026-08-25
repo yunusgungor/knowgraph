@@ -32,7 +32,7 @@ def _preinstalled_model_path():
     needed.
     """
     try:
-        from knowgraph.core.models.manager import MODEL_LOCAL_PATH, _MODEL_CONFIG
+        from knowgraph.core.models.manager import _MODEL_CONFIG, MODEL_LOCAL_PATH
 
         if (MODEL_LOCAL_PATH / _MODEL_CONFIG).exists():
             return MODEL_LOCAL_PATH

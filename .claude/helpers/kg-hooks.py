@@ -70,7 +70,7 @@ def post_edit() -> None:
     if not os.path.isfile(os.path.join(resolve_store(), "metadata", "manifest.json")):
         return
     # Background best-effort re-index, never blocks the agent.
-    subprocess.Popen(
+    subprocess.Popen(  # noqa: S603 - fixed argv; file_path is validated as an existing file above.
         [sys.executable, "-m", "knowgraph.adapters.cli.main",
          "index", file_path, "--incremental"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

@@ -33,20 +33,19 @@ from knowgraph.adapters.mcp.handlers import (
     handle_validate,
 )
 from knowgraph.adapters.mcp.utils import get_llm_provider
-from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.adapters.mcp.version_handlers import (
     handle_diff_versions,
     handle_list_versions,
     handle_rollback,
     handle_version_info,
 )
-from knowgraph.config import DEFAULT_GRAPH_STORE_PATH, LLM_MAX_TOKENS
+from knowgraph.config import DEFAULT_GRAPH_STORE_PATH, LLM_MAX_INPUT_TOKENS
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.shared.versioning import (
     VersionStatus,
     get_current_version,
     register_version,
 )
-
 from knowgraph.version import __version__
 
 app = MCPServer(
@@ -101,7 +100,7 @@ def _register_api_versions():
             "Conversation discovery",
         ],
     )
-    # Version 1.0.1 - Current stable release (matches package __version__)
+    # Current stable release (matches package __version__)
     register_version(
         version=__version__,
         status=VersionStatus.STABLE,
@@ -270,17 +269,17 @@ def _join(items: list[types.TextContent]) -> str:
 async def knowgraph_query(
     query: Annotated[str, Field(description="The natural language query to retrieve context for.")],
     ctx: Context | None = None,
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
     with_explanation: Annotated[bool, Field(description="Include an explanation of how the answer was derived (default: false).")] = False,
     top_k: Annotated[int, Field(description="Number of top results to return (default: 20).")] = 20,
     max_hops: Annotated[int, Field(description="Maximum number of hops for graph traversal (default: 4).")] = 4,
     expand_query: Annotated[bool, Field(description="Uses AI to expand query with synonyms and technical terms (default: false).")] = False,
-    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = LLM_MAX_TOKENS,
+    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = LLM_MAX_INPUT_TOKENS,
     enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
     lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
     enable_grounding: Annotated[bool, Field(description="Prefer graph-evidence-backed nodes in context; demote graph-isolated content (Graph Engineering, default: false).")] = False,
-    api_version: Annotated[str, Field(description="Requested API version to negotiate against the server registry (e.g., '1.0.1'). Omit to use the current version.")] = None,
-    min_api_version: Annotated[str, Field(description="Minimum acceptable API version. Rejected if `api_version` is below this.")] = None,
+    api_version: Annotated[str | None, Field(description="Requested API version to negotiate against the server registry (e.g., '1.1.0'). Omit to use the current version.")] = None,
+    min_api_version: Annotated[str | None, Field(description="Minimum acceptable API version. Rejected if `api_version` is below this.")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "query": query,
@@ -307,13 +306,13 @@ async def knowgraph_query(
 @app.tool(description="Trigger indexing of markdown files, Git repositories, or code directories.")
 async def knowgraph_index(
     ctx: Context | None = None,
-    input_path: Annotated[str, Field(description="Path to markdown files, local directory, or Git repository URL (GitHub, GitLab, Bitbucket). `source_path` is accepted as an alias.")] = None,
-    output_path: Annotated[str, Field(description="Path to graph storage (optional).")] = None,
+    input_path: Annotated[str | None, Field(description="Path to markdown files, local directory, or Git repository URL (GitHub, GitLab, Bitbucket). `source_path` is accepted as an alias.")] = None,
+    output_path: Annotated[str | None, Field(description="Path to graph storage (optional).")] = None,
     resume: Annotated[bool, Field(description="Resume indexing from checkpoint if interrupted (default: false). Only works for local files.")] = False,
     gc: Annotated[bool, Field(description="Garbage collect deleted nodes during update (default: false).")] = False,
-    include_patterns: Annotated[list[str], Field(description="File patterns to include (e.g., ['*.py', '*.md']). Only for repositories and code directories.")] = None,
-    exclude_patterns: Annotated[list[str], Field(description="File patterns to exclude (e.g., ['node_modules/*', '*.lock']). Only for repositories and code directories.")] = None,
-    access_token: Annotated[str, Field(description="GitHub Personal Access Token for private repositories.")] = None,
+    include_patterns: Annotated[list[str] | None, Field(description="File patterns to include (e.g., ['*.py', '*.md']). Only for repositories and code directories.")] = None,
+    exclude_patterns: Annotated[list[str] | None, Field(description="File patterns to exclude (e.g., ['node_modules/*', '*.lock']). Only for repositories and code directories.")] = None,
+    access_token: Annotated[str | None, Field(description="GitHub Personal Access Token for private repositories.")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "input_path": input_path,
@@ -336,7 +335,7 @@ async def knowgraph_index(
 async def knowgraph_analyze_impact(
     element: Annotated[str, Field(description="The element (name or query) to analyze impact for.")],
     max_hops: Annotated[int, Field(description="Maximum depth of dependency traversal (default: 4).")] = 4,
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
     mode: Annotated[Literal["semantic", "path"], Field(description="Analysis mode: 'semantic' (concept) or 'path' (file path pattern). Default: semantic.")] = "semantic",
 ) -> str:
     arguments: dict[str, Any] = {
@@ -350,7 +349,7 @@ async def knowgraph_analyze_impact(
 
 @app.tool(description="Validate the consistency and health of the knowledge graph.")
 async def knowgraph_validate(
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {"graph_path": graph_path}
     return _join(await handle_validate(arguments, PROJECT_ROOT))
@@ -358,7 +357,7 @@ async def knowgraph_validate(
 
 @app.tool(description="Get basic statistics about the stored knowledge graph.")
 async def knowgraph_get_stats(
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {"graph_path": graph_path}
     return _join(await handle_get_stats(arguments, PROJECT_ROOT))
@@ -366,7 +365,7 @@ async def knowgraph_get_stats(
 
 @app.tool(description="Auto-discover and index conversations from AI code editors (Antigravity, Cursor, GitHub Copilot). No manual export required!")
 async def knowgraph_discover_conversations(
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
     editor: Annotated[Literal["all", "antigravity", "cursor", "github_copilot"], Field(description="Which editor's conversations to index (default: all).")] = "all",
 ) -> str:
     arguments: dict[str, Any] = {
@@ -384,9 +383,9 @@ async def knowgraph_discover_conversations(
 async def knowgraph_tag_snippet(
     tag: Annotated[str, Field(description="Tag for the snippet (e.g., 'fastapi jwt detayı', 'important config')")],
     snippet: Annotated[str, Field(description="The content to tag and index")],
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
-    conversation_id: Annotated[str, Field(description="Optional conversation ID for context")] = None,
-    user_question: Annotated[str, Field(description="Optional user question that prompted this response")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    conversation_id: Annotated[str | None, Field(description="Optional conversation ID for context")] = None,
+    user_question: Annotated[str | None, Field(description="Optional user question that prompted this response")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "tag": tag,
@@ -402,10 +401,10 @@ async def knowgraph_tag_snippet(
 async def knowgraph_batch_query(
     queries: Annotated[list[str], Field(description="List of natural language queries to process.")],
     ctx: Context | None = None,
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
     top_k: Annotated[int, Field(description="Number of top results to return per query (default: 20).")] = 20,
     max_hops: Annotated[int, Field(description="Maximum number of hops for graph traversal (default: 4).")] = 4,
-    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = LLM_MAX_TOKENS,
+    max_tokens: Annotated[int, Field(description="Maximum token count for the context window.")] = LLM_MAX_INPUT_TOKENS,
     enable_hierarchical_lifting: Annotated[bool, Field(description="Enable hierarchical context lifting for broader context (default: true).")] = True,
     lift_levels: Annotated[int, Field(description="Number of directory levels to lift context from (default: 2).")] = 2,
     enable_grounding: Annotated[bool, Field(description="Prefer graph-evidence-backed nodes in context; demote graph-isolated content (Graph Engineering, default: false).")] = False,
@@ -431,7 +430,7 @@ async def knowgraph_batch_query(
 async def knowgraph_search_bookmarks(
     query: Annotated[str, Field(description="Search query for finding bookmarks")],
     top_k: Annotated[int, Field(description="Number of bookmarks to return (default: 10)")] = 10,
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "query": query,
@@ -443,9 +442,9 @@ async def knowgraph_search_bookmarks(
 
 @app.tool(description="Analyze conversation patterns for topics and trends. Discover what topics are trending, when they were discussed, and knowledge evolution over time.")
 async def knowgraph_analyze_conversations(
-    topic: Annotated[str, Field(description="Optional specific topic to analyze (omit for trending topics)")] = None,
+    topic: Annotated[str | None, Field(description="Optional specific topic to analyze (omit for trending topics)")] = None,
     time_window_days: Annotated[int, Field(description="Number of days to analyze (default: 7)")] = 7,
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "topic": topic,
@@ -457,7 +456,7 @@ async def knowgraph_analyze_conversations(
 
 @app.tool(description="List all versions in the knowledge graph history.")
 async def knowgraph_list_versions(
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
     limit: Annotated[int, Field(description="Maximum number of versions to return (default: 50)")] = 50,
 ) -> str:
     arguments: dict[str, Any] = {
@@ -470,7 +469,7 @@ async def knowgraph_list_versions(
 @app.tool(description="Get detailed information about a specific version.")
 async def knowgraph_version_info(
     version_id: Annotated[str, Field(description="Version identifier (e.g., 'v1', 'v2', 'v3')")],
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "version_id": version_id,
@@ -483,7 +482,7 @@ async def knowgraph_version_info(
 async def knowgraph_diff_versions(
     version1: Annotated[str, Field(description="First version ID (e.g., 'v1')")],
     version2: Annotated[str, Field(description="Second version ID (e.g., 'v3')")],
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "version1": version1,
@@ -496,7 +495,7 @@ async def knowgraph_diff_versions(
 @app.tool(description="Rollback manifest to a previous version (metadata only). Creates backup and requires confirmation.")
 async def knowgraph_rollback(
     version_id: Annotated[str, Field(description="Version to rollback to (e.g., 'v3')")],
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
     create_backup: Annotated[bool, Field(description="Create backup before rollback (default: true)")] = True,
     force: Annotated[bool, Field(description="Skip validation checks (default: false)")] = False,
 ) -> str:
@@ -511,7 +510,7 @@ async def knowgraph_rollback(
 
 @app.tool(description="Run diagnostic checks on the KnowGraph system. Check graph store status, LLM provider configuration, and get recommendations.")
 async def knowgraph_diagnostic(
-    graph_path: Annotated[str, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to the graph storage directory (optional, defaults to ./graphstore).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {"graph_path": graph_path}
     return _join(await handle_diagnostic(arguments, PROJECT_ROOT))
@@ -520,8 +519,8 @@ async def knowgraph_diagnostic(
 @app.tool(description="Execute native Joern DSL queries for advanced code analysis. Use predefined templates or custom queries.")
 async def knowgraph_joern_query(
     cpg_path: Annotated[str, Field(description="Path to CPG binary file (required).")],
-    query: Annotated[str, Field(description="Native Joern DSL query string (e.g., 'cpg.method.name.l').")] = None,
-    query_name: Annotated[str, Field(description="Use predefined query template (e.g., 'sql_injection', 'buffer_overflow').")] = None,
+    query: Annotated[str | None, Field(description="Native Joern DSL query string (e.g., 'cpg.method.name.l').")] = None,
+    query_name: Annotated[str | None, Field(description="Use predefined query template (e.g., 'sql_injection', 'buffer_overflow').")] = None,
     timeout: Annotated[int, Field(description="Query timeout in seconds (default: 60).")] = 60,
 ) -> str:
     arguments: dict[str, Any] = {
@@ -535,11 +534,11 @@ async def knowgraph_joern_query(
 
 @app.tool(description="Run security policy validation with 6 predefined CWE-mapped rules. Detect vulnerabilities like SQL injection, XSS, buffer overflows, etc. Auto-detects CPG from graph_path if not explicitly provided. Set scan_type to run flow-based taint analysis instead.")
 async def knowgraph_security_scan(
-    cpg_path: Annotated[str, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
+    cpg_path: Annotated[str | None, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
     severity_filter: Annotated[Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"], Field(description="Minimum severity level for violations (default: MEDIUM).")] = "MEDIUM",
-    policy_names: Annotated[list[str], Field(description="Specific policies to run (e.g., ['buffer_overflow', 'sql_injection', 'xss']). Omit to run all. Matches policy names loosely, so 'sql_injection' finds 'NoSQLInjection'.")] = None,
-    graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional, defaults to ./graphstore).")] = None,
-    scan_type: Annotated[Literal["all", "sql_injection", "xss", "command_injection", "path_traversal", "xxe", "ssrf"], Field(description="When set, run flow-based taint analysis for this vulnerability type instead of the policy scan. Requires graph_path or cpg_path.")] = None,
+    policy_names: Annotated[list[str] | None, Field(description="Specific policies to run (e.g., ['buffer_overflow', 'sql_injection', 'xss']). Omit to run all. Matches policy names loosely, so 'sql_injection' finds 'NoSQLInjection'.")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to graph storage for automatic CPG detection (optional, defaults to ./graphstore).")] = None,
+    scan_type: Annotated[Literal["all", "sql_injection", "xss", "command_injection", "path_traversal", "xxe", "ssrf"] | None, Field(description="When set, run flow-based taint analysis for this vulnerability type instead of the policy scan. Requires graph_path or cpg_path.")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "cpg_path": cpg_path,
@@ -553,9 +552,9 @@ async def knowgraph_security_scan(
 
 @app.tool(description="Detect unreachable methods using dominance analysis. Find methods that have no callers (potential dead code).")
 async def knowgraph_find_dead_code(
-    cpg_path: Annotated[str, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
+    cpg_path: Annotated[str | None, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
     include_internal: Annotated[bool, Field(description="Include internal methods starting with underscore (default: false).")] = False,
-    graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "cpg_path": cpg_path,
@@ -567,11 +566,11 @@ async def knowgraph_find_dead_code(
 
 @app.tool(description="Analyze call graph structure and relationships. Supports validation, recursive call detection, and call chain analysis.")
 async def knowgraph_analyze_call_graph(
-    cpg_path: Annotated[str, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
+    cpg_path: Annotated[str | None, Field(description="Path to CPG binary file (optional if graph_path is provided).")] = None,
     analysis_type: Annotated[Literal["validate", "recursive", "call_chain"], Field(description="Type of analysis: 'validate' (health check), 'recursive' (find recursion), 'call_chain' (paths between methods).")] = "validate",
-    method_name: Annotated[str, Field(description="Source method name (required for call_chain analysis).")] = None,
-    target_method: Annotated[str, Field(description="Target method name (required for call_chain analysis).")] = None,
-    graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
+    method_name: Annotated[str | None, Field(description="Source method name (required for call_chain analysis).")] = None,
+    target_method: Annotated[str | None, Field(description="Target method name (required for call_chain analysis).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "cpg_path": cpg_path,
@@ -588,7 +587,7 @@ async def knowgraph_export_cpg(
     cpg_path: Annotated[str, Field(description="Path to source CPG binary file (required).")],
     output_path: Annotated[str, Field(description="Export destination path (required).")],
     format: Annotated[Literal["graphml", "dot", "graphson", "neo4jcsv"], Field(description="Export format (default: graphml).")] = "graphml",
-    graph_path: Annotated[str, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
+    graph_path: Annotated[str | None, Field(description="Path to graph storage for automatic CPG detection (optional).")] = None,
 ) -> str:
     arguments: dict[str, Any] = {
         "cpg_path": cpg_path,
@@ -601,8 +600,8 @@ async def knowgraph_export_cpg(
 
 @app.tool(description="Generate Code Property Graph dynamically from source code. Automatically detects language and generates CPG for analysis.")
 async def knowgraph_generate_cpg(
-    source_path: Annotated[str, Field(description="Path to source code directory or file (required). `input_path` is accepted as an alias.")] = None,
-    language: Annotated[str, Field(description="Language hint for CPG generation (optional, auto-detected if not provided).")] = None,
+    source_path: Annotated[str | None, Field(description="Path to source code directory or file (required). `input_path` is accepted as an alias.")] = None,
+    language: Annotated[str | None, Field(description="Language hint for CPG generation (optional, auto-detected if not provided).")] = None,
     timeout: Annotated[int, Field(description="Generation timeout in seconds (default: 600).")] = 600,
 ) -> str:
     arguments: dict[str, Any] = {
@@ -661,17 +660,17 @@ async def _graph_nodes(graph_path: str) -> str:
     mime_type="application/json",
 )
 async def _graph_stats(graph_path: str) -> str:
-    import os
-
     resolved = resolve_graph_store(graph_path, root_dir=PROJECT_ROOT)
     nodes_dir = resolved / "nodes"
     edges_file = resolved / "edges" / "edges.jsonl"
+    edge_count = 0
+    if edges_file.exists():
+        with open(edges_file, encoding="utf-8") as file:
+            edge_count = sum(1 for _ in file)
     stats = {
         "graph_path": str(resolved),
         "node_count": len(list(nodes_dir.glob("*.json"))) if nodes_dir.exists() else 0,
-        "edge_count": (
-            sum(1 for _ in open(edges_file, encoding="utf-8")) if edges_file.exists() else 0
-        ),
+        "edge_count": edge_count,
     }
     return json.dumps(stats, ensure_ascii=False)
 

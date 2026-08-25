@@ -1,7 +1,6 @@
 """Unit tests for DenseIndex (pure numpy, no sentence-transformers needed)."""
 
 import numpy as np
-import pytest
 
 from knowgraph.infrastructure.search.dense_index import (
     DenseIndex,
@@ -111,8 +110,9 @@ class TestBackendPersistence:
         import knowgraph.infrastructure.embedding.dense_embedder as de
 
         monkeypatch.setattr(de.DenseEmbedder, "available", staticmethod(lambda: False))
-        from knowgraph.domain.models.node import Node
         from uuid import uuid4
+
+        from knowgraph.domain.models.node import Node
 
         node = Node(
             id=uuid4(), hash="a" * 40, title="QuickVatCalculator", content="tax math",

@@ -1,9 +1,9 @@
 # KnowGraph Configuration Guide
 
-**Version:** 1.0.1
+**Version:** 1.1.0
 **Last Updated:** August 22, 2026
 
-This document describes the configuration options for KnowGraph v1.0.1.
+This document describes the configuration options for KnowGraph v1.1.0.
 Configuration is **environment-driven** and read from the environment plus an
 optional `.env` file at startup. Most variables are centralized as constants /
 Pydantic settings in `knowgraph/config.py`; a few (API key/base URL, MCP

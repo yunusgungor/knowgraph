@@ -15,7 +15,6 @@ from knowgraph.application.query.query_classifier import QueryClassifier, QueryT
 
 async def test_llm_answer_cached_for_repeated_question():
     """Same query+context yields one LLM call (answer cache)."""
-    from unittest.mock import AsyncMock
 
     import knowgraph.adapters.mcp.handlers.query as qmod
 

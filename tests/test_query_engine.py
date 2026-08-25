@@ -12,15 +12,15 @@ from knowgraph.application.querying.query_engine import (
 def test_query_cache_key_distinguishes_grounding():
     """Graph Engineering: a query with grounding on must not reuse a cache entry
     from an evidence-blind run of the same text."""
-    base = dict(
-        query_text="auth",
-        top_k=20,
-        max_hops=4,
-        max_tokens=3000,
-        enable_hierarchical_lifting=True,
-        lift_levels=2,
-        with_explanation=False,
-    )
+    base = {
+        "query_text": "auth",
+        "top_k": 20,
+        "max_hops": 4,
+        "max_tokens": 3000,
+        "enable_hierarchical_lifting": True,
+        "lift_levels": 2,
+        "with_explanation": False,
+    }
     off = _get_query_cache_key(**base, enable_grounding=False, enable_temporal_filter=False)
     on = _get_query_cache_key(**base, enable_grounding=True, enable_temporal_filter=False)
     temporal = _get_query_cache_key(**base, enable_grounding=False, enable_temporal_filter=True)
@@ -32,17 +32,17 @@ def test_query_cache_key_distinguishes_grounding():
 def test_query_cache_key_distinguishes_dense():
     """Hybrid dense retrieval is a behavioral lever: a dense-fused result must
     not serve (or be served by) a sparse-only cache entry for the same text."""
-    base = dict(
-        query_text="how does vat work",
-        top_k=20,
-        max_hops=4,
-        max_tokens=3000,
-        enable_hierarchical_lifting=True,
-        lift_levels=2,
-        with_explanation=False,
-        enable_grounding=False,
-        enable_temporal_filter=False,
-    )
+    base = {
+        "query_text": "how does vat work",
+        "top_k": 20,
+        "max_hops": 4,
+        "max_tokens": 3000,
+        "enable_hierarchical_lifting": True,
+        "lift_levels": 2,
+        "with_explanation": False,
+        "enable_grounding": False,
+        "enable_temporal_filter": False,
+    }
     sparse = _get_query_cache_key(**base, enable_dense_retrieval=False)
     dense = _get_query_cache_key(**base, enable_dense_retrieval=True)
     assert sparse != dense
@@ -54,30 +54,55 @@ def test_query_cache_key_distinguishes_dense():
 def test_query_cache_key_distinguishes_dense_weight():
     """The fusion weight is a behavioral lever too: changing it must not serve
     a stale cached result from the old weight."""
-    base = dict(
-        query_text="how does vat work",
-        top_k=20,
-        max_hops=4,
-        max_tokens=3000,
-        enable_hierarchical_lifting=True,
-        lift_levels=2,
-        with_explanation=False,
-        enable_grounding=False,
-        enable_temporal_filter=False,
-        enable_dense_retrieval=True,
-    )
+    base = {
+        "query_text": "how does vat work",
+        "top_k": 20,
+        "max_hops": 4,
+        "max_tokens": 3000,
+        "enable_hierarchical_lifting": True,
+        "lift_levels": 2,
+        "with_explanation": False,
+        "enable_grounding": False,
+        "enable_temporal_filter": False,
+        "enable_dense_retrieval": True,
+    }
     light = _get_query_cache_key(**base, dense_search_weight=0.3)
     heavy = _get_query_cache_key(**base, dense_search_weight=0.8)
     assert light != heavy
 
 
+def test_query_cache_key_distinguishes_graph_fingerprint():
+    """The query cache is process-wide, so identical queries against different
+    graph stores or graph versions must not share one cached result."""
+    base = {
+        "query_text": "how does vat work",
+        "top_k": 20,
+        "max_hops": 4,
+        "max_tokens": 3000,
+        "enable_hierarchical_lifting": True,
+        "lift_levels": 2,
+        "with_explanation": False,
+        "enable_grounding": False,
+        "enable_temporal_filter": False,
+        "enable_dense_retrieval": True,
+        "dense_search_weight": 0.3,
+    }
+    graph_a = _get_query_cache_key(**base, graph_fingerprint="/repo/a|100")
+    graph_b = _get_query_cache_key(**base, graph_fingerprint="/repo/b|100")
+    graph_a_new = _get_query_cache_key(**base, graph_fingerprint="/repo/a|200")
+
+    assert graph_a != graph_b
+    assert graph_a != graph_a_new
+
+
 def test_serialize_grounding_facts():
     """Graph Engineering: enable_grounding serializes active-subgraph facts for
     answer-level grounding (grounded_edges + entity_names)."""
+    from uuid import uuid4
+
     from knowgraph.application.querying.query_engine import _serialize_grounding_facts
     from knowgraph.domain.models.edge import Edge
     from knowgraph.domain.models.node import Node
-    from uuid import uuid4
 
     n1 = Node(id=uuid4(), hash="a" * 40, title="auth.py", content="x", path="auth.py",
               type="code", token_count=5, created_at=1,
@@ -109,11 +134,10 @@ def test_query_engine_run():
 
         # Setup mocks
         mock_retriever = mock_retriever_cls.return_value
-        # retrieve returns (nodes, seed_nodes)
+        # retrieve_with_scores returns (nodes, seed_nodes, similarity_scores)
         n1 = MagicMock()
         n1.id = uuid4()
-        mock_retriever.retrieve.return_value = ([n1], [n1.id])
-        mock_retriever.retrieve_by_similarity.return_value = [(n1, 1.0)]
+        mock_retriever.retrieve_with_scores.return_value = ([n1], [n1.id], {n1.id: 1.0})
 
         mock_read_edges.return_value = []  # No edges
 
@@ -131,7 +155,7 @@ def test_query_engine_run():
         assert isinstance(result, QueryResult)
         assert result.answer == "Context"
         assert result.explanation is not None
-        assert mock_retriever.retrieve.called
+        assert mock_retriever.retrieve_with_scores.called
         assert mock_centrality.called
         assert mock_assemble.called
 
@@ -177,8 +201,9 @@ def test_async_assemble_context_receives_edges():
             mock_r = mock_rc.return_value
             n1 = MagicMock()
             n1.id = uuid4()
-            mock_r.retrieve_async = AsyncMock(return_value=([n1], [n1.id]))
-            mock_r.retrieve_by_similarity_async = AsyncMock(return_value=[(n1, 1.0)])
+            mock_r.retrieve_async_with_scores = AsyncMock(
+                return_value=([n1], [n1.id], {n1.id: 1.0})
+            )
             mock_re.return_value = []
             # compute_centrality_metrics_async is awaited in the async path.
             mock_cent.return_value = {n1.id: {"composite": 1.0}}

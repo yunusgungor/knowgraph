@@ -12,7 +12,6 @@ from pathlib import Path
 
 from knowgraph.adapters.mcp.handlers.conversations import handle_analyze_conversations
 from knowgraph.adapters.mcp.handlers.misc import handle_analyze_impact
-from knowgraph.adapters.mcp.handlers.query import handle_query
 
 
 def _run(coro):

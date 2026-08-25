@@ -167,11 +167,10 @@ class CodeIndexIntegration:
                 return results
 
             # Step 2.5: Check for incremental updates (NEW - Phase 4)
-            from knowgraph.infrastructure.indexing.incremental_cpg import IncrementalCPGUpdater
-
             # Reuse a CPG persisted by SmartGraphBuilder / run_index (stored in
             # graph_path/metadata/cpg.bin) rather than regenerating it here.
             from knowgraph.infrastructure.indexing.cpg_metadata import get_cpg_path
+            from knowgraph.infrastructure.indexing.incremental_cpg import IncrementalCPGUpdater
 
             persisted_cpg = get_cpg_path(graph_path)
 

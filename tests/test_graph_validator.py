@@ -152,12 +152,13 @@ def test_validate_invalid_node_hash(mock_storage):
 def test_grounded_edge_type_is_valid():
     """Graph Engineering: the SC-quote grounded edge type must be accepted by
     the validator (produced by _sc_relations_to_edges)."""
+    from uuid import uuid4
+
     from knowgraph.domain.algorithms.graph_validator import (
         VALID_EDGE_TYPES,
         validate_edge_types,
     )
     from knowgraph.domain.models.edge import Edge
-    from uuid import uuid4
 
     assert "grounded" in VALID_EDGE_TYPES
     edge = Edge(

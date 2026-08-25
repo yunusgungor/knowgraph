@@ -25,10 +25,8 @@ from knowgraph.application.querying.retriever import QueryRetriever
 from knowgraph.config import (
     DEFAULT_CENTRALITY_SCORE,
     LLM_MAX_INPUT_TOKENS,
-    LLM_MAX_TOKENS,
     MAX_CONCURRENT_QUERIES,
     MAX_QUERY_PREVIEW_LENGTH,
-    MAX_TOKENS,
     QUERY_TIMEOUT_SECONDS,
     TOP_K,
     get_settings,
@@ -80,6 +78,31 @@ def clear_query_cache() -> None:
     _query_result_cache.clear()
 
 
+def _graph_cache_fingerprint(graph_store_path: Path) -> str:
+    """Return a cache discriminator for the graph store behind a query."""
+    graph_path = Path(graph_store_path).resolve()
+    manifest_path = graph_path / "metadata" / "manifest.json"
+
+    updated_at = ""
+    try:
+        import json
+
+        if manifest_path.exists():
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            updated_at = str(data.get("updated_at", ""))
+    except Exception:
+        updated_at = ""
+
+    if not updated_at:
+        edges_path = graph_path / "edges" / "edges.jsonl"
+        try:
+            updated_at = str(edges_path.stat().st_mtime_ns)
+        except OSError:
+            updated_at = "missing"
+
+    return f"{graph_path}|{updated_at}"
+
+
 def _get_query_cache_key(
     query_text: str,
     top_k: int,
@@ -92,10 +115,12 @@ def _get_query_cache_key(
     enable_temporal_filter: bool = False,
     enable_dense_retrieval: bool = False,
     dense_search_weight: float = 0.3,
+    graph_fingerprint: str = "",
 ) -> str:
     """Generate cache key for query parameters.
 
-    ``enable_grounding`` and ``enable_temporal_filter`` are included so a query
+    ``graph_fingerprint`` keeps the process-wide cache isolated per graph store
+    and graph version. ``enable_grounding`` and ``enable_temporal_filter`` are included so a query
     with evidence-awareness on does not return a stale cache hit from an
     evidence-blind run (Graph Engineering transfer). ``enable_dense_retrieval``
     and ``dense_search_weight`` are the same class of lever: a dense-fused
@@ -106,7 +131,7 @@ def _get_query_cache_key(
     key_parts = (
         f"{query_text}|{top_k}|{max_hops}|{max_tokens}|{enable_hierarchical_lifting}"
         f"|{lift_levels}|{with_explanation}|{enable_grounding}|{enable_temporal_filter}"
-        f"|{enable_dense_retrieval}|{dense_search_weight}"
+        f"|{enable_dense_retrieval}|{dense_search_weight}|{graph_fingerprint}"
     )
     return hashlib.md5(key_parts.encode()).hexdigest()  # noqa: S324
 
@@ -363,8 +388,9 @@ class QueryEngine:
             except Exception:
                 # Joern-not-found (and similar code-analysis failures) must never
                 # crash a CLI query; degrade to generic retrieval.
-                from knowgraph.core.joern import JoernNotFoundError
                 import sys
+
+                from knowgraph.core.joern import JoernNotFoundError
 
                 if not isinstance(sys.exc_info()[1], JoernNotFoundError):
                     raise
@@ -382,6 +408,7 @@ class QueryEngine:
             enable_temporal_filter,
             getattr(self.retriever, "dense_available", False),
             getattr(self.retriever, "dense_search_weight", 0.3),
+            _graph_cache_fingerprint(Path(self.graph_store_path)),
         )
 
         if cache_key in _query_result_cache:
@@ -782,6 +809,7 @@ class QueryEngine:
             enable_temporal_filter,
             getattr(self.retriever, "dense_available", False),
             getattr(self.retriever, "dense_search_weight", 0.3),
+            _graph_cache_fingerprint(Path(self.graph_store_path)),
         )
 
         if cache_key in _query_result_cache:

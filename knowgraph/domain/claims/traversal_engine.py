@@ -4,7 +4,8 @@ Executes bounded neighborhood traversal on Knowledge Graph nodes to expand
 search depth and prevent shallow search limits.
 """
 
-from typing import List, Dict, Any, Set, Tuple
+from typing import Any
+
 
 class TraversalEngine:
     """Executes bounded multi-hop neighborhood graph traversals."""
@@ -14,28 +15,28 @@ class TraversalEngine:
 
     def traverse(
         self,
-        start_nodes: List[str],
-        graph_edges: List[Tuple[str, str, str]]
-    ) -> Dict[str, Any]:
+        start_nodes: list[str],
+        graph_edges: list[tuple[str, str, str]]
+    ) -> dict[str, Any]:
         """Traverses graph starting from start_nodes up to max_depth.
 
         graph_edges: List of (source_node, relation, target_node)
         """
-        adjacency: Dict[str, List[Tuple[str, str]]] = {}
+        adjacency: dict[str, list[tuple[str, str]]] = {}
         for src, rel, tgt in graph_edges:
             adjacency.setdefault(src, []).append((rel, tgt))
 
-        visited_nodes: Set[str] = set(start_nodes)
+        visited_nodes: set[str] = set(start_nodes)
         # Deterministic BFS discovery order: start_nodes order then first-discovery
         # order. A raw list(visited_nodes) would be set-iteration (hash) order and
         # break NFR-003 determinism across interpreter runs / PYTHONHASHSEED.
-        visited_order: List[str] = list(start_nodes)
-        traversed_edges: List[Dict[str, str]] = []
+        visited_order: list[str] = list(start_nodes)
+        traversed_edges: list[dict[str, str]] = []
         # E-018 (AI-4): dedupe at emission — repeated input triples and edges
         # rediscovered via another path must not inflate traversed_edges or the
         # UI artifact. First discovery keeps its depth (NFR-003 determinism).
         # ponytail: set-based seen guard; O(n) memory, fine for bounded traversal.
-        seen_edges: Set[Tuple[str, str, str]] = set()
+        seen_edges: set[tuple[str, str, str]] = set()
 
         frontier = list(start_nodes)
         for depth in range(self.max_depth):
@@ -121,7 +122,7 @@ class TraversalEngine:
         import hashlib
         return [(t, hashlib.sha1(str(t).encode()).hexdigest()[:8]) for t in triples]
 
-    def to_ui_artifact(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    def to_ui_artifact(self, result: dict[str, Any]) -> dict[str, Any]:
         """Transforms a traverse() result into a UI-ready graph artifact.
 
         Returns a JSON-serializable {"nodes": [{id, label}, ...],

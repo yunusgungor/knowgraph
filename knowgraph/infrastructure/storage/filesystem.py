@@ -519,8 +519,9 @@ async def write_all_edges_async(
         edges: List of edges to write
         graph_store_path: Root graph storage directory
         append: When True, append ``edges`` to the existing file instead of
-            overwriting it. Use only when no existing edge is being replaced
-            (no stale edges); a crash mid-append can leave a partial line.
+            overwriting it semantically. The implementation still rewrites the
+            combined edge set through a temp file so interruptions cannot leave
+            a partial JSONL line behind.
 
     Raises:
     ------
@@ -534,17 +535,11 @@ async def write_all_edges_async(
 
     if append:
         try:
-            # Append without temp+rename. Every edge is written followed by a
-            # newline; write_all_edges_async (the full rewrite) always ends with
-            # "\n", so appended lines stay on their own rows.
-            async with aiofiles.open(edges_file, "a", encoding="utf-8") as file:
-                for edge in edges:
-                    edge_json = json.dumps(edge.to_dict(), ensure_ascii=False)
-                    await file.write(edge_json + "\n")
-            return
+            existing_edges = await asyncio.to_thread(read_all_edges, graph_store_path)
+            edges = existing_edges + edges
         except Exception as error:
             raise StorageError(
-                "Failed to append edges file",
+                "Failed to prepare appended edges file",
                 {"error": str(error), "path": str(edges_file)},
             ) from error
 

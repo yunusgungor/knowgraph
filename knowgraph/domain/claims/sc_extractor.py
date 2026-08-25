@@ -25,7 +25,6 @@ from typing import Any
 
 from knowgraph.domain.claims.unitizer import unitize
 
-
 # ── D-2: SC extractor prompt (E-197/E-198/E-205 measured verbatim) ──
 _SC_EXTRACT_PROMPT = (
     "Extract a knowledge graph from the text as JSON with EXACTLY this schema:\n"
@@ -170,7 +169,7 @@ async def p3_verify(adapter: AsyncChatAdapter, s: str, p: str, o: str, quote: st
     block. Guard is a filter (~85% reduction of quote-bearing inference
     fabrication, E-198), not an eraser.
     """
-    prompt = _P3_PROMPT + f"\n\nClaim: ({s}, {p}, {o})\nQuoted span: \"{quote}\""
+    prompt = _P3_PROMPT + f'\n\nClaim: ({s}, {p}, {o})\nQuoted span: "{quote}"'
     first = _p3_verdict(await _llm_call_async(adapter, prompt, max_tokens=400))
     if first == "SUPPORTED":
         return True

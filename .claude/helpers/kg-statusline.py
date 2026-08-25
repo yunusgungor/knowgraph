@@ -46,7 +46,7 @@ def git_tracked_roots():
     if not root:
         return None, []
     try:
-        ls = subprocess.run(
+        ls = subprocess.run(  # noqa: S603 - fixed git argv against detected repository root.
             ["git", "-C", root, "ls-files", "-z"],
             capture_output=True, text=True, timeout=5,
         ).stdout

@@ -808,7 +808,6 @@ async def perform_gc(
     Returns:
         Number of nodes removed
     """
-    from knowgraph.domain.models.node import Node
     from knowgraph.infrastructure.storage.filesystem import (
         delete_node_json,
         list_all_nodes,

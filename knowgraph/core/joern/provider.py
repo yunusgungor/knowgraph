@@ -1,15 +1,21 @@
 """Joern integration provider - CPG generation and entity extraction."""
 
+from __future__ import annotations
+
 import logging
 import platform
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import networkx as nx
 
 from knowgraph.core.joern.manager import INSTALL_DIR
 from knowgraph.core.joern.types import ExportFormat, JoernCPG, JoernEntity
+
+if TYPE_CHECKING:
+    from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +54,7 @@ class JoernProvider:
         so wrap the command list accordingly.
         """
         if platform.system() == "Windows":
-            cmd = ["cmd.exe", "/c"] + cmd
+            cmd = ["cmd.exe", "/c", *cmd]
             # Avoid spawning a console window and reduce inherited handles —
             # this prevents _winapi.DuplicateHandle OSErrors when many Joern
             # subprocesses run in quick succession (e.g. under pytest capture).
@@ -72,10 +78,10 @@ class JoernProvider:
             raise JoernNotFoundError(
                 "Joern CLI not found. Run: knowgraph-setup-joern"
             )
-        self._executor_cache: "JoernQueryExecutor | None" = None
+        self._executor_cache: JoernQueryExecutor | None = None
         logger.info(f"Joern found at: {self.joern_path}")
 
-    def _executor(self) -> "JoernQueryExecutor":
+    def _executor(self) -> JoernQueryExecutor:
         """Return a memoized JoernQueryExecutor for this provider."""
         from knowgraph.domain.intelligence.joern_query_executor import JoernQueryExecutor
 

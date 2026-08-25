@@ -124,8 +124,8 @@ async def test_handle_query_whole_path_bounded():
     a clean bounded response regardless of where the delay is.
     """
     import asyncio as _asyncio
-    import time
     import tempfile as _tf
+    import time
 
     import knowgraph.adapters.mcp.handlers.query as qh
 

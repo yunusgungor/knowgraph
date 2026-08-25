@@ -328,7 +328,7 @@ a change, answering factual "is X true?" questions, or security review.
 ### Query & analyze
 - **`knowgraph_query`** — natural-language retrieval. Params: `query` (req),
   `graph_path`, `with_explanation`, `top_k` (20), `max_hops` (4), `expand_query`,
-  `max_tokens` (`LLM_MAX_TOKENS`=4096), `enable_hierarchical_lifting` (True),
+  `max_tokens` (`LLM_MAX_INPUT_TOKENS`=32000), `enable_hierarchical_lifting` (True),
   `lift_levels` (2), `enable_grounding` (False), `api_version`, `min_api_version`.
   No `system_prompt` MCP param.
 - **`knowgraph_batch_query`** — run 2+ related questions at once; shares context

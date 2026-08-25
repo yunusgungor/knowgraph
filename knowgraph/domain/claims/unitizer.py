@@ -143,10 +143,10 @@ def _org_memory(sent, last_org):
     s = sent.strip()
     # explicit org patterns win: "CEO of X", "led by CEO X" (capitalized runs only)
     cap = r"[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*"
-    m = re.search(r"(?:CEO|CTO|CFO)\s+of\s+(%s)" % cap, s)
+    m = re.search(rf"(?:CEO|CTO|CFO)\s+of\s+({cap})", s)
     if m:
         return m.group(1).strip()
-    m = re.search(r"\blead(?:s|ed)?\s+by\s+(?:CEO\s+)?(%s)" % cap, s)
+    m = re.search(rf"\blead(?:s|ed)?\s+by\s+(?:CEO\s+)?({cap})", s)
     if m:
         return m.group(1).strip()
     # sentence-initial proper phrase is an org candidate unless person-marked
@@ -238,10 +238,10 @@ def _coord_split(sent):
 _DIRECT_PREP = r"(?:to|for|with|in|at|on|from)"
 _DIRECT_2 = re.compile(
     r"^([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*)\s+([a-z][a-z-]+)\s+"
-    r"(.+?)\s+and\s+(.+?)\s+(%s)\s+(.+)$" % _DIRECT_PREP)
+    rf"(.+?)\s+and\s+(.+?)\s+({_DIRECT_PREP})\s+(.+)$")
 _DIRECT_3 = re.compile(
     r"^([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*)\s+([a-z][a-z-]+)\s+"
-    r"(.+?)\s*,\s*(.+?)\s*,\s*and\s+(.+?)\s+(%s)\s+(.+)$" % _DIRECT_PREP)
+    rf"(.+?)\s*,\s*(.+?)\s*,\s*and\s+(.+?)\s+({_DIRECT_PREP})\s+(.+)$")
 
 
 def _direct_nplist_split(sent):
@@ -400,8 +400,8 @@ def _split_clauses(sent):
     prod = "|".join(_PRODUCT_NOUNS)
 
     # (1) copular + temporal appositive: "X is a Y founded in Z."
-    m = re.match(r"^(.+?)\s+is\s+(a|an)\s+([^,.]+?)\s+(%s)\s+in\s+(\d{4})\.?$"
-                 % "|".join(_TEMP_VERBS[:4]), s)
+    temp_verbs = "|".join(_TEMP_VERBS[:4])
+    m = re.match(rf"^(.+?)\s+is\s+(a|an)\s+([^,.]+?)\s+({temp_verbs})\s+in\s+(\d{{4}})\.?$", s)
     if m:
         x, det, y, verb, year = m.groups()
         return [f"{x} is {det} {y}.", f"{x} was {verb} in {year}."]
@@ -415,8 +415,8 @@ def _split_clauses(sent):
 
     # (3) possessive-product + temporal appositive:
     #     "X' flagship product is Y, released in Z." (apostrophe, optional s)
-    m = re.match(r"^(.+?)'s?\s+(%s)\s+is\s+(.+?),\s+(%s)\s+in\s+(\d{4})\.?$"
-                 % (prod, "|".join(_TEMP_VERBS)), s)
+    temp_verbs = "|".join(_TEMP_VERBS)
+    m = re.match(rf"^(.+?)'s?\s+({prod})\s+is\s+(.+?),\s+({temp_verbs})\s+in\s+(\d{{4}})\.?$", s)
     if m:
         x, _np, y, verb, year = m.groups()
         return [f"{x} produces {y}.", f"{_capitalize_first(y)} was {verb} in {year}."]
@@ -425,10 +425,10 @@ def _split_clauses(sent):
     m = re.match(r"^(.+?)\s+was\s+(founded|established|incorporated)\s+in\s+(\d{4})\s+and\s+(.+)$", s)
     if m:
         x, verb, year, rest = m.groups()
-        return [f"{x} was {verb} in {year}."] + _split_clauses(f"{x} {rest}")
+        return [f"{x} was {verb} in {year}.", *_split_clauses(f"{x} {rest}")]
 
     # (5) possessive-product alone: "X' flagship product is Y."
-    m = re.match(r"^(.+?)'s?\s+(%s)\s+is\s+(.+)$" % prod, s)
+    m = re.match(rf"^(.+?)'s?\s+({prod})\s+is\s+(.+)$", s)
     if m:
         x, _np, y = m.groups()
         return [f"{x} produces {y}."]
@@ -484,8 +484,12 @@ def _rule_edges(sent):
     m = re.search(r"\b(released|launched|introduced)\s+in\s+(\d{4})", s)
     if m:
         prod = "|".join(_PRODUCT_NOUNS)
-        pm = re.match(r"^(.+?)'s?\s+(?:%s)\s+is\s+(.+?),\s+%s\s+in\s+%s\.?$"
-                      % (prod, m.group(1), m.group(2)), s)
+        released_verb = m.group(1)
+        release_year = m.group(2)
+        pm = re.match(
+            rf"^(.+?)'s?\s+(?:{prod})\s+is\s+(.+?),\s+{released_verb}\s+in\s+{release_year}\.?$",
+            s,
+        )
         if pm:
             edges.append((pm.group(2).strip(), "released_in", m.group(2)))
 
@@ -617,7 +621,8 @@ if __name__ == "__main__":
     print("== rule-based edges ==")
     for e in edges:
         print(f"  {e}")
-    norm = lambda s: re.sub(r"[^a-z0-9]+", " ", s.lower().strip()).strip().replace(" ", "_")
+    def norm(s):
+        return re.sub(r"[^a-z0-9]+", " ", s.lower().strip()).strip().replace(" ", "_")
     edge_so = {(norm(s), norm(o)) for (s, _p, o) in edges}
     print(f"rule_edge_recovery={len(edge_so & EXP_RULE_EDGES)}/{len(EXP_RULE_EDGES)} "
           f"(expected pairs {sorted(EXP_RULE_EDGES)})")

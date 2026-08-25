@@ -4,10 +4,9 @@ import numpy as np
 import pytest
 
 from knowgraph.infrastructure.embedding.dense_embedder import (
+    _MODEL_NAME,
     DenseEmbedder,
     DenseUnavailableError,
-    _preinstalled_model_path,
-    _MODEL_NAME,
 )
 
 

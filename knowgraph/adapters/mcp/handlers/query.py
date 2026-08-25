@@ -14,7 +14,6 @@ from knowgraph.adapters.mcp.handlers._resilience import (
     _global_rate_limiter,
     logger,
 )
-from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.application.querying.query_engine import QueryEngine
 from knowgraph.application.querying.query_expansion import QueryExpander
 from knowgraph.config import (
@@ -24,6 +23,7 @@ from knowgraph.config import (
     LLM_SYNTHESIS_TIMEOUT,
     QUERY_TOTAL_TIMEOUT,
 )
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.shared.progress import ProgressNotifier
 from knowgraph.shared.refactoring import (
     build_error_response,

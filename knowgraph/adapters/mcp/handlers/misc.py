@@ -8,10 +8,10 @@ import mcp.types as types
 
 from knowgraph.adapters.mcp.handlers._resilience import _global_circuit_breaker
 from knowgraph.adapters.mcp.methods import analyze_path_impact_report
-from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.application.querying.query_engine import QueryEngine
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
 from knowgraph.domain.algorithms.graph_validator import validate_graph_consistency
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.infrastructure.storage.manifest import Manifest
 from knowgraph.shared.refactoring import (
     build_error_response,

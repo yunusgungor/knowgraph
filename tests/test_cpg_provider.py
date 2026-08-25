@@ -10,7 +10,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from conftest import requires_joern
 
 pytestmark = requires_joern

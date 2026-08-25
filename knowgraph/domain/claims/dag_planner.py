@@ -16,7 +16,7 @@ def validate_and_order_plan(steps):
         if not deps.issubset(step_ids):
             return {"valid": False, "error": f"Step '{sid}' depends on unknown step ID"}
 
-    visited = {sid: 0 for sid in step_ids}
+    visited = dict.fromkeys(step_ids, 0)
     order = []
 
     def dfs(node):

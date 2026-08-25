@@ -17,6 +17,7 @@ from knowgraph.shared.tracing import (
     trace_function,
     trace_operation,
 )
+from knowgraph.version import __version__
 
 
 class TestTracingConfig:
@@ -27,7 +28,7 @@ class TestTracingConfig:
         config = TracingConfig()
 
         assert config.service_name == "knowgraph"
-        assert config.service_version == "1.0.1"
+        assert config.service_version == __version__
         assert config.environment == "development"
         assert config.console_export is False
 

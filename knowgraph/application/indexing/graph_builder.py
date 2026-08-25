@@ -728,7 +728,7 @@ class SmartGraphBuilder:
                 symbols_cache = cache_dir / "reference_symbols.json"
 
                 existing_metadata = []
-                existing_symbols: dict[str, list[str]] | None = None
+                existing_symbols: dict[str, list[UUID]] | None = None
                 existing_real_node_ids: set[UUID] = set()
 
                 # Try the on-disk symbol cache first (fast path).
@@ -738,7 +738,7 @@ class SmartGraphBuilder:
 
                         loaded = _json.loads(symbols_cache.read_text(encoding="utf-8"))
                         existing_symbols = {
-                            sym: [str(n) for n in ids] for sym, ids in loaded.items()
+                            sym: [UUID(str(n)) for n in ids] for sym, ids in loaded.items()
                         }
                         # Real node IDs for edge filtering: all IDs referenced by
                         # the symbol table are existing (real) nodes.
@@ -812,7 +812,10 @@ class SmartGraphBuilder:
                 try:
                     import json as _json
 
-                    merged_symbols = dict(existing_symbols or {})
+                    merged_symbols = {
+                        sym: [str(node_id) for node_id in ids]
+                        for sym, ids in (existing_symbols or {}).items()
+                    }
                     for node in final_nodes:
                         ents = (node.metadata or {}).get("entities")
                         if not isinstance(ents, list):
@@ -878,7 +881,11 @@ class SmartGraphBuilder:
 
                 # Auto-validate graph before returning
                 with self.perf_tracker.track("validation"):
-                    validation_warnings = self._validate_build_results(final_nodes, all_edges)
+                    validation_warnings = self._validate_build_results(
+                        final_nodes,
+                        all_edges,
+                        valid_node_ids=all_real_node_ids,
+                    )
                     if validation_warnings:
                         logger.warning(
                             f"Graph validation warnings: {len(validation_warnings)} issues detected"
@@ -980,7 +987,12 @@ class SmartGraphBuilder:
                 )
         return edges
 
-    def _validate_build_results(self, nodes: list[Node], edges: list[Edge]) -> list[str]:
+    def _validate_build_results(
+        self,
+        nodes: list[Node],
+        edges: list[Edge],
+        valid_node_ids: set[UUID] | None = None,
+    ) -> list[str]:
         """Validate build results for common issues.
 
         Args:
@@ -1004,10 +1016,11 @@ class SmartGraphBuilder:
             warnings.append(f"{len(orphaned)} orphaned nodes (no edges)")
 
         # Check for dangling edges (edges pointing to non-existent nodes)
+        edge_node_ids = valid_node_ids or node_ids
         for edge in edges:
-            if edge.source not in node_ids:
+            if edge.source not in edge_node_ids:
                 warnings.append(f"Dangling edge: source {edge.source} not in nodes")
-            if edge.target not in node_ids:
+            if edge.target not in edge_node_ids:
                 warnings.append(f"Dangling edge: target {edge.target} not in nodes")
 
         # Check for self-loops

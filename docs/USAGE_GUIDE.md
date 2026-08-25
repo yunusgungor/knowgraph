@@ -151,7 +151,7 @@ Bu özellikleri birleştirerek karmaşık senaryoları çözebilirsiniz.
 
 ## 8.5. Graph Engineering: Grounding & Anti-Halüsinasyon 🛡️
 
-KnowGraph v1.0.1, üretilen cevapları grafik kanıtına bağlayan bir **doğrulama katmanı** sunar. Tümü **sıfır ekstra LLM çağrısı** ile çalışır.
+KnowGraph v1.1.0, üretilen cevapları grafik kanıtına bağlayan bir **doğrulama katmanı** sunar. Tümü **sıfır ekstra LLM çağrısı** ile çalışır.
 
 *   **Answer Grounding (Cevaplama Dayanağı):** Sorguya `enable_grounding` ekleyin. Grafikte kanıtı olan (kenara bağlı) düğümler önceliklendirilir; izole düğümler arka plana atılır. LLM cevabı üretildikten sonra, cevaptaki varlıklar (entity'ler) grafikle doğrulanır:
     *   `grounded`: Cevapta var + grafik kenarının ucu.
@@ -199,7 +199,7 @@ KnowGraph v1.0.1, üretilen cevapları grafik kanıtına bağlayan bir **doğrul
       "tool": "knowgraph_query",
       "arguments": {
         "query": "…",
-        "api_version": "1.0.1",
+        "api_version": "1.1.0",
         "min_api_version": "1.0.0"
       }
     }

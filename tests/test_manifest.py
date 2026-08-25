@@ -4,11 +4,12 @@ from knowgraph.infrastructure.storage.manifest import (
     update_manifest_stats,
     write_manifest,
 )
+from knowgraph.version import __version__
 
 
 def test_manifest_creation():
     m = Manifest.create_new("edges.jsonl", "index")
-    assert m.version == "1.0.1"
+    assert m.version == __version__
     assert m.node_count == 0
     assert m.edges_filename == "edges.jsonl"
 

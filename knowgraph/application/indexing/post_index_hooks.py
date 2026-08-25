@@ -6,12 +6,16 @@ Provides automatic processing after code indexing:
 - Statistics collection
 """
 
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from knowgraph.domain.models.node import Node
 
 # Type: ignore for conversation_discovery - it's infrastructure code
 # mypy: disable-error-code="import-not-found"
-
-
 
 async def auto_link_conversations(
     graphstore_path: Path,

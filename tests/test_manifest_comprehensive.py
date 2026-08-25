@@ -19,6 +19,7 @@ from knowgraph.infrastructure.storage.manifest import (
     write_manifest,
 )
 from knowgraph.shared.exceptions import StorageError
+from knowgraph.version import __version__
 
 
 @pytest.fixture
@@ -41,7 +42,7 @@ class TestManifestCreation:
             sparse_index_filename="index.json",
         )
 
-        assert manifest.version == "1.0.1"
+        assert manifest.version == __version__
         assert manifest.edges_filename == "edges.json"
         assert manifest.sparse_index_filename == "index.json"
         assert manifest.node_count == 0
@@ -97,7 +98,7 @@ class TestManifestSerialization:
         data = manifest.to_dict()
 
         assert isinstance(data, dict)
-        assert data["version"] == "1.0.1"
+        assert data["version"] == __version__
         # Check for essential fields (keys may vary)
         assert "version" in data
         assert "node_count" in data

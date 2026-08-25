@@ -7,8 +7,8 @@ import mcp.types as types
 from mcp.server import Server
 
 from knowgraph.adapters.mcp.methods import index_graph
-from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.config import DEFAULT_GRAPH_STORE_PATH
+from knowgraph.infrastructure.detection.graph_store_locator import resolve_graph_store
 from knowgraph.shared.progress import ProgressNotifier
 from knowgraph.shared.refactoring import (
     build_error_response,

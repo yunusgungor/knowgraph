@@ -6,7 +6,7 @@ out unbacked/hallucinated statements to enforce 0-hallucination policy.
 
 import copy
 import re
-from typing import List, Dict, Any, Tuple, Set
+from typing import Any
 
 
 def _norm(value: str) -> str:
@@ -27,8 +27,8 @@ def _is_str_triple(t) -> bool:
 _LABELS = ("subject", "predicate", "object")
 
 
-def _revise_claim(claim_components: Tuple[str, str, str],
-                  supported_set: Set[Tuple[str, str, str]]) -> Tuple[bool, Tuple[str, str, str] | None, int]:
+def _revise_claim(claim_components: tuple[str, str, str],
+                  supported_set: set[tuple[str, str, str]]) -> tuple[bool, tuple[str, str, str] | None, int]:
     """Deterministic, evidence-anchored, non-fabricating claim revision (E-020).
 
     Given a normalized (s, p, o) claim NOT in supported_set, try to align it to a
@@ -71,8 +71,8 @@ def _revise_claim(claim_components: Tuple[str, str, str],
     return True, first_anchor, first_pos
 
 
-def derive_aligned_claim(claim: Dict[str, str], anchor: Tuple[str, str, str],
-                         div_pos: int) -> Dict[str, str]:
+def derive_aligned_claim(claim: dict[str, str], anchor: tuple[str, str, str],
+                         div_pos: int) -> dict[str, str]:
     """Fill exactly the divergent position (predicate/object) from the anchor.
 
     Anti-fabrication: the subject (identity) is preserved verbatim — WHO is never
@@ -86,7 +86,7 @@ def derive_aligned_claim(claim: Dict[str, str], anchor: Tuple[str, str, str],
     return aligned
 
 
-def build_supported_map(kg_triples) -> Dict[Tuple[str, str, str], Tuple[str, str, str]]:
+def build_supported_map(kg_triples) -> dict[tuple[str, str, str], tuple[str, str, str]]:
     """Normalize KG triples -> their first-seen ORIGINAL-cased form.
 
     The revision pass aligns a claim to an anchor triple; preserving the KG's
@@ -94,7 +94,7 @@ def build_supported_map(kg_triples) -> Dict[Tuple[str, str, str], Tuple[str, str
     revised claim human-readable and identical to real evidence. Deterministic:
     first-seen original is kept per normalized triple.
     """
-    mapping: Dict[Tuple[str, str, str], Tuple[str, str, str]] = {}
+    mapping: dict[tuple[str, str, str], tuple[str, str, str]] = {}
     for t in kg_triples:
         if not _is_str_triple(t):
             continue
@@ -105,14 +105,14 @@ def build_supported_map(kg_triples) -> Dict[Tuple[str, str, str], Tuple[str, str
     return mapping
 
 
-def build_supported_set(kg_triples) -> Set[Tuple[str, str, str]]:
+def build_supported_set(kg_triples) -> set[tuple[str, str, str]]:
     """Normalize and collect KG triples into a ground-truth supported set.
 
     Malformed/non-str triples and all-empty triples are skipped (AD-04 gate
     bypass guard, E-016 lesson). Shared between evaluate_and_filter and the
     revision mode so both agree on the anchor universe.
     """
-    supported_set: Set[Tuple[str, str, str]] = set()
+    supported_set: set[tuple[str, str, str]] = set()
     for t in kg_triples:
         if not _is_str_triple(t):
             continue  # skip malformed / non-str triples
@@ -127,7 +127,7 @@ def verify_entities_in_answer(
     answer: str,
     entity_names: list[str],
     grounded_edges: list[tuple[str, str, str]] | list[list[str]],
-) -> Dict[str, list[str]]:
+) -> dict[str, list[str]]:
     """Classify which answer entities are grounded vs isolated vs absent.
 
     Zero-LLM entity-in-graph verification (Graph Engineering transfer, E-132
@@ -148,13 +148,13 @@ def verify_entities_in_answer(
     """
     supported = build_supported_set(tuple(t) for t in grounded_edges)
     # build_supported_set normalizes to lowercase; keep a lowercased known set.
-    known: Set[str] = set()
+    known: set[str] = set()
     for s, _p, o in supported:
         known.add(s)
         known.add(o)
 
     lower = answer.lower()
-    hits: Dict[str, list[str]] = {"grounded": [], "isolated": [], "absent": []}
+    hits: dict[str, list[str]] = {"grounded": [], "isolated": [], "absent": []}
     for name in entity_names:
         nm = str(name).strip()
         if not nm or nm.lower() not in lower:
@@ -174,17 +174,17 @@ class GroundingEvaluator:
 
     def evaluate_and_filter(
         self,
-        claims: List[Dict[str, str]],
-        kg_triples: List[Tuple[str, str, str]]
-    ) -> Dict[str, Any]:
+        claims: list[dict[str, str]],
+        kg_triples: list[tuple[str, str, str]]
+    ) -> dict[str, Any]:
         """Evaluates claims against KG triples (Subject, Predicate, Object).
 
         Returns approved claims, rejected claims, and grounding precision metric.
         """
         supported_set = build_supported_set(kg_triples)
 
-        approved_claims: List[Dict[str, str]] = []
-        rejected_claims: List[Dict[str, str]] = []
+        approved_claims: list[dict[str, str]] = []
+        rejected_claims: list[dict[str, str]] = []
 
         for claim in claims:
             s, p, o = claim.get("subject"), claim.get("predicate"), claim.get("object")
@@ -365,8 +365,8 @@ class RatchetLoop:
         # can falsify the E-020 metric with a broken transform.
         self.revision_fn = revision_fn if revision_fn is not None else _revise_claim
 
-    def run(self, draft_report: List[Dict[str, str]], kg_triples: List[Tuple[str, str, str]],
-            revision_mode: bool = False) -> Dict[str, Any]:
+    def run(self, draft_report: list[dict[str, str]], kg_triples: list[tuple[str, str, str]],
+            revision_mode: bool = False) -> dict[str, Any]:
         """Runs the ratchet pass on a draft report.
 
         Args:

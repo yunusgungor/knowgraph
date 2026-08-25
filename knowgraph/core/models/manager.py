@@ -57,9 +57,9 @@ def install_model() -> bool:
     # Step 0: Already installed?
     print("🔍 Checking for existing embedding model...")
     if verify_model_installed():
-        print(f"\n✅ Model is already installed and verified!")
+        print("\n✅ Model is already installed and verified!")
         print(f"   Location: {MODEL_LOCAL_PATH}")
-        print(f"   Dense (semantic) retrieval is available.\n")
+        print("   Dense (semantic) retrieval is available.\n")
         return True
 
     # Step 1: sentence-transformers must be importable to download + verify.
@@ -94,7 +94,7 @@ def install_model() -> bool:
         print("   Dense retrieval will use the built-in local fallback.\n")
         return False
 
-    print(f"\n✅ Model installed successfully!")
+    print("\n✅ Model installed successfully!")
     print(f"   Location: {MODEL_LOCAL_PATH}")
     print("   Dense (semantic) retrieval is now available.\n")
     return True
