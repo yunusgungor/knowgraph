@@ -136,7 +136,7 @@ def extract_query_parameters(arguments: dict[str, Any]) -> dict[str, Any]:
         "max_hops": arguments.get("max_hops", 4),
         "with_explanation": arguments.get("with_explanation", False),
         "expand_query": arguments.get("expand_query", False),
-        "max_tokens": arguments.get("max_tokens", 3000),
+        "max_tokens": arguments.get("max_tokens", 32000),
         "enable_hierarchical_lifting": arguments.get("enable_hierarchical_lifting", True),
         "lift_levels": arguments.get("lift_levels", 2),
         "enable_grounding": arguments.get("enable_grounding", False),

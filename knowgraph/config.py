@@ -121,7 +121,7 @@ class QuerySettings(BaseSettings):
         description="Weight of dense scores in hybrid fusion (remainder is sparse BM25)",
     )
     timeout_seconds: float = Field(
-        30.0,
+        60.0,
         ge=1.0,
         le=300.0,
         description="Query execution timeout in seconds",
@@ -228,7 +228,7 @@ BATCH_SIZE = int(os.getenv("KNOWGRAPH_BATCH_SIZE", _get_optimal_batch_size()))
 
 # Async Configuration
 MAX_CONCURRENT_QUERIES = 15
-QUERY_TIMEOUT_SECONDS = 30.0
+QUERY_TIMEOUT_SECONDS = 60.0
 
 # Centrality Optimization Configuration
 CENTRALITY_APPROXIMATE_THRESHOLD = 75

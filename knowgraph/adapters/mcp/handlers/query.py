@@ -18,6 +18,7 @@ from knowgraph.application.querying.query_engine import QueryEngine
 from knowgraph.application.querying.query_expansion import QueryExpander
 from knowgraph.config import (
     DEFAULT_GRAPH_STORE_PATH,
+    LLM_MAX_INPUT_TOKENS,
     LLM_SYNTHESIS_RETRIES,
     LLM_SYNTHESIS_TIMEOUT,
     QUERY_TOTAL_TIMEOUT,
@@ -439,11 +440,6 @@ async def _generate_llm_answer(
 
     return raw_answer
 
-    if enable_grounding:
-        raw_answer = _annotate_grounding(raw_answer, result)
-
-    return raw_answer
-
 
 def _annotate_grounding(answer: str, result: Any) -> str:
     """Annotate a generated answer with unbacked entities (zero LLM).
@@ -506,7 +502,7 @@ async def handle_batch_query(
         # Shared parameters for all queries
         top_k = arguments.get("top_k", 20)
         max_hops = arguments.get("max_hops", 4)
-        max_tokens = arguments.get("max_tokens", 3000)
+        max_tokens = arguments.get("max_tokens", LLM_MAX_INPUT_TOKENS)
         enable_hierarchical_lifting = arguments.get("enable_hierarchical_lifting", True)
         lift_levels = arguments.get("lift_levels", 2)
         enable_grounding = arguments.get("enable_grounding", False)
