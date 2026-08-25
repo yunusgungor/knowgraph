@@ -249,4 +249,7 @@ def traverse_graph_reference_aware(
                     if neighbor not in visited:
                         heapq.heappush(heap, (-priority, neighbor, depth + 1))
 
-    return visited
+    # Deterministic order: a raw set's iteration order is arbitrary and would
+    # leak into downstream node ordering (and into assemble_context's tie-broken
+    # max_tokens cut), making the same query pack different nodes each run.
+    return sorted(visited)

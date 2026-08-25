@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from knowgraph.application.querying.query_engine import (
@@ -134,3 +134,66 @@ def test_query_engine_run():
         assert mock_retriever.retrieve.called
         assert mock_centrality.called
         assert mock_assemble.called
+
+
+def test_query_context_budget_defaults_to_max_tokens():
+    """query()/query_async() default max_tokens to MAX_TOKENS (50000), the
+    context-collection cap — NOT LLM_MAX_TOKENS (4096, the model output cap).
+
+    Regression: the small 4096 budget excluded large-file chunks (a single
+    20000-char chunk ~4500 tokens), so formula-bearing content never reached
+    the LLM context.
+    """
+    import inspect
+
+    from knowgraph.application.querying.query_engine import QueryEngine
+    from knowgraph.config import MAX_TOKENS
+
+    sig = inspect.signature(QueryEngine.query)
+    assert sig.parameters["max_tokens"].default == MAX_TOKENS
+    sig_async = inspect.signature(QueryEngine.query_async)
+    assert sig_async.parameters["max_tokens"].default == MAX_TOKENS
+
+
+def test_async_assemble_context_receives_edges():
+    """_query_async_impl passes edges= to assemble_context so ref-path quality
+    differentiates importance ties (determinism)."""
+    import asyncio
+
+    from knowgraph.application.querying.query_engine import QueryEngine
+
+    captured = {}
+
+    async def run():
+        with (
+            patch("knowgraph.application.querying.query_engine.QueryRetriever") as mock_rc,
+            patch("knowgraph.application.querying.query_engine.read_all_edges") as mock_re,
+            patch("knowgraph.application.querying.query_engine.assemble_context") as mock_ac,
+            patch(
+                "knowgraph.application.querying.query_engine.compute_centrality_metrics_async",
+                new=AsyncMock(),
+            ) as mock_cent,
+        ):
+            mock_r = mock_rc.return_value
+            n1 = MagicMock()
+            n1.id = uuid4()
+            mock_r.retrieve_async = AsyncMock(return_value=([n1], [n1.id]))
+            mock_r.retrieve_by_similarity_async = AsyncMock(return_value=[(n1, 1.0)])
+            mock_re.return_value = []
+            # compute_centrality_metrics_async is awaited in the async path.
+            mock_cent.return_value = {n1.id: {"composite": 1.0}}
+            mock_ac.return_value = ("Context", [])
+
+            def _capture(nodes, seed_ids, sim, cent, mt, **kw):
+                captured["edges"] = kw.get("edges")
+                return ("Context", [])
+
+            mock_ac.side_effect = _capture
+            engine = QueryEngine(Path("store"))
+            # Disable hierarchical lifting to keep the path minimal.
+            await engine.query_async(
+                "test query", enable_hierarchical_lifting=False, with_explanation=False
+            )
+
+    asyncio.run(run())
+    assert "edges" in captured, "assemble_context must receive edges= in the async path"

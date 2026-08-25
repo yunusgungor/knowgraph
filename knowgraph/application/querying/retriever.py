@@ -261,20 +261,21 @@ class QueryRetriever:
 
                     expanded_node_ids = traverse_graph_reference_aware(seed_node_ids, traversal_edges, max_hops)
 
-                    # Step 3: Load nodes CONCURRENTLY (using thread pool for I/O)
-                    from concurrent.futures import ThreadPoolExecutor, as_completed
+                    # Step 3: Load nodes CONCURRENTLY (using thread pool for I/O).
+                    # Collect in expanded_node_ids order (NOT as_completed order) so
+                    # the returned node list is deterministic across calls — thread
+                    # completion order is random, and it would otherwise flip which
+                    # nodes win assemble_context's tie-broken max_tokens cut.
+                    from concurrent.futures import ThreadPoolExecutor
 
                     nodes = []
                     with ThreadPoolExecutor(max_workers=10) as executor:
-                        # Submit all node loading tasks
                         future_to_id = {
-                            executor.submit(read_node_json, node_id, self.graph_store_path): node_id
+                            node_id: executor.submit(read_node_json, node_id, self.graph_store_path)
                             for node_id in expanded_node_ids
                         }
-
-                        # Collect results as they complete
-                        for future in as_completed(future_to_id):
-                            node = future.result()
+                        for node_id in expanded_node_ids:
+                            node = future_to_id[node_id].result()
                             if node:
                                 nodes.append(node)
 
