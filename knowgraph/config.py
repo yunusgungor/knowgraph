@@ -262,6 +262,12 @@ LLM_MAX_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_TOKENS", "4096"))
 # Approx. max INPUT tokens per completion (model context minus output cap).
 # gpt-4o-mini has a 128k context; a conservative default protects smaller models.
 LLM_MAX_INPUT_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_INPUT_TOKENS", "32000"))
+# Answer-synthesis retries at the MCP-handler level. The provider's internal
+# retry covers HTTP/429 errors but fail-fast times out (by design); a slow/free
+# provider's cold-start can time out the FIRST synthesis and degrade the answer
+# to raw context. Retrying the whole synthesis a bounded number of times turns
+# that transient first-call failure into a success.
+LLM_SYNTHESIS_RETRIES = int(os.getenv("KNOWGRAPH_LLM_SYNTHESIS_RETRIES", "2"))
 
 # Graph Traversal Configuration
 MAX_HOPS = 4
