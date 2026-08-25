@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-08-25
+
+### 🚀 New Features
+- **Hybrid Dense Retrieval**: semantic dense retrieval layer using `sentence-transformers/all-MiniLM-L6-v2` with local-hash deterministic fallback when neural model unavailable. Dense and sparse scores fused via min-max weighted sum. Backend pinned per index (`dense_meta.json`) to prevent vector-space mixing.
+- **Local-Hash Deterministic Embeddings**: zero-dependency `LocalHashEmbedder` using `zlib.crc32` feature hashing over `SparseEmbedder` tokens. Always available as a fallback; never degrades to sparse-only.
+- **`knowgraph-setup` command**: evolves `knowgraph-setup-joern` into a one-command installer for both Joern AND the `all-MiniLM-L6-v2` embedding model. Model pre-installs to `~/.knowgraph/models/` for offline access. `knowgraph-setup-joern` kept as compat alias.
+- **`DenseEmbedder` pre-installed model loading**: loads from `~/.knowgraph/models/all-MiniLM-L6-v2` when present; Hub lazy-fallback otherwise. First-use runtime download eliminated.
+- **`knowgraph-diagnostic` enhancement**: surfaces `LLM_REQUEST_TIMEOUT`, `LLM_SYNTHESIS_TIMEOUT`, `QUERY_TOTAL_TIMEOUT`, `top_k`, `max_hops`, and dense-retrieval state; recommends timeout/policy fixes for slow providers.
+
+### 🔧 Anti-Hallucination Fixes
+- **Query expansion sanitizer**: `_sanitize_expansion_terms` drops terms that look like code identifiers (camelCase/snake_case, dots, parens); keeps only generic language keywords.
+- **Anti-hallucination prompt rewrite**: default system prompt demands prose ("in your own words — do not paste context verbatim"), retains KNOWN_IDENTIFIERS allowlist, drops over-restrictive "and present in the context" coupling that caused verbatim-context-echo.
+- **`known_identifiers` allowlist wired through**: `entity_names` serialized from all retrieval (not just when grounding enabled); MCP handler passes `KNOWN_IDENTIFIERS` in prompt.
+- **CODE/HYBRID routing fix**: when Joern code-handler returns no results, handler falls through to semantic retrieval instead of returning raw code dump.
+
+### ⚡ LLM Resilience & Timeout Fixes
+- **Whole-call LLM timeout**: `asyncio.timeout(LLM_REQUEST_TIMEOUT)` on `_chat_completion` wraps rate-limiter wait + HTTP attempts + provider retries; a slow/free provider fails fast instead of hanging ~180s.
+- **Per-attempt timeout**: `asyncio.timeout(LLM_REQUEST_TIMEOUT)` in `_raw_completion` for each HTTP attempt (fail-fast on hung connections).
+- **Non-retryable timeouts**: `TimeoutError` propagates immediately through the retry loop; no backoff delay on timeouts (saves the user from waiting when the endpoint is dead).
+- **Whole-synthesis timeout** (`LLM_SYNTHESIS_TIMEOUT=120s`): all `_generate_llm_answer` retries bounded by one outer timeout; a cold provider degrades to raw context promptly rather than burning ~180s server-side.
+- **Whole-query timeout** (`QUERY_TOTAL_TIMEOUT=120s`): bounds the entire `handle_query` compute (query expansion + retrieval + assemble_context + LLM synthesis) so the response never hangs past the MCP client window; returns `[Generation Error]` on budget exhaustion.
+- **Answer synthesis retries** (`LLM_SYNTHESIS_RETRIES=2`): handler-level retry of `generate_text` on transient failures (timeout/empty) with small backoff; "first weak, second strong" inconsistency eliminated.
+- **Generous defaults**: `LLM_REQUEST_TIMEOUT=60s`, `LLM_SYNTHESIS_TIMEOUT=120s`, `QUERY_TOTAL_TIMEOUT=120s` — slow/free providers get enough time to complete; these are safety nets against infinite hangs, not speed limits.
+- **`KNOWGRAPH_LLM_REQUEST_TIMEOUT` env knob** for per-attempt HTTP timeout.
+- **`KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT` env knob** for whole-synthesis budget.
+- **`KNOWGRAPH_QUERY_TOTAL_TIMEOUT` env knob** for whole-query-path budget.
+- **Timeout hint in `[Generation Error]`**: when a timeout occurs, `raise KNOWGRAPH_LLM_REQUEST_TIMEOUT or use a faster endpoint` is appended.
+- **`knowgraph_diagnostic` recommendations**: warns when LLM_REQUEST_TIMEOUT ≤60 for slow providers (suggests raising both server and MCP client timeout); warns when top_k <15 (suggests raising for deeper retrieval).
+
+### ⚡ Retrieval Fixes
+- **Deterministic node ordering**: `traverse_graph_reference_aware` returns `sorted(visited)` instead of raw `set`; `retrieve` (sync) collects nodes in `expanded_node_ids` order instead of `ThreadPoolExecutor(as_completed)` completion order. Same query now returns same node set/context every time.
+- **`assemble_context` edges passthrough**: async path now passes `edges=active_edges` to `assemble_context` (matches sync path), enabling `ref_path_quality` to differentiate importance ties.
+- **Same-file chunk cohesion** (`assemble_context`): when one chunk of a file is selected, the file's other chunks are promoted within the token budget (Phase A: best block per path; Phase B: force siblings; Phase C: fill leftovers). Large files' formula chunks no longer lost to cheaper one-off files.
+- **Context budget fix**: `query()`/`query_async()` default `max_tokens` changed from `LLM_MAX_TOKENS` (4096, model output cap) to `LLM_MAX_INPUT_TOKENS` (32000, safe model-context cap) — large-file chunks (~15K tokens) now fit; extreme params no longer overflow model context.
+- **`LLM_MAX_INPUT_TOKENS`** (32000, `KNOWGRAPH_LLM_MAX_INPUT_TOKENS`) is the true model-context guard for `assemble_context`.
+- **Explanation data truncation**: `build_llm_prompt` caps `explanation_data` to 10K chars to prevent extreme params (top_k=40, hops=6, explanation=true) from exceeding model context limit.
+- **Synthesis retry** (`LLM_SYNTHESIS_RETRIES=2`): bounded handler-level retry of `_generate_llm_answer` on transient failures (timeout/empty) with small backoff (0.5s×attempt); "first weak, second strong" inconsistency eliminated.
+- **`knowgraph_query` diagnostic** surfaces: LLM request timeout, query timeout, top_k, max_hops, dense retrieval state — actionable recommendations for slow/thin-context queries.
+
+### 🔧 Other Fixes
+- `code_index_integration.py` dense index build uses append (load+add) instead of overwrite; preserves pre-existing dense entries.
+- `code_index_integration.py` uses `select_dense_embedder(for_backend=...)` to maintain backend consistency with the existing dense index.
+- `node.path` added to `ContextBlock` in `context_assembly.py` for same-file cohesion grouping.
+- All timeout constants (`LLM_REQUEST_TIMEOUT`, `LLM_SYNTHESIS_TIMEOUT`, `QUERY_TOTAL_TIMEOUT`) configurable via env vars (`KNOWGRAPH_LLM_REQUEST_TIMEOUT`, `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT`, `KNOWGRAPH_QUERY_TOTAL_TIMEOUT`).
+
 ## [1.0.1] - 2026-08-23
 
 ### ⚓ Graph Engineering: Grounding & Anti-Hallucination

@@ -1540,6 +1540,10 @@ knowgraph_diagnostic()
 | **Query Too Slow (>10s)** | Reduce `max_hops` (4 → 2) or `top_k` (20 → 10). Enable caching. |
 | **High Memory Usage** | Use `query_async()` for batch queries. Reduce graph size or split into sub-projects. |
 | **Incorrect Results** | Check if graph is up-to-date. Re-index with `knowgraph index ./project`. |
+| **"[Generation Error: timeout]"** | LLM provider took too long. Raise `KNOWGRAPH_LLM_REQUEST_TIMEOUT` (e.g. 90) and `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT` (e.g. 110). Also raise your MCP client's tool-call timeout (must be ≥ `KNOWGRAPH_QUERY_TOTAL_TIMEOUT`). For slow/free providers: `KNOWGRAPH_LLM_REQUEST_TIMEOUT=90 KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT=110 KNOWGRAPH_QUERY_TOTAL_TIMEOUT=115`. |
+| **"no info in context"** | Context retrieval is thin — raise `top_k` (e.g. 25–50) and `max_hops` (e.g. 4 → 6). `enable_grounding` re-weights but does NOT deepen retrieval. |
+| **Context length exceeded** | Params too large (e.g. top_k=40+hops=6+explanation=true). Reduce to `top_k=20, max_hops=4, explanation=false`. |
+| **Batch query returns 0 nodes** | Batch queries share the same rate-limiter; concurrent slow providers can starve later queries. Reduce batch size or use slower queries. |
 
 ### 18.4 Joern & CPG Issues
 

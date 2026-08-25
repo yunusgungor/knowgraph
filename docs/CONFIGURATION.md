@@ -75,7 +75,11 @@ def my_fn():
 | `KNOWGRAPH_QUERY_TOP_K` | `20` | 1–100 | Number of top results to return |
 | `KNOWGRAPH_QUERY_MAX_HOPS` | `4` | 1–10 | Maximum graph traversal depth |
 | `KNOWGRAPH_QUERY_ENABLE_QUERY_EXPANSION` | `true` | bool | Enable LLM-powered query expansion |
-| `KNOWGRAPH_QUERY_TIMEOUT_SECONDS` | `30.0` | 1–300 | Query execution timeout |
+| `KNOWGRAPH_QUERY_TIMEOUT_SECONDS` | `30.0` | 1–300 | Retrieval-only timeout (excludes LLM synthesis) |
+| `KNOWGRAPH_QUERY_ENABLE_DENSE_RETRIEVAL` | `true` | bool | Enable hybrid dense retrieval when a dense index exists |
+| `KNOWGRAPH_QUERY_DENSE_SEARCH_WEIGHT` | `0.3` | 0.0–1.0 | Weight of dense cosine scores in hybrid fusion (remainder = sparse BM25) |
+
+> **`KNOWGRAPH_QUERY_TIMEOUT_SECONDS`** bounds *retrieval only* (graph traversal, context assembly); it does **not** include LLM answer synthesis. Use `KNOWGRAPH_QUERY_TOTAL_TIMEOUT` for the whole query path.
 
 ---
 
@@ -88,19 +92,25 @@ def my_fn():
 | `KNOWGRAPH_LLM_MODEL` | `gpt-4o-mini` | LLM model to use |
 | `KNOWGRAPH_API_KEY` | - | OpenAI/OpenRouter API key |
 | `KNOWGRAPH_API_BASE_URL` | `https://api.openai.com/v1` | Custom OpenAI-compatible base URL |
-| `KNOWGRAPH_LLM_RETRY_COUNT` | `5` | Max LLM retries |
+| `KNOWGRAPH_LLM_RETRY_COUNT` | `5` | Max provider-internal retries (HTTP/429 errors) |
 | `KNOWGRAPH_LLM_RETRY_DELAY` | `1.0` | Base backoff delay (sec) |
 | `KNOWGRAPH_LLM_MAX_TOKENS` | `4096` | Max tokens the LLM may **generate** per completion (output cap) |
-| `KNOWGRAPH_LLM_MAX_INPUT_TOKENS` | `32000` | Approx. max **input** tokens per completion (model context guard) |
+| `KNOWGRAPH_LLM_MAX_INPUT_TOKENS` | `32000` | Approx. max **input** tokens — model-context guard for `assemble_context` |
+| `KNOWGRAPH_LLM_REQUEST_TIMEOUT` | `60` | Budget for a single `generate_text` call (whole-call: rate-limiter + HTTP + retries). Tune per provider speed. |
+| `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT` | `120` | Whole-synthesis budget at MCP handler level (retries included). Must fit the MCP client's tool-call timeout. |
+| `KNOWGRAPH_LLM_SYNTHESIS_RETRIES` | `2` | Handler-level retries of `_generate_llm_answer` on transient failures (timeout/empty). |
+| `KNOWGRAPH_QUERY_TOTAL_TIMEOUT` | `120` | Whole-query-path budget (query-expansion + retrieval + assembly + synthesis). The real client-window guarantee. Tune per MCP client timeout. |
 | `KNOWGRAPH_WORKERS` | auto (≤5) | Concurrent API requests / indexing workers |
 | `KNOWGRAPH_BATCH_SIZE` | auto-tuned to RAM | LLM batch size for entity extraction |
 | `KNOWGRAPH_PROJECT_ROOT` | auto-detect | Override project root detection |
 
-> **MAX_TOKENS vs LLM_MAX_TOKENS (important)** — these were decoupled:
-> - `KNOWGRAPH_LLM_MAX_TOKENS` is the **output** cap for a single LLM completion.
-> - `MAX_TOKENS` (code constant `knowgraph.config.MAX_TOKENS = 50000`) is the
->   **context-collection** cap for RAG — the max tokens gathered into the context
->   presented to the LLM. The two bound different sides of the pipeline.
+> **LLM timeout hierarchy** — three nested layers (most to least granular):
+>
+> 1. `LLM_REQUEST_TIMEOUT` (60s, per `generate_text` call) — wraps rate-limiter + HTTP + provider retries. Can raise to 90–120s for slow/free providers.
+> 2. `LLM_SYNTHESIS_TIMEOUT` (120s, whole synthesis) — wraps `_generate_llm_answer` retries. Must be ≤ `QUERY_TOTAL_TIMEOUT`.
+> 3. `QUERY_TOTAL_TIMEOUT` (120s, whole query path) — wraps expansion + retrieval + synthesis. This is the real client-window guarantee. **MCP client timeout must be ≥ this value.**
+>
+> **For slow/free providers**: raise all three to match your MCP client's tool-call timeout. A good starting point is `KNOWGRAPH_LLM_REQUEST_TIMEOUT=90`, `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT=110`, `KNOWGRAPH_QUERY_TOTAL_TIMEOUT=115` and set your MCP client timeout to ≥120s.
 
 ---
 
