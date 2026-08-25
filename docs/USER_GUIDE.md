@@ -85,6 +85,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "knowgraph": {
       "command": "knowgraph",
       "args": ["serve"],
+      "timeout": 120000,
       "env": {
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
@@ -97,7 +98,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   }
 }
 ```
-> **Timeout tip** — for slow/free providers, set all three to 90–120s.
+> **Timeout tip** — for slow/free providers, set all three env vars to 90–120s and the MCP client `timeout` to 120000 (120s) so the client doesn't cut before the server responds.
 
 #### For Cursor
 Add to `.cursor/mcp.json` in your project:
@@ -107,6 +108,7 @@ Add to `.cursor/mcp.json` in your project:
     "knowgraph": {
       "command": "knowgraph",
       "args": ["serve"],
+      "timeout": 120000,
       "env": {
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
@@ -128,6 +130,7 @@ Add to `~/.gemini/antigravity/mcp_config.json`:
     "knowgraph": {
       "command": "knowgraph",
       "args": ["serve"],
+      "timeout": 120000,
       "env": {
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",

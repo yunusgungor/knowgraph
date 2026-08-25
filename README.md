@@ -63,6 +63,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "knowgraph": {
       "command": "knowgraph",
       "args": ["serve"],
+      "timeout": 120000,
       "env": {
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
@@ -75,7 +76,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   }
 }
 ```
-> **Timeout tip**: For slow/free providers, raise all three timeout env vars above to 90–120s.
+> **Timeout tip**: For slow/free providers, raise all three env vars to 90–120s and the MCP client `timeout` to 120000 (120s) so the client doesn't cut before the server responds.
 > `KNOWGRAPH_LLM_REQUEST_TIMEOUT` is the per-call budget; `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT`
 > is the whole-synthesis budget (retries included); `KNOWGRAPH_QUERY_TOTAL_TIMEOUT` is the
 > entire query-path budget (retrieval + synthesis). Raise your MCP client's tool-call timeout
@@ -91,6 +92,7 @@ Add to `.cursor/mcp.json` in your project:
     "knowgraph": {
       "command": "knowgraph",
       "args": ["serve"],
+      "timeout": 120000,
       "env": {
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
@@ -114,6 +116,7 @@ Add to `~/.gemini/antigravity/mcp_config.json`:
     "knowgraph": {
       "command": "knowgraph",
       "args": ["serve"],
+      "timeout": 120000,
       "env": {
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
         "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
