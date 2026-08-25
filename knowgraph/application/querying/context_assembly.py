@@ -350,12 +350,12 @@ def assemble_context(
     for block in blocks:
         if block.path in used_paths or total_tokens + block.tokens > max_tokens:
             continue
-        # Skip tiny blocks (< 50 tokens) when a larger block from the same path exists.
-        # This prevents function-call nodes (13-39 tokens) from抢占 budget
-        # when the actual component code (1000+ tokens) is in a sibling block.
+        # Skip truly tiny blocks (< 25 tokens) when a much larger sibling exists.
+        # Threshold is low (25) to preserve meaningful function calls (32+ tokens)
+        # while still skipping trivial ref-only nodes (13-20 chars like "Call: setRate").
         siblings = by_path.get(block.path, [])
         max_sibling_tokens = max((s.tokens for s in siblings), default=0)
-        if block.tokens < 50 and max_sibling_tokens > block.tokens * 5:
+        if block.tokens < 25 and max_sibling_tokens > block.tokens * 10:
             continue
         # Phase A: pick this path's best (already-aligned top) block.
         selected_blocks.append(block)
