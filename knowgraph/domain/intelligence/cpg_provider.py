@@ -58,40 +58,47 @@ class CPGProvider:
     def ensure_cpg(self, directory: Path) -> Path:
         """Generate (or reuse) a CPG for ``directory``.
 
-        One multi-language CPG is generated: joern-parse without ``--language``
-        handles every frontend in a single pass. Per-language generation (the
-        old behaviour) re-parsed the whole directory once per language group
-        (e.g. 250 python files 3x), which stalled large repos and hit the
-        export timeout.
+        One directory-level CPG is generated per Joern-supported language.
+        Joern's auto-detection can miss languages in mixed repositories, so
+        each language is parsed with its explicit frontend alias. This still
+        avoids per-chunk generation while keeping per-file entity extraction
+        correct for mixed Python/JS/etc. projects.
 
         Args:
             directory: Source code directory to index.
 
         Returns:
-            Path to the primary cpg.bin.
+            Path to the primary cpg.bin, or an empty Path when no CPG exists.
         """
         if self._primary_cpg is not None:
             return self._primary_cpg
 
         # Populate _file_lang (cheap: filename scan) so _cpg_for_file can
-        # resolve per-file entities against the single CPG.
-        self._detect_language_groups(directory)
-        if not self._file_lang:
+        # resolve per-file entities against the matching language CPG.
+        groups = self._detect_language_groups(directory)
+        if not groups:
             # No Joern-supported files detected; nothing to do.
             logger.info("No Joern-supported files detected, skipping directory CPG")
             return Path()
 
-        try:
-            cpg_path = self.provider.generate_cpg(repo_path=directory)
-            self._primary_cpg = cpg_path
-            # Point every detected language at the single multi-language CPG.
-            self._cpg_by_lang = {lang: cpg_path for lang in set(self._file_lang.values())}
-            self._executors = {lang: self.provider._executor() for lang in set(self._file_lang.values())}
-            logger.info(f"✅ Directory CPG: {cpg_path}")
-        except Exception as e:
-            logger.warning(f"CPG generation failed: {e}")
+        for lang in sorted(groups):
+            alias = JOERN_LANGUAGE_ALIASES[lang]
+            try:
+                cpg_path = self.provider.generate_cpg(
+                    repo_path=directory,
+                    language=alias,
+                )
+            except Exception as e:
+                logger.warning(f"CPG generation failed for {lang}: {e}")
+                continue
 
-        if self._primary_cpg is not None:
+            self._cpg_by_lang[lang] = cpg_path
+            self._executors[lang] = self.provider._executor()
+            if self._primary_cpg is None:
+                self._primary_cpg = cpg_path
+            logger.info(f"✅ Directory CPG ({lang}): {cpg_path}")
+
+        if self._primary_cpg is not None and len(self._cpg_by_lang) == 1:
             self._persist(self._primary_cpg, directory)
 
         return self._primary_cpg or Path()
@@ -123,7 +130,7 @@ class CPGProvider:
             return self._executors[language]
         if self._executors:
             # Primary language executor
-            return self._executors[list(self._cpg_by_lang)[0]]
+            return self._executors[next(iter(self._cpg_by_lang))]
         # Fallback: provider's memoized executor (CPG generated outside).
         return self.provider._executor()
 
