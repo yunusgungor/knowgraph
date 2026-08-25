@@ -102,3 +102,49 @@ def test_assemble_context():
 
         assert len(blocks) == 2
         assert "Short" in context
+
+
+def test_same_file_chunks_all_reach_context():
+    """A large file split into chunks keeps ALL its chunks in context.
+
+    Regression: assemble_context scored each chunk independently and greedily
+    packed, so a 1330-line file's formula-bearing chunks (down-weighted by the
+    token penalty) were dropped in favor of cheaper one-off files — "the formulas
+    are listed but their content isn't provided."
+    """
+    import uuid as _uuid
+
+    big_a = create_mock_node(_uuid.uuid4(), content="part1 seed formula", token_count=200)
+    big_b = create_mock_node(_uuid.uuid4(), content="part2 formula KDV=matrah*oran", token_count=200)
+    big_c = create_mock_node(_uuid.uuid4(), content="part3 tevkifat formula", token_count=200)
+    # Same file path -> same-file cohesion should pull all three.
+    for n in (big_a, big_b, big_c):
+        n.path = "tax/QuickVatCalculator.tsx"
+
+    # Cheaper unrelated files that the OLD greedy would prefer.
+    small1 = create_mock_node(_uuid.uuid4(), content="small doc 1", token_count=10)
+    small2 = create_mock_node(_uuid.uuid4(), content="small doc 2", token_count=10)
+    small1.path = "other/one.ts"
+    small2.path = "other/two.ts"
+
+    nodes = [big_a, big_b, big_c, small1, small2]
+    seed_ids = [big_a.id]
+    sim = {big_a.id: 0.9, big_b.id: 0.5, big_c.id: 0.4, small1.id: 0.3, small2.id: 0.3}
+    cent = {n.id: {"composite": 0.5} for n in nodes}
+
+    with patch("tiktoken.get_encoding") as mock_get_encoding:
+        mock_encoding = MagicMock()
+        mock_encoding.encode.side_effect = lambda x: [0] * len(x)
+        mock_get_encoding.return_value = mock_encoding
+
+        # Budget big enough for the whole big file (3*200) + some small, but the
+        # old greedy would stop after big_a + small files and drop big_b/big_c.
+        context, blocks = assemble_context(
+            nodes, seed_ids, sim, cent, max_tokens=1000
+        )
+
+    block_paths = [b.path for b in blocks]
+    # The big file's 3 chunks all made it (cohesion).
+    assert block_paths.count("tax/QuickVatCalculator.tsx") == 3
+    assert any("part2 formula" in b.content for b in blocks)
+    assert any("part3 tevkifat" in b.content for b in blocks)

@@ -43,6 +43,7 @@ class ContextBlock:
     role: str
     importance: float
     tokens: int
+    path: str = ""
 
 
 def score_node_importance(
@@ -245,17 +246,47 @@ def assemble_context(
                 role=node.type,
                 importance=importance,
                 tokens=tokens,
+                path=node.path or "",
             )
         )
 
     # Sort by importance (descending)
     blocks.sort(key=lambda b: b.importance, reverse=True)
 
-    # Greedy packing
-    selected_blocks = []
+    # Same-file cohesion: a large file split into multiple chunk nodes must not
+    # have its formula-bearing chunks dropped in favor of cheaper one-off files.
+    # Phase A selects the best block per path; Phase B forces a selected path's
+    # sibling chunks in (within budget); Phase C fills the rest with leftovers.
+    selected_blocks: list[ContextBlock] = []
     total_tokens = 0
+    used_paths: set[str] = set()
 
+    # Phase A+B: take each path's top block, then its whole (multi-chunk) file.
+    by_path: dict[str, list[ContextBlock]] = {}
     for block in blocks:
+        by_path.setdefault(block.path, []).append(block)
+
+    # A path with no path (single doc) is treated as one unit anyway.
+    for block in blocks:
+        if block.path in used_paths or total_tokens + block.tokens > max_tokens:
+            continue
+        # Phase A: pick this path's best (already-aligned top) block.
+        selected_blocks.append(block)
+        total_tokens += block.tokens
+        used_paths.add(block.path)
+        # Phase B: force the rest of this path's chunks in while they fit.
+        for sibling in by_path.get(block.path, []):
+            if sibling is block or sibling in selected_blocks:
+                continue
+            if total_tokens + sibling.tokens <= max_tokens:
+                selected_blocks.append(sibling)
+                total_tokens += sibling.tokens
+
+    # Phase C: fill leftover budget with any remaining unselected blocks.
+    selected_ids = {b.node_id for b in selected_blocks}
+    for block in blocks:
+        if block.node_id in selected_ids:
+            continue
         if total_tokens + block.tokens <= max_tokens:
             selected_blocks.append(block)
             total_tokens += block.tokens
