@@ -51,6 +51,10 @@ pip install knowgraph
 knowgraph-setup
 ```
 
+> **Tip**: If your shell reports `knowgraph: command not found` (its `Scripts`
+> folder isn't on `PATH`, common on Windows), run `python -m knowgraph` instead —
+> it behaves identically and needs no PATH setup.
+
 ### 2. MCP Server Configuration
 
 #### Global Timeout (all MCP servers at once)
