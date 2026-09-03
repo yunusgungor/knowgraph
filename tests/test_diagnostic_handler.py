@@ -17,7 +17,7 @@ class TestDiagnosticConfigReport:
         text = _run({"graph_path": "C:/tmp/definitely_missing_graph"})
         assert "LLM request timeout: 60s" in text
         assert "LLM retries: 5" in text
-        assert "Query timeout: 30.0s" in text
+        assert "Query timeout: 60.0s" in text
         assert "top_k: 20" in text
         assert "max_hops: 4" in text
         assert "dense retrieval: on" in text

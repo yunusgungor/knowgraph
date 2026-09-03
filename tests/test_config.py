@@ -39,7 +39,7 @@ class TestDefaultSettings:
         # always enabled via the legacy ENABLE_QUERY_EXPANSION constant). Users
         # can disable it via KNOWGRAPH_QUERY_ENABLE_QUERY_EXPANSION=false.
         assert query.enable_query_expansion is True
-        assert query.timeout_seconds == 30.0
+        assert query.timeout_seconds == 60.0
 
     def test_main_settings_defaults(self):
         """Test main settings have correct defaults."""

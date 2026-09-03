@@ -213,7 +213,7 @@ class TestExtractQueryParameters:
         assert result["max_hops"] == 4
         assert result["with_explanation"] is False
         assert result["expand_query"] is False
-        assert result["max_tokens"] == 3000
+        assert result["max_tokens"] == 32000
         assert result["enable_hierarchical_lifting"] is True
         assert result["lift_levels"] == 2
         assert result["system_prompt"] is None

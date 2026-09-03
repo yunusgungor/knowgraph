@@ -8,6 +8,8 @@ handlers. This test pins the fix: optional args passed as None must not raise.
 """
 
 import asyncio
+import contextlib
+import tempfile
 from pathlib import Path
 
 from knowgraph.adapters.mcp.handlers.conversations import handle_analyze_conversations
@@ -15,7 +17,7 @@ from knowgraph.adapters.mcp.handlers.misc import handle_analyze_impact
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def test_analyze_conversations_trending_with_none_topic():
@@ -37,9 +39,6 @@ def test_analyze_impact_with_none_element():
         ))
     assert res[0].text
 
-
-import contextlib
-import tempfile
 
 
 @contextlib.contextmanager

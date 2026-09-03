@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `node.path` added to `ContextBlock` in `context_assembly.py` for same-file cohesion grouping.
 - All timeout constants (`LLM_REQUEST_TIMEOUT`, `LLM_SYNTHESIS_TIMEOUT`, `QUERY_TOTAL_TIMEOUT`) configurable via env vars (`KNOWGRAPH_LLM_REQUEST_TIMEOUT`, `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT`, `KNOWGRAPH_QUERY_TOTAL_TIMEOUT`).
 
+### 🧪 Release-Hardening (tests green again)
+- **Anti-hallucination wording restored**: the default answer prompt again demands prose ("in your own words — do not paste the context verbatim") while keeping the code-snippet guidance added later; a later edit had dropped the anti-echo clause and broke the regression test.
+- **Stale tests updated to v1.1.0 defaults/APIs**: `QuerySettings.timeout_seconds` (30→60s), query `max_tokens` default (3000→32000), and query-engine tests re-pinned to the single-pass retrieval methods (`retrieve_with_scores` / `retrieve_async_with_scores`, 3-tuple returns) introduced by the v1.1.0 query-pipeline optimization.
+- **Test-suite portability**: conversation regression tests run via `asyncio.run` (Python 3.14 no longer auto-creates an event loop); Joern native-binary permission tests skip on Windows where POSIX execute-bit semantics don't apply.
+
 ## [1.0.1] - 2026-08-23
 
 ### ⚓ Graph Engineering: Grounding & Anti-Hallucination

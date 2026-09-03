@@ -97,7 +97,7 @@ async def test_end_to_end_local_query_logic():
         # Setup Retriever behavior
         mock_retriever = MockRetrieverCls.return_value
         # it returns list of Node
-        mock_retriever.retrieve.return_value = ([n1], {n1.id: 1.0})
+        mock_retriever.retrieve_with_scores.return_value = ([n1], [n1.id], {n1.id: 1.0})
 
         # Setup Assembly
         mock_assemble.return_value = ("context", [])
@@ -108,4 +108,4 @@ async def test_end_to_end_local_query_logic():
         # QueryEngine.query returns context as answer (no LLM generation)
         assert result.answer == "context"
         assert result.context == "context"
-        mock_retriever.retrieve.assert_called_once()  # Integration point
+        mock_retriever.retrieve_with_scores.assert_called_once()  # Integration point

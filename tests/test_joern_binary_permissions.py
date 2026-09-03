@@ -8,9 +8,17 @@ required.
 """
 
 import stat
+import sys
 from pathlib import Path
 
+import pytest
+
 from knowgraph.core.joern.manager import _make_native_binaries_executable
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX execute-bit semantics do not apply on Windows",
+)
 
 
 def _mk_file(p: Path) -> None:

@@ -173,7 +173,7 @@ def build_llm_prompt(
         if system_prompt
         else (
             "You are a helpful assistant. Use the following context to answer the user's "
-            "question. Answer in the same language as the question.\n\n"
+            "question. Answer in the same language as the question, in your own words — do not paste the context verbatim.\n\n"
             "When the context contains code that answers the question, include concise "
             "relevant code snippets in your answer instead of only summarizing them. "
             "Format code blocks with proper language tags (```typescript, ```python, etc.).\n\n"

@@ -32,12 +32,12 @@ async def test_query_engine_async_basic():
 
         # Mock async methods
         async def mock_retrieve_async(*args, **kwargs):
-            return ([n1], [n1.id])
+            return ([n1], [n1.id], {n1.id: 1.0})
 
         async def mock_retrieve_by_similarity_async(*args, **kwargs):
             return [(n1, 1.0)]
 
-        mock_retriever.retrieve_async = mock_retrieve_async
+        mock_retriever.retrieve_async_with_scores = mock_retrieve_async
         mock_retriever.retrieve_by_similarity_async = mock_retrieve_by_similarity_async
 
         mock_read_edges.return_value = []
@@ -72,7 +72,7 @@ async def test_query_engine_async_timeout():
             await asyncio.sleep(10)  # Longer than timeout
             return ([], [])
 
-        mock_retriever.retrieve_async = slow_retrieve_async
+        mock_retriever.retrieve_async_with_scores = slow_retrieve_async
         mock_read_edges.return_value = []
 
         engine = QueryEngine(store_path)
@@ -105,12 +105,12 @@ async def test_batch_queries_concurrent():
 
         async def mock_retrieve_async(*args, **kwargs):
             await asyncio.sleep(0.1)  # Simulate some work
-            return ([n1], [n1.id])
+            return ([n1], [n1.id], {n1.id: 1.0})
 
         async def mock_retrieve_by_similarity_async(*args, **kwargs):
             return [(n1, 1.0)]
 
-        mock_retriever.retrieve_async = mock_retrieve_async
+        mock_retriever.retrieve_async_with_scores = mock_retrieve_async
         mock_retriever.retrieve_by_similarity_async = mock_retrieve_by_similarity_async
         mock_read_edges.return_value = []
         mock_centrality.return_value = {n1.id: {"degree": 1.0}}
@@ -154,12 +154,12 @@ async def test_batch_query_async_with_progress():
         n1.id = uuid4()
 
         async def mock_retrieve_async(*args, **kwargs):
-            return ([n1], [n1.id])
+            return ([n1], [n1.id], {n1.id: 1.0})
 
         async def mock_retrieve_by_similarity_async(*args, **kwargs):
             return [(n1, 1.0)]
 
-        mock_retriever.retrieve_async = mock_retrieve_async
+        mock_retriever.retrieve_async_with_scores = mock_retrieve_async
         mock_retriever.retrieve_by_similarity_async = mock_retrieve_by_similarity_async
         mock_read_edges.return_value = []
         mock_centrality.return_value = {n1.id: {"degree": 1.0}}
@@ -212,12 +212,12 @@ async def test_batch_query_async_error_handling():
             call_count[0] += 1
             if call_count[0] == 2:
                 raise Exception("Simulated failure")
-            return ([n1], [n1.id])
+            return ([n1], [n1.id], {n1.id: 1.0})
 
         async def mock_retrieve_by_similarity_async(*args, **kwargs):
             return [(n1, 1.0)]
 
-        mock_retriever.retrieve_async = mock_retrieve_async
+        mock_retriever.retrieve_async_with_scores = mock_retrieve_async
         mock_retriever.retrieve_by_similarity_async = mock_retrieve_by_similarity_async
         mock_read_edges.return_value = []
         mock_centrality.return_value = {n1.id: {"degree": 1.0}}
@@ -260,12 +260,12 @@ async def test_batch_query_async_performance():
 
         async def mock_retrieve_async(*args, **kwargs):
             await asyncio.sleep(0.1)  # Simulate work
-            return ([n1], [n1.id])
+            return ([n1], [n1.id], {n1.id: 1.0})
 
         async def mock_retrieve_by_similarity_async(*args, **kwargs):
             return [(n1, 1.0)]
 
-        mock_retriever.retrieve_async = mock_retrieve_async
+        mock_retriever.retrieve_async_with_scores = mock_retrieve_async
         mock_retriever.retrieve_by_similarity_async = mock_retrieve_by_similarity_async
         mock_read_edges.return_value = []
         mock_centrality.return_value = {n1.id: {"degree": 1.0}}
