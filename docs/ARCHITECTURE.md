@@ -1,6 +1,6 @@
 # KnowGraph Architecture & Joern Integration
 
-**Version**: 1.1.0  
+**Version**: 1.1.1  
 **Status**: Production Ready  
 **Last Updated**: August 22, 2026
 

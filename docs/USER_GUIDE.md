@@ -1,6 +1,6 @@
 # KnowGraph User Guide
 
-**Version:** 1.1.0  
+**Version:** 1.1.1  
 **Last Updated:** August 22, 2026
 
 Welcome to the comprehensive KnowGraph User Guide. This document covers everything you need to know to effectively use KnowGraph as a Graph RAG system with **integrated Joern code analysis** and MCP server for your AI coding assistants.
@@ -220,7 +220,7 @@ pip install knowgraph
 **Verify installation:**
 ```bash
 knowgraph --version
-# Output: KnowGraph 1.1.0
+# Output: KnowGraph 1.1.1
 ```
 
 **Configure MCP server** (see [Getting Started](#2-getting-started) above)
@@ -297,7 +297,7 @@ mypy .
 **Test the CLI:**
 ```bash
 knowgraph --version
-# Output: KnowGraph 1.1.0
+# Output: KnowGraph 1.1.1
 
 # Index a small folder and run a query
 knowgraph index ./tests/fixtures

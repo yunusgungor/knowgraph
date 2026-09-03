@@ -1,6 +1,6 @@
 # KnowGraph Configuration Guide
 
-**Version:** 1.1.0
+**Version:** 1.1.1
 **Last Updated:** August 22, 2026
 
 This document describes the configuration options for KnowGraph v1.1.0.
