@@ -17,55 +17,8 @@ import click
 
 from knowgraph.infrastructure.parsing.repo_ingestor import detect_source_type
 
-# Language detection maps — shared by index_command and index_helpers.
-# Moved here to break the circular import between the two modules.
-LANGUAGE_MAP = {
-    "py": "python",
-    "js": "javascript",
-    "ts": "typescript",
-    "jsx": "javascript",
-    "tsx": "typescript",
-    "rs": "rust",
-    "rb": "ruby",
-    "md": "markdown",
-    "java": "java",
-    "go": "go",
-    "php": "php",
-    "html": "html",
-    "css": "css",
-    "txt": "text",
-    "sql": "sql",
-    "json": "json",
-    "yml": "yaml",
-    "yaml": "yaml",
-    "xml": "xml",
-    "csv": "csv",
-    "tsv": "tsv",
-    "ini": "ini",
-    "conf": "conf",
-    "cfg": "cfg",
-    "properties": "properties",
-    "toml": "toml",
-    "cpp": "cpp",
-    "cxx": "cpp",
-    "cc": "cpp",
-    "c": "c",
-    "h": "c",
-    "hpp": "cpp",
-    "cs": "csharp",
-    "kt": "kotlin",
-    "swift": "swift",
-    "m": "objectivec",
-    "dart": "dart",
-    "scala": "scala",
-    "erl": "erlang",
-    "ex": "elixir",
-    "lua": "lua",
-    "sh": "shell",
-    "bash": "shell",
-}
-
-EXT_MAP = {f".{ext}": lang for ext, lang in LANGUAGE_MAP.items()}
+# Shared constants (canonical home is _constants.py to avoid circular imports)
+from knowgraph.adapters.cli._constants import EXT_MAP, LANGUAGE_MAP  # noqa: F401
 
 # Global list to track temporary files for cleanup
 _temp_cleanup_registry: list[Path] = []

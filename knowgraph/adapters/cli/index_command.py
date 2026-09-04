@@ -3,6 +3,7 @@
 import sys
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 import click
 
@@ -10,8 +11,8 @@ from knowgraph.domain.intelligence.provider import IntelligenceProvider
 from knowgraph.infrastructure.parsing.repo_ingestor import RepositoryIngestorError
 from knowgraph.shared.security import validate_path
 
-# Re-export from helpers to break circular import (canonical home is index_helpers)
-from knowgraph.adapters.cli.index_helpers import EXT_MAP, LANGUAGE_MAP  # noqa: F401
+# Shared constants (canonical home is _constants.py to avoid circular imports)
+from knowgraph.adapters.cli._constants import EXT_MAP, LANGUAGE_MAP  # noqa: F401
 
 
 async def run_index(
@@ -170,6 +171,31 @@ async def run_index(
             )
             if garbage_count and verbose:
                 click.echo(f"✓ GC removed {garbage_count} orphan nodes")
+
+        # Code analysis integration (call graph, data flow, CPG entities)
+        try:
+            from knowgraph.infrastructure.indexing.code_index_integration import (
+                CodeIndexIntegration,
+            )
+
+            input_path_obj = Path(input_path)
+            if input_path_obj.exists() and input_path_obj.is_dir():
+                if verbose:
+                    click.echo("Running code analysis (CPG, call graph, data flow)...")
+                integration = CodeIndexIntegration()
+                code_results = integration.process_code_directory(
+                    input_path_obj, Path(graph_store_path)
+                )
+                if code_results.get("cpg_generated"):
+                    call_edges = code_results.get("call_edges_extracted", 0)
+                    data_flows = code_results.get("data_flows_found", 0)
+                    entities = code_results.get("entities_extracted", 0)
+                    if verbose:
+                        click.echo(f"  CPG: {entities} entities, {call_edges} call edges, {data_flows} data flows")
+        except Exception as e:
+            # Don't fail indexing if code analysis fails
+            if verbose:
+                click.echo(f"  Code analysis skipped: {e}")
 
         # Log completion
         if progress_callback:

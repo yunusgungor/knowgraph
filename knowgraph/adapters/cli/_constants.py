@@ -1,0 +1,52 @@
+"""Shared constants for CLI modules.
+
+Moved here to break circular imports between index_command and index_helpers.
+"""
+
+LANGUAGE_MAP = {
+    "py": "python",
+    "js": "javascript",
+    "ts": "typescript",
+    "jsx": "javascript",
+    "tsx": "typescript",
+    "rs": "rust",
+    "rb": "ruby",
+    "md": "markdown",
+    "java": "java",
+    "go": "go",
+    "php": "php",
+    "html": "html",
+    "css": "css",
+    "txt": "text",
+    "sql": "sql",
+    "json": "json",
+    "yml": "yaml",
+    "yaml": "yaml",
+    "xml": "xml",
+    "csv": "csv",
+    "tsv": "tsv",
+    "ini": "ini",
+    "conf": "conf",
+    "cfg": "cfg",
+    "properties": "properties",
+    "toml": "toml",
+    "cpp": "cpp",
+    "cxx": "cpp",
+    "cc": "cpp",
+    "c": "c",
+    "h": "c",
+    "hpp": "cpp",
+    "cs": "csharp",
+    "kt": "kotlin",
+    "swift": "swift",
+    "m": "objectivec",
+    "dart": "dart",
+    "scala": "scala",
+    "erl": "erlang",
+    "ex": "elixir",
+    "lua": "lua",
+    "sh": "shell",
+    "bash": "shell",
+}
+
+EXT_MAP = {f".{ext}": lang for ext, lang in LANGUAGE_MAP.items()}

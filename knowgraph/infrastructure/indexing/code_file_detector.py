@@ -62,6 +62,7 @@ class CodeFileDetector:
         "coverage",
         ".next",
         ".nuxt",
+        "test_graphs",  # Test fixture JSON files, not real code
     }
 
     # Minimum thresholds for CPG generation

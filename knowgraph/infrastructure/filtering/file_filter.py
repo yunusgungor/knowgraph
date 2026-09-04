@@ -22,6 +22,7 @@ SKIP_PATTERNS = {
     "*.egg-info",
     ".indexing_cache",
     "graphstore",
+    "test_graphs",  # Test fixture JSON files, not real code
 }
 
 # Extensions to skip
