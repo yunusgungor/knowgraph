@@ -19,6 +19,38 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Map Joern frontend names to their directory/binary names.
+# CodeFileDetector language -> Joern frontend executable name.
+_JOERN_LANGUAGE_ALIASES = {
+    "python": "pythonsrc",
+    "javascript": "jssrc",
+    "typescript": "jssrc",
+    "c": "c",
+    "cpp": "c",
+    "java": "javasrc",
+    "go": "golang",
+    "csharp": "csharpsrc",
+    "ruby": "rubysrc",
+    "php": "php",
+    "kotlin": "kotlin",
+    "swift": "swiftsrc",
+    "scala": "scala2cpg",
+}
+# Joern language alias -> frontend executable dir/name under frontends/.
+_ALIAS_TO_FRONTEND = {
+    "pythonsrc": "pysrc2cpg",
+    "jssrc": "jssrc2cpg",
+    "javasrc": "javasrc2cpg",
+    "golang": "gosrc2cpg",
+    "csharpsrc": "csharpsrc2cpg",
+    "rubysrc": "rubysrc2cpg",
+    "c": "c2cpg",
+    "php": "php2cpg",
+    "kotlin": "kotlin2cpg",
+    "swiftsrc": "swiftsrc2cpg",
+    "scala2cpg": "scala2cpg",
+}
+
 
 class JoernNotFoundError(Exception):
     """Raised when Joern CLI is not found."""
@@ -60,6 +92,34 @@ class JoernProvider:
             # subprocesses run in quick succession (e.g. under pytest capture).
             kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return subprocess.run(cmd, **kwargs)
+
+    def _detect_dominant_language(self, repo_path: Path) -> str | None:
+        """Detect the dominant programming language in a directory.
+
+        Returns a language key that maps to a Joern frontend (e.g. 'python'),
+        or None if no supported language is found.
+        """
+        from knowgraph.infrastructure.indexing.code_file_detector import CodeFileDetector
+
+        detector = CodeFileDetector()
+        code_files = detector.detect_code_files(repo_path)
+        if not code_files:
+            return None
+
+        # Count files per language
+        lang_counts: dict[str, int] = {}
+        for cf in code_files:
+            lang_counts[cf.language] = lang_counts.get(cf.language, 0) + 1
+
+        if not lang_counts:
+            return None
+
+        # Return the language with the most files, but only if it has a frontend
+        dominant = max(lang_counts, key=lang_counts.get)
+        alias = _JOERN_LANGUAGE_ALIASES.get(dominant)
+        if alias and alias in _ALIAS_TO_FRONTEND:
+            return dominant
+        return None
 
     def __init__(self, joern_path: str | None = None):
         """Initialize Joern provider.
@@ -134,6 +194,58 @@ class JoernProvider:
 
         return None
 
+    def _generate_cpg_via_frontend(
+        self,
+        repo_path: Path,
+        language: str,
+        output_file: Path,
+        timeout: int | None = None,
+    ) -> Path:
+        """Generate a CPG by invoking a language-specific Joern frontend directly.
+
+        This is the Windows-safe path: the outer ``joern-parse.bat`` wrapper
+        mis-parses some argument combinations, but the frontend binaries under
+        ``frontends/<name>/bin`` preserve argument order.
+        """
+        alias = _JOERN_LANGUAGE_ALIASES.get(language, language)
+        frontend_name = _ALIAS_TO_FRONTEND.get(alias)
+        if not frontend_name:
+            raise JoernNotFoundError(f"No Joern frontend mapped for language: {language}")
+
+        candidate = Path(self.joern_path) / "frontends" / frontend_name / "bin" / f"{frontend_name}.bat"
+        if platform.system() != "Windows" or not candidate.exists():
+            candidate = Path(self.joern_path) / "frontends" / frontend_name / "bin" / frontend_name
+        if not candidate.exists():
+            raise JoernNotFoundError(f"Joern frontend not found: {candidate}")
+
+        if timeout is None:
+            from knowgraph.config import JOERN_EXPORT_TIMEOUT
+
+            timeout = JOERN_EXPORT_TIMEOUT
+
+        cmd = [str(candidate), str(repo_path), "--output", str(output_file)]
+        logger.info(f"Generating CPG via frontend ({frontend_name}): {' '.join(cmd)}")
+
+        result = self._joern_subprocess(
+            cmd,
+            timeout=timeout,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if result.returncode != 0:
+            logger.error(f"{frontend_name} failed: {result.stderr}")
+            raise subprocess.CalledProcessError(
+                result.returncode, cmd, result.stdout or "", result.stderr
+            )
+
+        if not output_file.exists():
+            raise FileNotFoundError(f"{frontend_name} reported success, but CPG was not written: {output_file}")
+
+        logger.info(f"✅ CPG generated via frontend: {output_file}")
+        return output_file
+
     def generate_cpg(
         self,
         repo_path: Path,
@@ -168,8 +280,16 @@ class JoernProvider:
 
             timeout = JOERN_EXPORT_TIMEOUT
 
-        # Build joern-parse command
-        # joern_path is now the joern-cli directory
+        # On Windows, the outer `joern-parse.bat` wrapper corrupts argument
+        # parsing (`Unknown argument '0' ...`). Work around it by invoking the
+        # language-specific frontend directly. When language is None, auto-detect
+        # from the source files and use the dominant language's frontend.
+        if platform.system() == "Windows":
+            if not language:
+                language = self._detect_dominant_language(repo_path)
+            if language:
+                return self._generate_cpg_via_frontend(repo_path, language, output_file, timeout)
+
         joern_parse = self._joern_cmd("joern-parse")
         cmd = [joern_parse, str(repo_path), "--output", str(output_file)]
 

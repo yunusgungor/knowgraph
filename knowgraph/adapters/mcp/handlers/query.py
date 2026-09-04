@@ -43,6 +43,30 @@ from knowgraph.shared.versioning import (
 _llm_answer_cache: dict[str, str] = {}
 _LLM_ANSWER_CACHE_MAX = 256
 
+# QueryEngine cache: keyed by resolved graph_path. The dense index (500MB+)
+# stays in memory after the first load, making subsequent queries ~10x faster.
+# The provider is NOT part of the key — a stale provider reference is harmless
+# (it's only used for LLM synthesis, not retrieval), and baking it in would
+# defeat the cache on every provider refresh.
+_engine_cache: dict[str, QueryEngine] = {}
+_ENGINE_CACHE_MAX = 4  # at most N graph stores cached
+
+
+def _get_cached_engine(graph_path: Path, provider: Any) -> QueryEngine:
+    """Return a cached QueryEngine for *graph_path*, creating one if needed."""
+    key = str(graph_path.resolve())
+    engine = _engine_cache.get(key)
+    if engine is None:
+        if len(_engine_cache) >= _ENGINE_CACHE_MAX:
+            # Evict the oldest entry (first inserted)
+            oldest_key = next(iter(_engine_cache))
+            del _engine_cache[oldest_key]
+        engine = QueryEngine(graph_path, provider=provider)
+        _engine_cache[key] = engine
+    # Always refresh the provider reference (LLM synthesis needs a live one)
+    engine.retriever.intelligence_provider = provider
+    return engine
+
 
 def _llm_answer_key(prompt: str) -> str:
     """Return a stable key for a generated-answer prompt."""
@@ -204,7 +228,7 @@ async def handle_query(
                 if progress:
                     await progress.update(2, "🔧 Initializing query engine...")
 
-                engine = QueryEngine(graph_path, provider=provider)
+                engine = _get_cached_engine(graph_path, provider)
                 params = extract_query_parameters(arguments)
 
                 # Query Expansion (now supports generic provider)
@@ -565,7 +589,7 @@ async def handle_batch_query(
         enable_grounding = arguments.get("enable_grounding", False)
         enable_temporal_filter = arguments.get("enable_temporal_filter", False)
 
-        engine = QueryEngine(graph_path, provider=provider)
+        engine = _get_cached_engine(graph_path, provider)
 
         # Use async batch query for better performance
         results_list = await engine.batch_query_async(

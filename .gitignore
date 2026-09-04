@@ -111,3 +111,5 @@ tests/test_e2e_graphstore/
 tests/test_graphs/
 **/bookmarks.db
 **/.indexing_cache/
+
+.mcp.json
