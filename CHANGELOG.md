@@ -5,10 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.1] - 2026-09-03
+## [1.1.1] - 2026-09-04
+
+### ⚡ Performance
+- **QueryEngine instance cache** (up to 4, keyed by graph path): dense indexes are loaded once and reused across MCP queries instead of being reloaded per query — repeat queries answer in ~1.5s.
+- **Call graph via Joern**: call-graph extraction rewritten from code-text parsing to caller→callee method-level Joern queries, adding complete call edges (0 → 4688) and data-flow edges (0 → 100).
 
 ### 🐛 Fixes
 - **`python -m knowgraph` entry point** (`knowgraph/__main__.py`): a PATH-independent way to run the CLI when the console script's `Scripts` folder is not on PATH (common on Windows after `pip install`). README Quick Start now points to the fallback.
+- **Noisy reference symbols filtered**: `test_*`/`Test*` symbols, builtins (`__init__`, common params) and generic framework symbols excluded from reference edges — edge noise cut by ~27%, entity coverage 12% → 97%, orphan nodes 30% → 9%.
+- **CPG/AST fallback fixed**: AST extraction now triggers when Joern's CPG returns empty entities (not only when no CPG provider exists); parallel CPG generation dropped so a single CPG yields the complete call graph.
+- **Test data excluded from indexing**: `test_graphs` filtered out of the graph (test nodes 741 → 7, −99%).
+- **Windows Joern support**: broken `joern-parse.bat` bypassed by invoking language-specific frontends directly with auto-detected dominant language.
+- **Code index integration**: `CodeIndexIntegration` wired into the CLI `index` path for call/data-flow edges.
+- **Architecture cleanups**: shared constants extracted to `_constants.py`; `LANGUAGE_MAP` re-exported from helpers (breaks circular imports); `detect_project_root_with_llm` provider injectable for testability.
+
+### ⚙️ Configuration Simplification
+- **Timeout env overrides removed**: `KNOWGRAPH_LLM_REQUEST_TIMEOUT`, `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT`, and `KNOWGRAPH_QUERY_TOTAL_TIMEOUT` are no longer configurable — timeouts are now fixed defaults (request 60s, synthesis 120s, query total 120s). README config snippets, `docs/CONFIGURATION.md`, `knowgraph_diagnostic`, and timeout error hints no longer reference the env vars.
 
 ## [1.1.0] - 2026-08-25
 
