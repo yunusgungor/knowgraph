@@ -586,12 +586,21 @@ async def write_graph_to_storage(nodes, edges, existing_manifest, graph_store_pa
         _log_verbose(verbose, f"Dense index skipped: {e}")
 
     click.echo(f"Writing {len(nodes)} nodes to storage...")
-    # Write all nodes in parallel using async. Bulk writes skip per-node full
-    # cache invalidation (invalidate=False); flush once after the batch so N
-    # writes don't pay N full cache clears.
-    await asyncio.gather(
-        *[write_node_json_async(node, graph_store_path, invalidate=False) for node in nodes]
-    )
+    # Write nodes in bounded-concurrency batches using async. Bulk writes skip
+    # per-node full cache invalidation (invalidate=False); flush once after the
+    # batch so N writes don't pay N full cache clears. The batch cap keeps the
+    # number of concurrently open file handles bounded: an unbounded gather
+    # over thousands of nodes exhausts the OS open-file limit (OSError 24,
+    # "Too many open files") — observed on Windows with ~9k nodes.
+    _BULK_WRITE_CONCURRENCY = 64
+    for _start in range(0, len(nodes), _BULK_WRITE_CONCURRENCY):
+        _batch = nodes[_start : _start + _BULK_WRITE_CONCURRENCY]
+        await asyncio.gather(
+            *[
+                write_node_json_async(node, graph_store_path, invalidate=False)
+                for node in _batch
+            ]
+        )
     from knowgraph.shared.cache_versioning import invalidate_all_caches
 
     invalidate_all_caches()
