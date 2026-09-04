@@ -132,14 +132,11 @@ async def handle_diagnostic(
         )
 
         qs = get_settings().query
-        report_lines.append(f"   LLM request timeout: {LLM_REQUEST_TIMEOUT}s "
-                            f"(env: KNOWGRAPH_LLM_REQUEST_TIMEOUT)")
-        report_lines.append(f"   LLM retries: {LLM_RETRY_COUNT} "
-                            f"(env: KNOWGRAPH_LLM_RETRY_COUNT)")
-        report_lines.append(f"   Query timeout: {QUERY_TIMEOUT_SECONDS}s "
-                            f"(env: KNOWGRAPH_QUERY_TIMEOUT_SECONDS)")
-        report_lines.append(f"   top_k: {qs.top_k} (env: KNOWGRAPH_QUERY_TOP_K)")
-        report_lines.append(f"   max_hops: {qs.max_hops} (env: KNOWGRAPH_QUERY_MAX_HOPS)")
+        report_lines.append(f"   LLM request timeout: {LLM_REQUEST_TIMEOUT}s")
+        report_lines.append(f"   LLM retries: {LLM_RETRY_COUNT}")
+        report_lines.append(f"   Query timeout: {QUERY_TIMEOUT_SECONDS}s")
+        report_lines.append(f"   top_k: {qs.top_k}")
+        report_lines.append(f"   max_hops: {qs.max_hops}")
         report_lines.append(f"   dense retrieval: "
                             f"{'on' if qs.enable_dense_retrieval else 'off'}")
     except Exception:
@@ -203,8 +200,7 @@ async def handle_diagnostic(
             if LLM_REQUEST_TIMEOUT <= 60:
                 recommendations.append(
                     "🟡 LLM request timeout is 60s or less; with a slow/free provider, "
-                    "raise KNOWGRAPH_LLM_REQUEST_TIMEOUT (e.g. 90-120) AND the MCP "
-                    "client's tool timeout — the client cuts first if its limit is lower"
+                    "consider using a faster endpoint or reducing query scope"
                 )
         except Exception:
             pass

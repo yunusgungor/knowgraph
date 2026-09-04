@@ -87,20 +87,12 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "env": {
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
-        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
-        "KNOWGRAPH_LLM_REQUEST_TIMEOUT": "120",
-        "KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT": "115",
-        "KNOWGRAPH_QUERY_TOTAL_TIMEOUT": "118"
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       }
     }
   }
 }
 ```
-> **Timeout tip**: For slow/free providers, raise all three env vars to 90–120s and the MCP client `timeout` to 120000 (120s) so the client doesn't cut before the server responds.
-> `KNOWGRAPH_LLM_REQUEST_TIMEOUT` is the per-call budget; `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT`
-> is the whole-synthesis budget (retries included); `KNOWGRAPH_QUERY_TOTAL_TIMEOUT` is the
-> entire query-path budget (retrieval + synthesis). Raise your MCP client's tool-call timeout
-> to match (≥ 120s).
 
 #### For Cursor
 
@@ -116,10 +108,7 @@ Add to `.cursor/mcp.json` in your project:
       "env": {
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
-        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
-        "KNOWGRAPH_LLM_REQUEST_TIMEOUT": "120",
-        "KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT": "115",
-        "KNOWGRAPH_QUERY_TOTAL_TIMEOUT": "118"
+        "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast"
       }
     }
   }
@@ -140,10 +129,7 @@ Add to `~/.gemini/antigravity/mcp_config.json`:
       "env": {
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
         "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
-        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
-        "KNOWGRAPH_LLM_REQUEST_TIMEOUT": "120",
-        "KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT": "115",
-        "KNOWGRAPH_QUERY_TOTAL_TIMEOUT": "118"
+        "KNOWGRAPH_API_KEY": "sk-your-openai-key-here"
       },
       "disabled": false
     }

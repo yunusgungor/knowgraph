@@ -249,38 +249,19 @@ LLM_TEMPERATURE = 0.0
 MAX_EXPANSION_TERMS = 5
 LLM_RETRY_COUNT = int(os.getenv("KNOWGRAPH_LLM_RETRY_COUNT", "5"))
 LLM_RETRY_BASE_DELAY = float(os.getenv("KNOWGRAPH_LLM_RETRY_DELAY", "1.0"))
-# Budget for a WHOLE logical LLM call (rate-limiter wait + HTTP attempts +
-# retries), not just one attempt. 60s gives a slow/free provider (e.g. a `*:free`
-# OpenRouter model) room to synthesize a large answer, while a truly hung
-# endpoint still fails fast (vs the OpenAI client's 600s default). Tune per
-# provider via KNOWGRAPH_LLM_REQUEST_TIMEOUT; pair with a matching MCP client
-# timeout so the client doesn't cut the query first.
-LLM_REQUEST_TIMEOUT = int(os.getenv("KNOWGRAPH_LLM_REQUEST_TIMEOUT", "60"))
-# Max tokens the LLM may GENERATE per completion (output cap). Keeps costs
-# bounded and avoids runaway responses. Override via KNOWGRAPH_LLM_MAX_TOKENS.
+# Budget for a single LLM call (rate-limiter + HTTP + retries). 60s is
+# generous for most providers; QueryEngine cache keeps subsequent queries fast.
+LLM_REQUEST_TIMEOUT = 60
+# Max tokens the LLM may GENERATE per completion (output cap).
 LLM_MAX_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_TOKENS", "4096"))
-# Approx. max INPUT tokens per completion (model context minus output cap).
-# gpt-4o-mini has a 128k context; a conservative default protects smaller models.
+# Approx. max INPUT tokens per completion.
 LLM_MAX_INPUT_TOKENS = int(os.getenv("KNOWGRAPH_LLM_MAX_INPUT_TOKENS", "32000"))
-# Answer-synthesis retries at the MCP-handler level. The provider's internal
-# retry covers HTTP/429 errors but fail-fast times out (by design); a slow/free
-# provider's cold-start can time out the FIRST synthesis and degrade the answer
-# to raw context. Retrying the whole synthesis a bounded number of times turns
-# that transient first-call failure into a success.
+# Answer-synthesis retries at MCP-handler level.
 LLM_SYNTHESIS_RETRIES = int(os.getenv("KNOWGRAPH_LLM_SYNTHESIS_RETRIES", "2"))
-# Whole-synthesis budget at the handler level (retries INCLUDED), sized to fit a
-# ~30s MCP client window with headroom for retrieval. Without an outer bound, a
-# cold provider's retry chain (2 x LLM_REQUEST_TIMEOUT) can span ~180s server-side
-# and guarantee the client's cut. This cap turns worst-case ~180s into a bounded
-# ≤~25s response (full answer if the provider warms up, honest raw-context
-# degradation otherwise). Tune per client/provider via KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT.
-LLM_SYNTHESIS_TIMEOUT = int(os.getenv("KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT", "120"))
-# Whole QUERY-path budget (query expansion + retrieval + assemble_context + LLM
-# synthesis) at the MCP-handler level. The inner caps (retrieval 30s, synthesis
-# 25s) can sum to ~55s worst case and blow past a ~30s client window. This single
-# outer timeout guarantees a response within the window. Tune per client/provider
-# via KNOWGRAPH_QUERY_TOTAL_TIMEOUT (e.g. lower it below a tighter client limit).
-QUERY_TOTAL_TIMEOUT = int(os.getenv("KNOWGRAPH_QUERY_TOTAL_TIMEOUT", "120"))
+# Whole-synthesis budget (retries included). Must fit within MCP client timeout.
+LLM_SYNTHESIS_TIMEOUT = 120
+# Whole-query-path budget (expansion + retrieval + assembly + synthesis).
+QUERY_TOTAL_TIMEOUT = 120
 
 # Graph Traversal Configuration
 MAX_HOPS = 4

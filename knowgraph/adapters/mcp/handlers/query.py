@@ -289,7 +289,7 @@ async def handle_query(
                     await progress.error(f"Query timed out after {QUERY_TOTAL_TIMEOUT}s")
                 answer = (
                     f"[Generation Error: query exceeded {QUERY_TOTAL_TIMEOUT}s budget] "
-                    f"[raise KNOWGRAPH_QUERY_TOTAL_TIMEOUT or use a faster provider]"
+                    f"[use a faster provider or reduce top_k/max_hops]"
                 )
 
             if progress:
@@ -346,16 +346,10 @@ async def _expand_query_if_available(query: str, provider: Any) -> str:
 
 
 def _timeout_hint(error: Exception) -> str:
-    """Return a short actionable hint when the LLM call failed on a timeout.
-
-    A slow/free provider hitting the whole-call budget (LLM_REQUEST_TIMEOUT)
-    degrades to a raw-context answer; tell the user how to fix it rather than
-    leaving them with a bare "[Generation Error: ...]".
-    """
+    """Return a short actionable hint when the LLM call failed on a timeout."""
     if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
         return (
-            "\n[provider timed out — raise KNOWGRAPH_LLM_REQUEST_TIMEOUT "
-            "(env) or use a faster endpoint]"
+            "\n[provider timed out — use a faster endpoint or reduce query scope]"
         )
     return ""
 

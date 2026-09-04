@@ -79,8 +79,6 @@ def my_fn():
 | `KNOWGRAPH_QUERY_ENABLE_DENSE_RETRIEVAL` | `true` | bool | Enable hybrid dense retrieval when a dense index exists |
 | `KNOWGRAPH_QUERY_DENSE_SEARCH_WEIGHT` | `0.3` | 0.0–1.0 | Weight of dense cosine scores in hybrid fusion (remainder = sparse BM25) |
 
-> **`KNOWGRAPH_QUERY_TIMEOUT_SECONDS`** bounds *retrieval only* (graph traversal, context assembly); it does **not** include LLM answer synthesis. Use `KNOWGRAPH_QUERY_TOTAL_TIMEOUT` for the whole query path.
-
 ---
 
 ## 5. General / LLM Settings (`KNOWGRAPH_*`)
@@ -96,21 +94,12 @@ def my_fn():
 | `KNOWGRAPH_LLM_RETRY_DELAY` | `1.0` | Base backoff delay (sec) |
 | `KNOWGRAPH_LLM_MAX_TOKENS` | `4096` | Max tokens the LLM may **generate** per completion (output cap) |
 | `KNOWGRAPH_LLM_MAX_INPUT_TOKENS` | `32000` | Approx. max **input** tokens — model-context guard for `assemble_context` |
-| `KNOWGRAPH_LLM_REQUEST_TIMEOUT` | `60` | Budget for a single `generate_text` call (whole-call: rate-limiter + HTTP + retries). Tune per provider speed. |
-| `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT` | `120` | Whole-synthesis budget at MCP handler level (retries included). Must fit the MCP client's tool-call timeout. |
 | `KNOWGRAPH_LLM_SYNTHESIS_RETRIES` | `2` | Handler-level retries of `_generate_llm_answer` on transient failures (timeout/empty). |
-| `KNOWGRAPH_QUERY_TOTAL_TIMEOUT` | `120` | Whole-query-path budget (query-expansion + retrieval + assembly + synthesis). The real client-window guarantee. Tune per MCP client timeout. |
 | `KNOWGRAPH_WORKERS` | auto (≤5) | Concurrent API requests / indexing workers |
 | `KNOWGRAPH_BATCH_SIZE` | auto-tuned to RAM | LLM batch size for entity extraction |
 | `KNOWGRAPH_PROJECT_ROOT` | auto-detect | Override project root detection |
 
-> **LLM timeout hierarchy** — three nested layers (most to least granular):
->
-> 1. `LLM_REQUEST_TIMEOUT` (60s, per `generate_text` call) — wraps rate-limiter + HTTP + provider retries. Can raise to 90–120s for slow/free providers.
-> 2. `LLM_SYNTHESIS_TIMEOUT` (120s, whole synthesis) — wraps `_generate_llm_answer` retries. Must be ≤ `QUERY_TOTAL_TIMEOUT`.
-> 3. `QUERY_TOTAL_TIMEOUT` (120s, whole query path) — wraps expansion + retrieval + synthesis. This is the real client-window guarantee. **MCP client timeout must be ≥ this value.**
->
-> **For slow/free providers**: raise all three to match your MCP client's tool-call timeout. A good starting point is `KNOWGRAPH_LLM_REQUEST_TIMEOUT=90`, `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT=110`, `KNOWGRAPH_QUERY_TOTAL_TIMEOUT=115` and set your MCP client timeout to ≥120s.
+> **Timeouts** are fixed defaults (LLM request: 60s, synthesis: 120s, query total: 120s). QueryEngine cache keeps subsequent queries fast (~1.5s). Adjust via source code if needed.
 
 ---
 
