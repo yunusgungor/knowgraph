@@ -343,6 +343,41 @@ def create_reference_edges(
         "result", "output", "data", "info", "msg", "text",
     })
 
+    # Test functions and high-frequency utility symbols that create noisy
+    # reference edges.  test_* alone accounts for 1500+ low-value edges.
+    _NOISY_SYMBOLS = frozenset({
+        "get_settings", "get_cache_stats", "init_command", "to_dict",
+        "from_dict", "echo", "click", "logger", "logging",
+        "validate_path", "resolve_graph_store", "detect_project_root",
+        "read_manifest", "write_manifest", "list_all_nodes", "read_all_edges",
+        "append_edge_jsonl", "write_node_json", "read_node_json",
+        "hash_content", "SparseEmbedder", "SparseIndex", "DenseIndex",
+        "QueryEngine", "QueryRetriever", "QueryClassifier",
+        "SmartGraphBuilder", "CodeAnalyzer", "ASTAnalyzer",
+        "JoernProvider", "JoernQueryExecutor", "CPGProvider",
+        "CallGraphExtractor", "DataFlowAnalyzer", "CodeDocsLinker",
+        "CodeEntityExtractor", "CodeFileDetector", "CodeIndexIntegration",
+        "OpenAIProvider", "MCPSamplingProvider", "IntelligenceProvider",
+        "Edge", "Node", "Manifest", "Chunk",
+        "CircuitBreaker", "RequestThrottle", "RateLimiter",
+        "IndexingMetrics", "PerformanceTracker", "ProgressNotifier",
+        "MemoryGuard", "memory_guard", "trace_operation",
+        "build_error_response", "extract_query_parameters",
+        "validate_required_argument", "build_llm_prompt",
+    })
+
+    def _is_noisy_symbol(name: str) -> bool:
+        """Return True if a symbol should be filtered from reference edges."""
+        if name in _GENERIC_SYMBOLS or name in _NOISY_SYMBOLS:
+            return True
+        # Test functions: test_*, Test*, *_test
+        if name.startswith("test_") or name.startswith("Test") or name.endswith("_test"):
+            return True
+        # Private single-letter/dunder patterns
+        if len(name) <= 1:
+            return True
+        return False
+
     # 1. Build Global symbol table (Symbol -> Defining Node IDs)
     symbol_definitions: dict[str, list[UUID]] = dict(existing_symbols or {})
     node_references: dict[UUID, set[str]] = {}
@@ -367,12 +402,12 @@ def create_reference_edges(
             e_type = e.get("type", "semantic")
 
             if e_type == "definition":
-                if name not in _GENERIC_SYMBOLS and name not in symbol_definitions:
+                if not _is_noisy_symbol(name) and name not in symbol_definitions:
                     symbol_definitions[name] = []
-                if name not in _GENERIC_SYMBOLS:
+                if not _is_noisy_symbol(name):
                     symbol_definitions[name].append(node.id)
             elif e_type in ["reference", "call", "import"]:
-                if name not in _GENERIC_SYMBOLS:
+                if not _is_noisy_symbol(name):
                     refs.add(name)
 
         if refs:
@@ -527,8 +562,12 @@ class SmartGraphBuilder:
                             if file_key not in file_entity_cache:
                                 file_entity_cache[file_key] = cpg_provider.extract_entities_for_file(file_key)
                             entities = file_entity_cache[file_key]
-                        else:
-                            # AST fallback (no directory CPG available)
+
+                        # AST fallback: when CPG returns nothing (unsupported
+                        # language, extraction failure, or empty file), fall
+                        # back to the built-in AST/regex extractor so code
+                        # nodes still get entities for reference edges.
+                        if not entities:
                             entities = self.code_analyzer.ast_analyzer.extract_entities(node.content)
 
                         if entities:

@@ -10,54 +10,8 @@ from knowgraph.domain.intelligence.provider import IntelligenceProvider
 from knowgraph.infrastructure.parsing.repo_ingestor import RepositoryIngestorError
 from knowgraph.shared.security import validate_path
 
-LANGUAGE_MAP = {
-    "py": "python",
-    "js": "javascript",
-    "ts": "typescript",
-    "jsx": "javascript",
-    "tsx": "typescript",
-    "rs": "rust",
-    "rb": "ruby",
-    "md": "markdown",
-    "java": "java",
-    "go": "go",
-    "php": "php",
-    "html": "html",
-    "css": "css",
-    "txt": "text",
-    "sql": "sql",
-    "json": "json",
-    "yml": "yaml",
-    "yaml": "yaml",
-    "xml": "xml",
-    "csv": "csv",
-    "tsv": "tsv",
-    "ini": "ini",
-    "conf": "conf",
-    "cfg": "cfg",
-    "properties": "properties",
-    "toml": "toml",
-    "cpp": "cpp",
-    "cxx": "cpp",
-    "cc": "cpp",
-    "c": "c",
-    "h": "c",
-    "hpp": "cpp",
-    "cs": "csharp",
-    "kt": "kotlin",
-    "swift": "swift",
-    "m": "objectivec",
-    "dart": "dart",
-    "scala": "scala",
-    "erl": "erlang",
-    "ex": "elixir",
-    "lua": "lua",
-    "sh": "shell",
-    "bash": "shell",
-}
-
-# Derived maps for easier access
-EXT_MAP = {f".{ext}": lang for ext, lang in LANGUAGE_MAP.items()}
+# Re-export from helpers to break circular import (canonical home is index_helpers)
+from knowgraph.adapters.cli.index_helpers import EXT_MAP, LANGUAGE_MAP  # noqa: F401
 
 
 async def run_index(

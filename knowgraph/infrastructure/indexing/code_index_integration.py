@@ -215,66 +215,30 @@ class CodeIndexIntegration:
                         # Fall through to generate new CPG
 
             # Step 3: Generate CPG (if needed)
+            # Always use single CPG generation (not parallel) to ensure the
+            # CallGraphExtractor gets a complete CPG covering all files.
+            # Parallel generation splits the project into chunks, producing
+            # partial CPGs that miss cross-file call relationships.
             if not results.get("cpg_from_cache"):
-                logger.info("Generating CPG...")
+                logger.info("Generating single CPG for full project coverage...")
+                try:
+                    provider = JoernProvider()
+                    cpg_path = provider.generate_cpg(
+                        repo_path=input_path,
+                        timeout=300  # 5 minutes
+                    )
 
-                # Check if parallel generation is worthwhile (NEW - Phase 4)
-                from knowgraph.infrastructure.indexing.parallel_cpg import ParallelCPGGenerator
+                    results["cpg_generated"] = True
+                    results["cpg_path"] = str(cpg_path)
+                    self.cpg_path = cpg_path
+                    self.cpg_generated = True
 
-                parallel_gen = ParallelCPGGenerator(max_workers=4)
-                use_parallel = parallel_gen.should_use_parallel(code_files)
+                    logger.info(f"CPG generated at: {cpg_path}")
 
-                if use_parallel:
-                    logger.info("Using parallel CPG generation for large repository")
-                    try:
-                        import tempfile
-                        # Use persistent temp directory (don't auto-delete)
-                        tmpdir = Path(tempfile.mkdtemp(prefix="knowgraph_cpg_"))
-                        logger.info(f"Parallel CPG temp dir: {tmpdir}")
-
-                        cpg_paths = parallel_gen.generate_parallel(
-                            code_files,
-                            tmpdir,
-                            timeout=300
-                        )
-
-                        if cpg_paths:
-                            # Use first generated CPG (simplified)
-                            cpg_path = cpg_paths[0]
-                            results["cpg_generated"] = True
-                            results["cpg_path"] = str(cpg_path)
-                            results["parallel_generation"] = True
-                            self.cpg_path = cpg_path
-                            self.cpg_generated = True
-                            logger.info(f"Parallel CPG generation complete: {len(cpg_paths)} CPGs")
-                        else:
-                            logger.warning("Parallel generation failed, falling back to single CPG")
-                            use_parallel = False
-                    except Exception as e:
-                        logger.warning(f"Parallel generation failed: {e}, falling back to single CPG")
-                        use_parallel = False
-
-                # Fall back to single CPG generation
-                if not use_parallel or not results.get("cpg_generated"):
-                    try:
-                        provider = JoernProvider()
-                        cpg_path = provider.generate_cpg(
-                            repo_path=input_path,
-                            timeout=300  # 5 minutes
-                        )
-
-                        results["cpg_generated"] = True
-                        results["cpg_path"] = str(cpg_path)
-                        results["parallel_generation"] = False
-                        self.cpg_path = cpg_path
-                        self.cpg_generated = True
-
-                        logger.info(f"CPG generated at: {cpg_path}")
-
-                    except Exception as e:
-                        logger.error(f"CPG generation failed: {e}")
-                        results["error"] = f"CPG generation failed: {e}"
-                        return results
+                except Exception as e:
+                    logger.error(f"CPG generation failed: {e}")
+                    results["error"] = f"CPG generation failed: {e}"
+                    return results
 
             # Step 4: Extract entities (methods + classes)
             logger.info("Extracting code entities...")

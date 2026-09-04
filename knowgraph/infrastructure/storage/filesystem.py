@@ -14,7 +14,6 @@ import aiofiles
 
 from knowgraph.domain.models.edge import Edge
 from knowgraph.domain.models.node import Node
-from knowgraph.shared.cache_versioning import invalidate_all_caches
 from knowgraph.shared.exceptions import StorageError
 
 # LRU cache for frequently accessed nodes (improves repeated queries)
@@ -146,6 +145,7 @@ async def write_node_json_async(
         await asyncio.to_thread(os.replace, str(temp_file), str(node_file))
 
         if invalidate:
+            from knowgraph.shared.cache_versioning import invalidate_all_caches
             invalidate_all_caches()
         else:
             # Bulk path: drop only this node's cache entry; the caller flushes
@@ -195,6 +195,7 @@ def write_node_json(node: Node, graph_store_path: Path, invalidate: bool = True)
         os.replace(str(temp_file), str(node_file))
 
         if invalidate:
+            from knowgraph.shared.cache_versioning import invalidate_all_caches
             invalidate_all_caches()
         else:
             invalidate_node_entry(node.id, graph_store_path)

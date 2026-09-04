@@ -10,6 +10,7 @@ This module provides intelligent project root detection using:
 import logging
 import subprocess
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,7 @@ def analyze_directory_structure(path: Path, max_depth: int = 3) -> dict:
 
 async def detect_project_root_with_llm(
     start_path: Path | None = None,
+    provider: Any | None = None,
 ) -> Path | None:
     """Detect project root using LLM analysis.
 
@@ -184,6 +186,8 @@ async def detect_project_root_with_llm(
     Args:
     ----
         start_path: Starting directory (defaults to current working directory)
+        provider: LLM provider for analysis. When None, falls back to MCP
+            server's default provider (lazy import to avoid circular dep).
 
     Returns:
     -------
@@ -194,10 +198,11 @@ async def detect_project_root_with_llm(
         start_path = Path.cwd()
 
     try:
-        from knowgraph.adapters.mcp.server import app
-        from knowgraph.adapters.mcp.utils import get_llm_provider
+        if provider is None:
+            from knowgraph.adapters.mcp.server import app
+            from knowgraph.adapters.mcp.utils import get_llm_provider
 
-        provider = get_llm_provider(app)
+            provider = get_llm_provider(app)
 
         # Analyze directory structure
         current = start_path.resolve()
