@@ -199,8 +199,8 @@ async def handle_diagnostic(
 
             if LLM_REQUEST_TIMEOUT <= 60:
                 recommendations.append(
-                    "🟡 LLM request timeout is 60s or less; with a slow/free provider, "
-                    "consider using a faster endpoint or reducing query scope"
+                    "🟡 LLM request timeout is 60s or less; set KNOWGRAPH_LLM_REQUEST_TIMEOUT "
+                    "(and your MCP client's tool timeout) higher for slow/free providers"
                 )
         except Exception:
             pass
