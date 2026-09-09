@@ -1,10 +1,11 @@
-"""E-006 bench: traversal regression lock. Stdlib only.
+"""E-006/E-009 bench: traversal + retriever regression lock. Stdlib only.
 
 Re-runs the E-001 (determinism, 40 trials), E-002 (annotation, 40),
-E-005 (reachability-100, 100) suites plus the traversal/retriever
-pytest files (9 tests) as subprocesses and aggregates every trial/test
-as one pass/fail check: regression_accuracy=W/T (W/T). Any single
-guarantee break scores below the 0.95 threshold.
+E-005 (reachability-100, 100), E-008 (retriever order, 40) suites plus
+the traversal/retriever pytest files (9 tests) as subprocesses and
+aggregates every trial/test as one pass/fail check:
+regression_accuracy=W/T (W/T). Any single guarantee break scores below
+the 0.95 threshold.
 """
 import re
 import subprocess
@@ -16,6 +17,7 @@ BENCHES = [
     "scripts/bench/bench_traversal_determinism.py",
     "scripts/bench/bench_traversal_annotation.py",
     "scripts/bench/bench_traversal_reachability100.py",
+    "scripts/bench/bench_retriever_order.py",
 ]
 FRACTION_RE = re.compile(r"\((\d+)\s*/\s*(\d+)\)")
 
