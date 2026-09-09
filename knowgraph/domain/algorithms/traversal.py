@@ -173,7 +173,7 @@ def traverse_graph_reference_aware(
     edges: list[Edge],
     max_hops: int = MAX_HOPS,
     reference_weight: float = 2.0,
-) -> set[UUID]:
+) -> list[UUID]:
     """Traverse graph with reference-aware BFS (OPTIMIZED FOR CODE DEPENDENCIES).
 
     This traversal intelligently prioritizes reference edges (precise code dependencies)
@@ -192,7 +192,7 @@ def traverse_graph_reference_aware(
 
     Returns:
     -------
-        Set of reachable node UUIDs
+        Sorted list of reachable node UUIDs (deterministic order, E-001)
 
     """
     import heapq
