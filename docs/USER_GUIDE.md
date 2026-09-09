@@ -104,15 +104,12 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
         "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
-        "KNOWGRAPH_LLM_REQUEST_TIMEOUT": "120",
-        "KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT": "115",
-        "KNOWGRAPH_QUERY_TOTAL_TIMEOUT": "118"
       }
     }
   }
 }
 ```
-> **Timeout tip** — for slow/free providers, set all three env vars to 90–120s and the MCP client `timeout` to 120000 (120s) so the client doesn't cut before the server responds.
+> **Timeout tip** — timeouts are fixed defaults (request 60s, synthesis 120s, query total 120s; v1.1.1 removed the env overrides). For slow/free providers, keep the MCP client `timeout` at 120000 (120s) so the client doesn't cut before the server responds.
 
 #### For Cursor
 Add to `.cursor/mcp.json` in your project:
@@ -127,9 +124,6 @@ Add to `.cursor/mcp.json` in your project:
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
         "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
-        "KNOWGRAPH_LLM_REQUEST_TIMEOUT": "120",
-        "KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT": "115",
-        "KNOWGRAPH_QUERY_TOTAL_TIMEOUT": "118"
       }
     }
   }
@@ -149,9 +143,6 @@ Add to `~/.gemini/antigravity/mcp_config.json`:
         "KNOWGRAPH_API_KEY": "sk-your-openai-key-here",
         "KNOWGRAPH_API_BASE_URL": "https://openrouter.ai/api/v1",
         "KNOWGRAPH_LLM_MODEL": "x-ai/grok-4.1-fast",
-        "KNOWGRAPH_LLM_REQUEST_TIMEOUT": "120",
-        "KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT": "115",
-        "KNOWGRAPH_QUERY_TOTAL_TIMEOUT": "118"
       },
       "disabled": false
     }
@@ -1567,7 +1558,7 @@ knowgraph_diagnostic()
 | **Query Too Slow (>10s)** | Reduce `max_hops` (4 → 2) or `top_k` (20 → 10). Enable caching. |
 | **High Memory Usage** | Use `query_async()` for batch queries. Reduce graph size or split into sub-projects. |
 | **Incorrect Results** | Check if graph is up-to-date. Re-index with `knowgraph index ./project`. |
-| **"[Generation Error: timeout]"** | LLM provider took too long. Raise `KNOWGRAPH_LLM_REQUEST_TIMEOUT` (e.g. 90) and `KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT` (e.g. 110). Also raise your MCP client's tool-call timeout (must be ≥ `KNOWGRAPH_QUERY_TOTAL_TIMEOUT`). For slow/free providers: `KNOWGRAPH_LLM_REQUEST_TIMEOUT=90 KNOWGRAPH_LLM_SYNTHESIS_TIMEOUT=110 KNOWGRAPH_QUERY_TOTAL_TIMEOUT=115`. |
+| **"[Generation Error: timeout]"** | LLM provider took too long (fixed budgets: request 60s, synthesis 120s, query total 120s). Use a faster endpoint or reduce query scope (lower `top_k`/`max_hops`). Also raise your MCP client's tool-call timeout to ≥120000 (120s) so the client doesn't cut before the server responds. |
 | **"no info in context"** | Context retrieval is thin — raise `top_k` (e.g. 25–50) and `max_hops` (e.g. 4 → 6). `enable_grounding` re-weights but does NOT deepen retrieval. |
 | **Context length exceeded** | Params too large (e.g. top_k=40+hops=6+explanation=true). Reduce to `top_k=20, max_hops=4, explanation=false`. |
 | **Batch query returns 0 nodes** | Batch queries share the same rate-limiter; concurrent slow providers can starve later queries. Reduce batch size or use slower queries. |
