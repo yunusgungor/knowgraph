@@ -222,6 +222,12 @@ def traverse_graph_reference_aware(
             semantic_adj[edge.target].append(edge.source)
 
     visited: set[UUID] = set()
+    # E-004: best-known depth per node. The heap orders by priority, NOT depth,
+    # so a node's first pop may come via a long priority path; cutting on first
+    # pop drops nodes reachable within max_hops (E-003: 8/40 trials incomplete).
+    # Stale entries are skipped and shorter paths re-expand — every node lands
+    # in visited along a shortest path, so reachability equals true BFS.
+    best: dict[UUID, int] = {}
     # OPTIMIZED: Use heap for priority queue (O(log n) vs O(n log n) per iteration)
     # Heap stores: (-priority, node_id, depth)  # Negative for max-heap
     heap: list[tuple[float, UUID, int]] = [(-1.0, node_id, 0) for node_id in seed_nodes]
@@ -231,22 +237,29 @@ def traverse_graph_reference_aware(
         neg_priority, current_node, depth = heapq.heappop(heap)
         priority = -neg_priority
 
-        if current_node in visited or depth > max_hops:
+        if current_node in best and depth >= best[current_node]:
+            continue  # stale entry: a shorter path was already finalized
+        best[current_node] = depth
+
+        if depth > max_hops:
             continue
 
         visited.add(current_node)
 
         if depth < max_hops:
+            # Re-enqueue also when best improves: a neighbor already visited via
+            # a longer path must expand again at its shorter depth, else its own
+            # neighbors inherit the inflated depth and get cut (E-004).
             # First, add REFERENCE neighbors (high priority)
             if current_node in reference_adj:
                 for neighbor in reference_adj[current_node]:
-                    if neighbor not in visited:
+                    if neighbor not in best or depth + 1 < best[neighbor]:
                         heapq.heappush(heap, (-(priority * reference_weight), neighbor, depth + 1))
 
             # Then, add SEMANTIC neighbors (normal priority)
             if current_node in semantic_adj:
                 for neighbor in semantic_adj[current_node]:
-                    if neighbor not in visited:
+                    if neighbor not in best or depth + 1 < best[neighbor]:
                         heapq.heappush(heap, (-priority, neighbor, depth + 1))
 
     # Deterministic order: a raw set's iteration order is arbitrary and would
