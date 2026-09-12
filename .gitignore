@@ -113,3 +113,6 @@ tests/test_graphs/
 **/.indexing_cache/
 
 .mcp.json
+
+# Methodology runtime state (blackboard, hook audit logs — machine-local)
+.metodoloji/

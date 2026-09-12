@@ -1,0 +1,3 @@
+[hooks]
+code_guard = "hard"
+stop_guard = "hard"
