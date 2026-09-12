@@ -1,0 +1,9 @@
+tests/test_config.py: 15 passed (was 14 passed + 1 failed before fix)
+tests/test_circuit_breaker.py + test_cache_versioning.py + test_chunker.py + test_config.py: 62 passed
+test_config.py from foreign cwd (/tmp): 15 passed
+
+Before fix (baseline, repo root): 1 failed, 61 passed in 10.15s
+  FAILED tests/test_config.py::TestDefaultSettings::test_query_defaults
+  assert 30.0 == 60.0 (repo .env KNOWGRAPH_QUERY_TIMEOUT_SECONDS=30.0 leaked
+  into QuerySettings via pydantic-settings dotenv loading)
+Falsifiability: plain QuerySettings() from repo root -> [30.0, 30.0, 30.0, 30.0]

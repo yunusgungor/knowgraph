@@ -1,0 +1,9 @@
+consistency_score=1.00 (40/40)
+
+Bench: scripts/bench/bench_config_consistency.py
+40 trials alternating cwd (repo root / /tmp) with poisoned
+KNOWGRAPH_QUERY_TIMEOUT_SECONDS=5.0; each trial strips KNOWGRAPH_* vars and
+uses _env_file=os.devnull, then checks timeout_seconds == 60.0,
+top_k == 20, max_hops == 4.
+Gate decision: APPROVED — H-001: measured=1.0 >= threshold=0.9
+Gate evidence: GATE-OK-E-001-995fb886358c7ebc4a7794e27fb1cc61 (VERIFIED)
