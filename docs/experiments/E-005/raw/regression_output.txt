@@ -1,0 +1,4 @@
+.............................                                            [100%]
+29 passed in 0.30s
+Re-run bench at record time: factor03_accuracy=1.00 (80/80) — gate run measured 0.99 (79/80); both clear threshold.
+Falsifiability: broken impl (factor 0.2) scored 0.85/0.85 -> REJECTED (E-002).
