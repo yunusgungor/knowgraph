@@ -158,16 +158,24 @@ def enrich_with_conversations(
     result_node_ids = {node.id for node in query_result_nodes}
     conversation_nodes = []
 
+    # E-008: dedupe by node id (the same conversation matches once per edge,
+    # so the tail held duplicates) and cap BEFORE sorting so edge-list order
+    # never leaks into the result — identical inputs, identical sequences.
+    seen_conv_ids: set = set()
     for edge in edge_list:
         # Look for conversation_references_code edges pointing to our results
         if edge.type == "conversation_references_code" and edge.target in result_node_ids:
+            if edge.source in seen_conv_ids:
+                continue
             # Find the conversation node
             conv_node = read_node_json(edge.source, graph_store_path)
-            if conv_node and conv_node not in conversation_nodes:
+            if conv_node is not None and conv_node not in conversation_nodes:
+                seen_conv_ids.add(edge.source)
                 conversation_nodes.append(conv_node)
 
                 if len(conversation_nodes) >= max_conversations:
                     break
+    conversation_nodes.sort(key=lambda n: str(n.id))
 
     metadata = {
         "conversations_found": len(conversation_nodes),

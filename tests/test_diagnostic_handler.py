@@ -36,7 +36,12 @@ class TestDiagnosticConfigReport:
         assert "enable_grounding re-weights context but does NOT fetch more nodes" in text
 
     def test_recommendation_for_60s_timeout(self, monkeypatch):
-        """A default/60s LLM timeout with a configured provider fires the hint."""
+        """A default/60s LLM timeout with a configured provider fires the hint.
+
+        v1.1.1 removed the timeout env overrides (E-010): the hint must stay
+        actionable (faster endpoint / reduce scope) and must NOT name the
+        removed KNOWGRAPH_LLM_REQUEST_TIMEOUT knob.
+        """
         import knowgraph.config as config
 
         monkeypatch.setenv("KNOWGRAPH_API_KEY", "sk-test-key-1234567890")
@@ -44,9 +49,9 @@ class TestDiagnosticConfigReport:
         monkeypatch.setattr(config, "LLM_REQUEST_TIMEOUT", 60)
         text = _run({"graph_path": "C:/tmp/definitely_missing_graph"})
         assert "LLM request timeout is 60s or less" in text
-        assert "KNOWGRAPH_LLM_REQUEST_TIMEOUT" in text
-        # The hint must also tell the user to raise the MCP client timeout.
-        assert "MCP client's tool timeout" in text
+        assert "KNOWGRAPH_LLM_REQUEST_TIMEOUT" not in text
+        # The hint stays actionable without the removed knob.
+        assert "faster endpoint" in text
 
     def test_no_timeout_hint_when_generous(self, monkeypatch):
         """A generous timeout (>60) suppresses the slow-provider hint."""
